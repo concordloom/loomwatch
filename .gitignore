@@ -38,6 +38,10 @@ Thumbs.db
 *.png
 *.jpg
 *.jpeg
+
+# The chart icon is not a screenshot: Chart.yaml references it by URL, so it
+# has to be tracked or the icon 404s for everyone installing the chart.
+!charts/loomwatch/logo.png
 *.gif
 *.bmp
 !docs/screenshots/*.png

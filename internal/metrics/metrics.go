@@ -430,17 +430,32 @@ func (m *Metrics) scrapeZai(s *store.Store, staleThreshold time.Duration) {
 
 	m.recordLastCycleAge(method, defaultAccountID, snap.CapturedAt, staleThreshold)
 
-	if snap.TokensUsage > 0 {
+	if zaiQuotaDeclared(snap.TokensLimit, snap.TokensUsage, snap.TokensCurrentValue, snap.TokensRemaining, snap.TokensPercentage) {
 		labels := prometheus.Labels{"provider": method, "quota_type": "tokens", "account_id": defaultAccountID}
 		m.quotaUtilization.With(labels).Set(float64(snap.TokensPercentage))
 		if snap.TokensNextResetTime != nil && !snap.TokensNextResetTime.IsZero() {
 			m.quotaResetTimestamp.With(labels).Set(float64(snap.TokensNextResetTime.Unix()))
 		}
 	}
-	if snap.TimeUsage > 0 {
+	if zaiQuotaDeclared(snap.TimeLimit, snap.TimeUsage, snap.TimeCurrentValue, snap.TimeRemaining, snap.TimePercentage) {
 		labels := prometheus.Labels{"provider": method, "quota_type": "time", "account_id": defaultAccountID}
 		m.quotaUtilization.With(labels).Set(float64(snap.TimePercentage))
 	}
+}
+
+// zaiQuotaDeclared reports whether the provider said anything at all about a
+// quota, and gates its series on that rather than on consumption.
+//
+// The previous condition was Usage > 0. Usage is the amount spent, so it hid
+// the series exactly while the account was still healthy, and hid it
+// permanently for plans that report a percentage while leaving usage at zero -
+// the case in issue #112, where tokens_usage=0 accompanied tokens_percentage=68
+// and the only number that moved was never exported. Gating on the limit alone
+// would invert the same mistake, because Unit*Number can be zero while usage is
+// real. Any non-zero signal therefore counts as declared; a quota that is zero
+// on every axis is one the plan does not have.
+func zaiQuotaDeclared(limit int, usage, currentValue, remaining float64, percentage int) bool {
+	return limit > 0 || usage > 0 || currentValue > 0 || remaining > 0 || percentage > 0
 }
 
 func (m *Metrics) scrapeMiniMax(s *store.Store, staleThreshold time.Duration) {
@@ -479,8 +494,34 @@ func (m *Metrics) scrapeMiniMax(s *store.Store, staleThreshold time.Duration) {
 			if v.ResetAt != nil && !v.ResetAt.IsZero() {
 				m.quotaResetTimestamp.With(labels).Set(float64(v.ResetAt.Unix()))
 			}
+
+			// MiniMax plans carry a weekly window alongside the rolling
+			// five-hour one, and it is the window that burns over days. The
+			// store already reads it; exporting only the per-model values left
+			// long-horizon exhaustion unobservable. Accounts predating the
+			// weekly window report zeros and are skipped: a flat zero series
+			// would read as a permanently healthy account.
+			if v.HasWeeklyQuota {
+				weeklyLabels := prometheus.Labels{
+					"provider":   method,
+					"quota_type": weeklyQuotaType(v.ModelName),
+					"account_id": accountID,
+				}
+				m.quotaUtilization.With(weeklyLabels).Set(v.WeeklyUsedPercent)
+				if v.WeeklyResetAt != nil && !v.WeeklyResetAt.IsZero() {
+					m.quotaResetTimestamp.With(weeklyLabels).Set(float64(v.WeeklyResetAt.Unix()))
+				}
+			}
 		}
 	}
+}
+
+// weeklyQuotaType names the weekly companion of a per-model quota. Keeping both
+// windows in the same label dimension is deliberate: a rule can then select or
+// exclude either one without knowing the model set, which changes as the
+// provider adds models.
+func weeklyQuotaType(modelName string) string {
+	return "weekly_" + modelName
 }
 
 func (m *Metrics) scrapeAntigravity(s *store.Store, staleThreshold time.Duration) {

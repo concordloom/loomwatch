@@ -12,6 +12,15 @@ loomwatch collects LLM subscription quotas and exposes them to Prometheus.
 
   http{{ if .Values.ingress.tls }}s{{ end }}://{{ .Values.ingress.hostname }}{{ .Values.ingress.path }}
 
+{{- else if .Values.httpRoute.enabled }}
+
+  {{- if .Values.httpRoute.hostnames }}
+  https://{{ index .Values.httpRoute.hostnames 0 }}{{ .Values.httpRoute.path }}
+  {{- else }}
+  Through the Gateway it is attached to; this route matches every hostname the
+  Gateway serves, so the address is whatever that Gateway listens on.
+  {{- end }}
+
 {{- else }}
 
   kubectl port-forward --namespace {{ include "loomwatch.namespace" . }} svc/{{ include "loomwatch.fullname" . }} 9211:{{ .Values.service.ports.http }}

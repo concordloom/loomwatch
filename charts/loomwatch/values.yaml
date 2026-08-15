@@ -75,7 +75,7 @@ diagnosticMode:
 image:
   registry: ghcr.io
   repository: concordloom/loomwatch
-  tag: 1.0.3
+  tag: 1.0.4
   ## Pinning by digest is strongly recommended for a component whose readings
   ## alerts are built on: a moving tag lets the running version change with no
   ## diff in whatever declares it.
@@ -435,6 +435,67 @@ ingress:
   ## @param ingress.extraRules Additional rules to be covered with this ingress record
   ##
   extraRules: []
+
+## loomwatch Gateway API route
+##
+## The alternative to `ingress` above, for clusters that route with Gateway API.
+## Same caveat applies and for the same reason: this publishes a panel whose
+## only protection is one password with no second factor.
+##
+## Off by default, and deliberately not auto-detected from installed CRDs.
+## Which router publishes a service is a decision, and a chart that silently
+## picks one based on what happens to be installed produces a different result
+## on two clusters from identical values.
+##
+httpRoute:
+  ## @param httpRoute.enabled Enable Gateway API HTTPRoute record generation
+  ##
+  enabled: false
+  ## @param httpRoute.apiVersion HTTPRoute API version
+  ## v1 since Gateway API 1.0; older installations still serve v1beta1 only.
+  ##
+  apiVersion: gateway.networking.k8s.io/v1
+  ## @param httpRoute.parentRefs Gateways this route attaches to. Required when enabled
+  ## There is no default: a route with no parent is accepted by the API server
+  ## and then routes nothing, which is indistinguishable from a working install
+  ## until someone tries the address.
+  ## E.g.
+  ## parentRefs:
+  ##   - name: my-gateway
+  ##     namespace: gateway-system
+  ##     sectionName: https
+  ##
+  parentRefs: []
+  ## @param httpRoute.hostnames Hostnames this route matches. Empty means every hostname the Gateway serves
+  ##
+  hostnames: []
+  ## @param httpRoute.path Path prefix for the default rule
+  ##
+  path: /
+  ## @param httpRoute.pathType Path match type for the default rule. Allowed values: `PathPrefix`, `Exact`, `RegularExpression`
+  ##
+  pathType: PathPrefix
+  ## @param httpRoute.filters Filters applied to the default rule
+  ##
+  filters: []
+  ## @param httpRoute.weight Backend weight for the default rule
+  ##
+  weight: ""
+  ## @param httpRoute.rules Replace the generated rule entirely with your own
+  ##
+  rules: []
+  ## @param httpRoute.annotations Additional annotations for the HTTPRoute resource
+  ##
+  annotations: {}
+  ## @param httpRoute.labels Additional labels for the HTTPRoute resource
+  ##
+  labels: {}
+  ## @param httpRoute.allowAlongsideIngress Permit an Ingress and an HTTPRoute at the same time
+  ## Rendering both is refused by default. Two routes to one Service is nearly
+  ## always a migration someone stopped halfway through, and the forgotten one
+  ## keeps serving on an address nobody watches any more.
+  ##
+  allowAlongsideIngress: false
 
 ## @section Persistence Parameters
 ##

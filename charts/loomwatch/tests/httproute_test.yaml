@@ -1,0 +1,98 @@
+suite: gateway api httproute
+templates:
+  - httproute.yaml
+tests:
+  - it: is not created unless asked for
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: attaches to the given gateway and backs the service
+    set:
+      httpRoute.enabled: true
+      httpRoute.parentRefs:
+        - name: public
+          namespace: gateway-system
+      httpRoute.hostnames: ["loomwatch.example.com"]
+    asserts:
+      - isKind:
+          of: HTTPRoute
+      - equal:
+          path: spec.parentRefs[0].name
+          value: public
+      - equal:
+          path: spec.hostnames[0]
+          value: loomwatch.example.com
+      - equal:
+          path: spec.rules[0].backendRefs[0].name
+          value: RELEASE-NAME-loomwatch
+      - equal:
+          path: spec.rules[0].backendRefs[0].port
+          value: 9211
+      - equal:
+          path: spec.rules[0].matches[0].path.type
+          value: PathPrefix
+
+  # An HTTPRoute with no parentRefs is accepted by the API server and then
+  # routes nothing at all, which reads as a successful install right up until
+  # someone opens the address.
+  - it: refuses to render a route that attaches to nothing
+    set:
+      httpRoute.enabled: true
+    asserts:
+      - failedTemplate:
+          errorPattern: "requires httpRoute.parentRefs"
+
+  # Two routes to one Service is nearly always a half-finished migration, and
+  # the forgotten one keeps serving on an address nobody watches.
+  - it: refuses an ingress and a route at the same time
+    set:
+      httpRoute.enabled: true
+      httpRoute.parentRefs:
+        - name: public
+      ingress.enabled: true
+    asserts:
+      - failedTemplate:
+          errorPattern: "half-finished migration"
+
+  - it: allows both when the cutover is declared
+    set:
+      httpRoute.enabled: true
+      httpRoute.parentRefs:
+        - name: public
+      ingress.enabled: true
+      httpRoute.allowAlongsideIngress: true
+    asserts:
+      - isKind:
+          of: HTTPRoute
+
+  - it: lets the rule be replaced wholesale
+    set:
+      httpRoute.enabled: true
+      httpRoute.parentRefs:
+        - name: public
+      httpRoute.rules:
+        - matches:
+            - path:
+                type: Exact
+                value: /metrics
+          backendRefs:
+            - name: somewhere-else
+              port: 8080
+    asserts:
+      - equal:
+          path: spec.rules[0].matches[0].path.value
+          value: /metrics
+      - equal:
+          path: spec.rules[0].backendRefs[0].name
+          value: somewhere-else
+
+  - it: honours a pinned api version for older Gateway API installs
+    set:
+      httpRoute.enabled: true
+      httpRoute.apiVersion: gateway.networking.k8s.io/v1beta1
+      httpRoute.parentRefs:
+        - name: public
+    asserts:
+      - isAPIVersion:
+          of: gateway.networking.k8s.io/v1beta1

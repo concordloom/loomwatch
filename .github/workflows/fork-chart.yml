@@ -72,6 +72,9 @@ jobs:
             --set metrics.prometheusRule.enabled=true \
             --set dashboard.enabled=true \
             --set ingress.enabled=true \
+            --set httpRoute.enabled=true \
+            --set httpRoute.allowAlongsideIngress=true \
+            --set httpRoute.parentRefs[0].name=example-gateway \
             --set pdb.create=true \
             --set auth.providers.EXAMPLE_API_KEY=x \
             > /tmp/rendered.yaml

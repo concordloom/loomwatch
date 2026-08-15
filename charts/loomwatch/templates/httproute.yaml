@@ -1,0 +1,50 @@
+{{- if .Values.httpRoute.enabled }}
+{{- if and .Values.ingress.enabled (not .Values.httpRoute.allowAlongsideIngress) }}
+{{- fail "loomwatch: both ingress.enabled and httpRoute.enabled are set. Two routes to the same Service is almost always a half-finished migration rather than an intent, and the one you forgot keeps serving traffic on an address you stopped watching. Set httpRoute.allowAlongsideIngress=true if you really are running both during a cutover." }}
+{{- end }}
+apiVersion: {{ .Values.httpRoute.apiVersion }}
+kind: HTTPRoute
+metadata:
+  name: {{ include "loomwatch.fullname" . }}
+  namespace: {{ include "loomwatch.namespace" . | quote }}
+  labels: {{- include "loomwatch.labels" . | nindent 4 }}
+    {{- if .Values.httpRoute.labels }}
+    {{- include "loomwatch.tplvalues.render" (dict "value" .Values.httpRoute.labels "context" $) | nindent 4 }}
+    {{- end }}
+  {{- if or .Values.httpRoute.annotations .Values.commonAnnotations }}
+  annotations:
+    {{- if .Values.commonAnnotations }}
+    {{- include "loomwatch.tplvalues.render" (dict "value" .Values.commonAnnotations "context" $) | nindent 4 }}
+    {{- end }}
+    {{- if .Values.httpRoute.annotations }}
+    {{- include "loomwatch.tplvalues.render" (dict "value" .Values.httpRoute.annotations "context" $) | nindent 4 }}
+    {{- end }}
+  {{- end }}
+spec:
+  {{- if .Values.httpRoute.parentRefs }}
+  parentRefs: {{- include "loomwatch.tplvalues.render" (dict "value" .Values.httpRoute.parentRefs "context" $) | nindent 4 }}
+  {{- else }}
+  {{- fail "loomwatch: httpRoute.enabled requires httpRoute.parentRefs. An HTTPRoute with no parent is accepted by the API server and then routes nothing, which looks like a working install." }}
+  {{- end }}
+  {{- if .Values.httpRoute.hostnames }}
+  hostnames: {{- include "loomwatch.tplvalues.render" (dict "value" .Values.httpRoute.hostnames "context" $) | nindent 4 }}
+  {{- end }}
+  rules:
+    {{- if .Values.httpRoute.rules }}
+    {{- include "loomwatch.tplvalues.render" (dict "value" .Values.httpRoute.rules "context" $) | nindent 4 }}
+    {{- else }}
+    - matches:
+        - path:
+            type: {{ .Values.httpRoute.pathType }}
+            value: {{ .Values.httpRoute.path | quote }}
+      {{- if .Values.httpRoute.filters }}
+      filters: {{- include "loomwatch.tplvalues.render" (dict "value" .Values.httpRoute.filters "context" $) | nindent 8 }}
+      {{- end }}
+      backendRefs:
+        - name: {{ include "loomwatch.fullname" . }}
+          port: {{ .Values.service.ports.http }}
+          {{- if .Values.httpRoute.weight }}
+          weight: {{ .Values.httpRoute.weight }}
+          {{- end }}
+    {{- end }}
+{{- end }}

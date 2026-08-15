@@ -97,7 +97,7 @@ kubectl delete pvc my-release-loomwatch-data
 | ---- | ----------- | ----- |
 | `image.registry` | loomwatch image registry | `ghcr.io` |
 | `image.repository` | loomwatch image repository | `concordloom/loomwatch` |
-| `image.tag` | loomwatch image tag (immutable tags are recommended) | `1.0.3` |
+| `image.tag` | loomwatch image tag (immutable tags are recommended) | `1.0.4` |
 | `image.digest` | loomwatch image digest in the way sha256:aa.... Please note this parameter, if set, will override the tag | `""` |
 | `image.pullPolicy` | loomwatch image pull policy | `IfNotPresent` |
 | `image.pullSecrets` | loomwatch image pull secrets | `[]` |
@@ -220,6 +220,18 @@ kubectl delete pvc my-release-loomwatch-data
 | `ingress.extraTls` | TLS configuration for additional hostname(s) to be covered with this ingress record | `[]` |
 | `ingress.secrets` | Custom TLS certificates as secrets | `[]` |
 | `ingress.extraRules` | Additional rules to be covered with this ingress record | `[]` |
+| `httpRoute.enabled` | Enable Gateway API HTTPRoute record generation | `false` |
+| `httpRoute.apiVersion` | HTTPRoute API version | `gateway.networking.k8s.io/v1` |
+| `httpRoute.parentRefs` | Gateways this route attaches to. Required when enabled | `[]` |
+| `httpRoute.hostnames` | Hostnames this route matches. Empty means every hostname the Gateway serves | `[]` |
+| `httpRoute.path` | Path prefix for the default rule | `/` |
+| `httpRoute.pathType` | Path match type for the default rule. Allowed values: `PathPrefix`, `Exact`, `RegularExpression` | `PathPrefix` |
+| `httpRoute.filters` | Filters applied to the default rule | `[]` |
+| `httpRoute.weight` | Backend weight for the default rule | `""` |
+| `httpRoute.rules` | Replace the generated rule entirely with your own | `[]` |
+| `httpRoute.annotations` | Additional annotations for the HTTPRoute resource | `{}` |
+| `httpRoute.labels` | Additional labels for the HTTPRoute resource | `{}` |
+| `httpRoute.allowAlongsideIngress` | Permit an Ingress and an HTTPRoute at the same time | `false` |
 
 ### Persistence Parameters
 
@@ -402,6 +414,20 @@ volume, and if it lands on another node the rollout deadlocks on a Multi-Attach
 error and never completes.
 
 ### Exposing the dashboard
+
+Two routers are supported and neither is on by default: `ingress.*` for
+Ingress, `httpRoute.*` for Gateway API. Which one publishes a service is a
+decision, so the chart does not pick based on which CRDs happen to be installed
+— that would give different results on two clusters from identical values.
+
+Rendering both at once is refused unless `httpRoute.allowAlongsideIngress` says
+otherwise: two routes to one Service is nearly always a migration someone
+stopped halfway through, and the forgotten one keeps serving on an address
+nobody watches.
+
+`httpRoute.parentRefs` is required when enabled. A route with no parent is
+accepted by the API server and then routes nothing, which reads as a successful
+install until someone opens the address.
 
 The panel carries the whole surface behind one password with no second factor,
 so `ingress.enabled` is `false` by default. The metrics endpoint is a better

@@ -98,7 +98,10 @@ jobs:
       - name: Lint and test the chart
         run: |
           helm lint charts/loomwatch
-          helm plugin install https://github.com/helm-unittest/helm-unittest --version 1.0.3
+          # --verify=false is required from Helm 4 on: the plugin source
+          # publishes no provenance, and without the flag the install aborts.
+          helm plugin install https://github.com/helm-unittest/helm-unittest \
+            --version 1.0.3 --verify=false
           helm unittest charts/loomwatch
 
       - name: Set up Docker Buildx

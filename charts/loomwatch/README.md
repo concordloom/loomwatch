@@ -97,7 +97,7 @@ kubectl delete pvc my-release-loomwatch-data
 | ---- | ----------- | ----- |
 | `image.registry` | loomwatch image registry | `ghcr.io` |
 | `image.repository` | loomwatch image repository | `concordloom/loomwatch` |
-| `image.tag` | loomwatch image tag (immutable tags are recommended) | `1.0.2` |
+| `image.tag` | loomwatch image tag (immutable tags are recommended) | `1.0.3` |
 | `image.digest` | loomwatch image digest in the way sha256:aa.... Please note this parameter, if set, will override the tag | `""` |
 | `image.pullPolicy` | loomwatch image pull policy | `IfNotPresent` |
 | `image.pullSecrets` | loomwatch image pull secrets | `[]` |

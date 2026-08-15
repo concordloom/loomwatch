@@ -1,0 +1,91 @@
+# Chart validation on every change, not only at release time.
+#
+# Separate from the upstream CI workflow, which knows nothing about charts/ and
+# is left untouched so upstream syncs never conflict here.
+#
+# Without this the chart is only checked when someone cuts a release, which
+# means a broken chart is discovered at the worst possible moment - and on a
+# public repository, by whoever opened the pull request rather than by us.
+name: Fork chart
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "charts/**"
+      - ".github/workflows/fork-chart.yml"
+  pull_request:
+    paths:
+      - "charts/**"
+      - ".github/workflows/fork-chart.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  chart:
+    runs-on: ubuntu-latest
+    name: Lint, test, render
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: azure/setup-helm@v4
+
+      - name: Install helm-unittest
+        # --verify=false is required from Helm 4 on: the plugin source
+        # publishes no provenance and the install aborts without it.
+        run: helm plugin install https://github.com/helm-unittest/helm-unittest --version 1.0.3 --verify=false
+
+      - name: Parameter tables match values.yaml
+        run: |
+          python3 -m pip install --quiet pyyaml
+          python3 charts/loomwatch/hack/gen-params.py --check
+
+      - name: Chart version matches app version
+        run: |
+          v="$(awk '/^version:/ {print $2; exit}' charts/loomwatch/Chart.yaml)"
+          a="$(awk '/^appVersion:/ {print $2; exit}' charts/loomwatch/Chart.yaml)"
+          if [ "$v" != "$a" ]; then
+            echo "Chart.yaml version='$v' but appVersion='$a'; they are released together and must match"
+            exit 1
+          fi
+
+      - name: Lint
+        run: helm lint charts/loomwatch
+
+      - name: Unit tests
+        run: helm unittest charts/loomwatch
+
+      # Rendering with everything switched on is what catches a template that
+      # only breaks in a configuration the unit tests do not exercise.
+      - name: Render with all optional objects enabled
+        run: |
+          helm template lw charts/loomwatch \
+            --set metrics.serviceMonitor.enabled=true \
+            --set metrics.prometheusRule.enabled=true \
+            --set dashboard.enabled=true \
+            --set ingress.enabled=true \
+            --set pdb.create=true \
+            --set auth.providers.EXAMPLE_API_KEY=x \
+            > /tmp/rendered.yaml
+          test -s /tmp/rendered.yaml
+          echo "objects rendered: $(grep -c '^kind:' /tmp/rendered.yaml)"
+
+      - name: Rendered manifests are valid YAML and the dashboard is valid JSON
+        run: |
+          python3 - <<'PY'
+          import json, sys, yaml
+          docs = [d for d in yaml.safe_load_all(open("/tmp/rendered.yaml")) if d]
+          kinds = sorted({d["kind"] for d in docs})
+          print("kinds:", ", ".join(kinds))
+          cm = next(d for d in docs if d["kind"] == "ConfigMap")
+          json.loads(cm["data"]["loomwatch.json"])
+          print("dashboard JSON parses")
+          PY

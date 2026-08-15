@@ -97,6 +97,10 @@ jobs:
       # supported. These are the same checks run locally.
       - name: Lint and test the chart
         run: |
+          # A values table that disagrees with the defaults is worse than none,
+          # so staleness fails the release rather than shipping quietly.
+          python3 -m pip install --quiet pyyaml
+          python3 charts/loomwatch/hack/gen-params.py --check
           helm lint charts/loomwatch
           # --verify=false is required from Helm 4 on: the plugin source
           # publishes no provenance, and without the flag the install aborts.

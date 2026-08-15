@@ -1,6 +1,10 @@
 <!--
-  Parameter tables are generated from the @param annotations in values.yaml.
-  Regenerate them rather than editing by hand, or the two will drift.
+  The parameter tables below are generated from the @param annotations in
+  values.yaml. Do not edit them by hand - run:
+
+      python3 charts/loomwatch/hack/gen-params.py
+
+  Pass --check to verify they are current without rewriting.
 -->
 
 # loomwatch
@@ -61,6 +65,7 @@ kubectl delete pvc my-release-loomwatch-data
 ```
 
 ## Parameters
+
 ### Global parameters
 
 | Name | Description | Value |

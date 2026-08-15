@@ -16,3 +16,7 @@
 .vscode/
 tests/
 ci/
+# Not part of what gets installed: the icon is referenced by URL, and the
+# generator only runs in the repository.
+logo.png
+hack/

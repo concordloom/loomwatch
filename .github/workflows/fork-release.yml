@@ -95,6 +95,12 @@ jobs:
           # No `latest`, deliberately: deployments pin an immutable reference,
           # and a moving tag lets the running version change with no diff in
           # the infrastructure repo that declares it.
+          #
+          # latest=false is required, not decorative. metadata-action defaults
+          # to latest=auto, which publishes `latest` on any semver tag - it did
+          # exactly that on the 1.0.0 release before this line existed.
+          flavor: |
+            latest=false
           # value= is required: the git tag is `loom-v1.0.0`, which is not
           # parseable as SemVer, so the version is fed in from VERSION instead
           # of being derived from the ref.

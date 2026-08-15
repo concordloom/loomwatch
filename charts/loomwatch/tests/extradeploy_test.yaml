@@ -1,0 +1,33 @@
+suite: extraDeploy
+templates:
+  - extra-list.yaml
+tests:
+  - it: renders nothing when unused
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  # extraDeploy exists so that a deployment-specific object can live beside the
+  # release without forking the chart. That is only useful if the value is run
+  # through tpl: without it the entry would have to hard-code the release name
+  # and namespace, which defeats the point.
+  - it: renders arbitrary objects through the template engine
+    set:
+      extraDeploy:
+        - |
+          apiVersion: v1
+          kind: ConfigMap
+          metadata:
+            name: {{ include "loomwatch.fullname" . }}-extra
+            namespace: {{ include "loomwatch.namespace" . }}
+          data:
+            release: {{ .Release.Name | quote }}
+    asserts:
+      - hasDocuments:
+          count: 1
+      - equal:
+          path: metadata.name
+          value: RELEASE-NAME-loomwatch-extra
+      - equal:
+          path: data.release
+          value: RELEASE-NAME

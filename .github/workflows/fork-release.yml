@@ -1,0 +1,133 @@
+# Release: container image + GitHub Release.
+#
+# Deliberately a separate file rather than an edit to the upstream release
+# pipeline, which is left untouched so that syncing with upstream never has to
+# resolve a conflict here. Upstream's workflow is dispatch-only, so the two do
+# not compete for the same trigger.
+#
+# It is not reused because it builds macOS menubar binaries and an Alpine shell
+# variant that this deployment has no use for, and macOS runners are the
+# expensive part of it.
+#
+# Versioning: this fork has its own version line, recorded in VERSION, with the
+# upstream base it was cut from recorded separately in UPSTREAM_VERSION. A
+# derived scheme such as `2.13.3-loom.1` was rejected: under SemVer a hyphen
+# suffix denotes a PRE-release, so it sorts BELOW 2.13.3, and anything that
+# compares versions - including this project's own updater - would read the
+# fork as older than the release it is built on.
+#
+# Do not push upstream tags to this remote. Sync with `git fetch upstream
+# --no-tags`; upstream tags match `v*` too and would otherwise trigger a build
+# of upstream code under this workflow.
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Tag to build (must already exist)"
+        required: true
+
+env:
+  REGISTRY: ghcr.io
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    name: Build, push and release
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      # Catches the common human error of tagging without bumping VERSION.
+      # The binary embeds VERSION (see main.go), so a mismatch would ship an
+      # image whose tag and self-reported version disagree - and the updater
+      # compares the embedded value against the latest release tag, so it would
+      # then report an update against itself forever.
+      - name: Verify VERSION matches the tag
+        run: |
+          tag="${{ inputs.ref || github.ref_name }}"
+          want="${tag#v}"
+          got="$(cat VERSION)"
+          if [ "$want" != "$got" ]; then
+            echo "tag $tag implies version '$want' but VERSION says '$got'"
+            exit 1
+          fi
+          echo "version=$got" >> "$GITHUB_OUTPUT"
+        id: version
+
+      - name: Read upstream base version
+        id: upstream
+        run: echo "version=$(cat UPSTREAM_VERSION)" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository }}
+          # No `latest`, deliberately: deployments pin an immutable reference,
+          # and a moving tag lets the running version change with no diff in
+          # the infrastructure repo that declares it.
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=sha,format=long
+          labels: |
+            org.opencontainers.image.title=loomwatch
+            org.opencontainers.image.description=LLM subscription quota tracker (fork of onllm-dev/onWatch)
+            dev.concordloom.upstream.repository=onllm-dev/onWatch
+            dev.concordloom.upstream.version=${{ steps.upstream.outputs.version }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: runtime
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ steps.version.outputs.version }}
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.ref || github.ref_name }}
+        run: |
+          {
+            echo "Fork of [onllm-dev/onWatch](https://github.com/onllm-dev/onWatch),"
+            echo "based on upstream **${{ steps.upstream.outputs.version }}**."
+            echo
+            echo "Container image:"
+            echo '```'
+            echo "ghcr.io/${{ github.repository }}:${{ steps.version.outputs.version }}"
+            echo '```'
+            echo
+            echo "Self-update inside a container is unsupported: the unit of"
+            echo "delivery is the image."
+            echo
+          } > notes.md
+          gh release create "$TAG" --title "$TAG" --notes-file notes.md --generate-notes

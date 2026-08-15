@@ -35,6 +35,9 @@ const (
 	// is one edit rather than four.
 	githubRepoSlug = "concordloom/loomwatch"
 
+	// releaseTagPrefix is this fork's release tag prefix. See normalizeTag.
+	releaseTagPrefix = "loom-v"
+
 	githubReleasesURL     = "https://api.github.com/repos/" + githubRepoSlug + "/releases/latest"
 	githubReleasesListURL = "https://api.github.com/repos/" + githubRepoSlug + "/releases"
 	// githubReleasesRedirectURL is the github.com (NOT api.github.com) web
@@ -162,7 +165,7 @@ func (u *Updater) Check() (UpdateInfo, error) {
 		return info, err
 	}
 
-	latest := strings.TrimPrefix(tagName, "v")
+	latest := normalizeTag(tagName)
 
 	// Update cache
 	u.mu.Lock()
@@ -782,9 +785,21 @@ func (u *Updater) binaryDownloadURL(version string) string {
 // compareVersions compares two semver strings.
 // Returns: 1 if a > b, -1 if a < b, 0 if equal.
 // Handles pre-release suffixes like "2.2.5-test" by extracting numeric parts.
+// normalizeTag turns a release tag into a bare version.
+//
+// Fork change. This fork's release tags carry a `loom-v` prefix because a fork
+// inherits the upstream tag namespace and `v*` is both occupied and unsafe
+// there. compareVersions parses leading integers per dotted segment, so an
+// un-normalized `loom-v1.1.0` parses its first segment as 0 and compares BELOW
+// any real version - the update check would then report "no update" forever,
+// which is worse than reporting the wrong thing, because it is silent.
+func normalizeTag(tag string) string {
+	return strings.TrimPrefix(strings.TrimPrefix(tag, releaseTagPrefix), "v")
+}
+
 func compareVersions(a, b string) int {
-	a = strings.TrimPrefix(a, "v")
-	b = strings.TrimPrefix(b, "v")
+	a = normalizeTag(a)
+	b = normalizeTag(b)
 
 	partsA := strings.Split(a, ".")
 	partsB := strings.Split(b, ".")

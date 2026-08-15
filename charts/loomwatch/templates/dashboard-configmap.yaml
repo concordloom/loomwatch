@@ -1,0 +1,30 @@
+{{- if .Values.dashboard.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ printf "%s-dashboard" (include "loomwatch.fullname" .) }}
+  namespace: {{ default (include "loomwatch.namespace" .) .Values.dashboard.namespace | quote }}
+  labels: {{- include "loomwatch.labels" . | nindent 4 }}
+    app.kubernetes.io/component: dashboard
+    {{- if .Values.dashboard.labels }}
+    {{- include "loomwatch.tplvalues.render" (dict "value" .Values.dashboard.labels "context" $) | nindent 4 }}
+    {{- end }}
+  {{- if or .Values.dashboard.annotations .Values.commonAnnotations }}
+  annotations:
+    {{- if .Values.commonAnnotations }}
+    {{- include "loomwatch.tplvalues.render" (dict "value" .Values.commonAnnotations "context" $) | nindent 4 }}
+    {{- end }}
+    {{- if .Values.dashboard.annotations }}
+    {{- include "loomwatch.tplvalues.render" (dict "value" .Values.dashboard.annotations "context" $) | nindent 4 }}
+    {{- end }}
+  {{- end }}
+data:
+  {{/*
+    Shipped verbatim rather than templated. The dashboard picks its data source
+    through a Grafana variable, so it needs no values from Helm - and a
+    dashboard rendered through the template engine breaks the moment a panel
+    legend contains {{ }}, which Grafana's own legend syntax does constantly.
+  */}}
+  loomwatch.json: |
+{{ .Files.Get "dashboards/loomwatch.json" | indent 4 }}
+{{- end }}

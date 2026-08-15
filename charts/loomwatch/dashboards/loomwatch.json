@@ -1,0 +1,194 @@
+{
+  "uid": "loomwatch-quotas",
+  "title": "loomwatch — LLM quotas",
+  "description": "Remaining LLM subscription quota per provider, quota window and account. Utilisation is a share of the plan's own limit, so 100 is the quota itself.",
+  "tags": ["loomwatch", "llm", "quota"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "refresh": "1m",
+  "time": { "from": "now-24h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "datasource",
+        "label": "Data source",
+        "type": "datasource",
+        "query": "prometheus",
+        "current": {},
+        "hide": 0
+      },
+      {
+        "name": "provider",
+        "label": "Provider",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "query": "label_values(onwatch_quota_utilization_percent, provider)",
+        "refresh": 1,
+        "includeAll": true,
+        "multi": true,
+        "current": { "text": "All", "value": "$__all" }
+      },
+      {
+        "name": "quota_type",
+        "label": "Quota window",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "query": "label_values(onwatch_quota_utilization_percent{provider=~\"$provider\"}, quota_type)",
+        "refresh": 1,
+        "includeAll": true,
+        "multi": true,
+        "current": { "text": "All", "value": "$__all" }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Quota utilisation",
+      "description": "Share of each plan's own limit. The account is part of the series identity on purpose: collapsing it would show that a quota is running out without saying whose.",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "max by (provider, quota_type, account_id) (onwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"})",
+          "legendFormat": "{{provider}} / {{quota_type}} / acct {{account_id}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "custom": { "lineWidth": 2, "fillOpacity": 8, "showPoints": "never" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 80 },
+              { "color": "red", "value": 95 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Time until reset",
+      "description": "How long the current window still has to run. A series is absent when the provider schedules no reset.",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 6, "w": 8, "x": 0, "y": 9 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "max by (provider, quota_type, account_id) (onwatch_quota_reset_timestamp_seconds{provider=~\"$provider\",quota_type=~\"$quota_type\"} - time())",
+          "legendFormat": "{{provider}} / {{quota_type}} / acct {{account_id}}",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "text", "value": null }] }
+        },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "none", "textMode": "auto" }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Projected at reset",
+      "description": "Current utilisation plus the 24h trend extrapolated to this series' own reset time. Above 100 the window runs out before it resets. Long horizons make this noisy - treat a far-off reset as a weak signal.",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 6, "w": 8, "x": 8, "y": 9 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "max by (provider, quota_type, account_id) (onwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}) + max by (provider, quota_type, account_id) (deriv(onwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}[24h])) * max by (provider, quota_type, account_id) (onwatch_quota_reset_timestamp_seconds{provider=~\"$provider\",quota_type=~\"$quota_type\"} - time())",
+          "legendFormat": "{{provider}} / {{quota_type}} / acct {{account_id}}",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 80 },
+              { "color": "red", "value": 100 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "textMode": "auto" }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Collector health",
+      "description": "1 when the collector has recent successful data for the provider. This reflects poll freshness, not credential validity.",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 6, "w": 8, "x": 16, "y": 9 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "min by (provider) (onwatch_agent_healthy{provider=~\"$provider\"})",
+          "legendFormat": "{{provider}}",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "stale", "color": "red", "index": 0 }, "1": { "text": "fresh", "color": "green", "index": 1 } } }
+          ],
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] }
+        },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "textMode": "auto" }
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Age of last successful poll",
+      "description": "Companion to collector health: catches the collector stalling while its own health flag still reads healthy.",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 7, "w": 24, "x": 0, "y": 15 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "max by (provider, account_id) (onwatch_agent_last_cycle_age_seconds{provider=~\"$provider\"})",
+          "legendFormat": "{{provider}} / acct {{account_id}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": { "lineWidth": 2, "fillOpacity": 0, "showPoints": "never" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      }
+    }
+  ]
+}

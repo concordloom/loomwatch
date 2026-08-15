@@ -1,0 +1,117 @@
+suite: deployment
+templates:
+  - deployment.yaml
+tests:
+  - it: defaults to Recreate, because a ReadWriteOnce volume cannot be attached twice
+    asserts:
+      - equal:
+          path: spec.strategy.type
+          value: Recreate
+
+  - it: refuses RollingUpdate while the volume is ReadWriteOnce
+    set:
+      updateStrategy.type: RollingUpdate
+    asserts:
+      - failedTemplate:
+          errorPattern: "Multi-Attach"
+
+  - it: allows RollingUpdate once the volume can be attached from several nodes
+    set:
+      updateStrategy.type: RollingUpdate
+      persistence.accessModes: ["ReadWriteMany"]
+    asserts:
+      - equal:
+          path: spec.strategy.type
+          value: RollingUpdate
+
+  # Caught by values.schema.json before the template runs. The template keeps
+  # its own check as well, for installs that skip schema validation.
+  - it: refuses a second replica
+    set:
+      replicaCount: 2
+    asserts:
+      - failedTemplate:
+          errorPattern: "replicaCount.*maximum"
+
+  - it: refuses a database path outside the mounted volume
+    set:
+      databasePath: /var/lib/onwatch.db
+    asserts:
+      - failedTemplate:
+          errorPattern: "outside the mounted volume"
+
+  - it: accepts a database path outside the volume when nothing is persisted
+    set:
+      databasePath: /var/lib/onwatch.db
+      persistence.enabled: false
+    asserts:
+      - hasDocuments:
+          count: 1
+
+  - it: sets fsGroup so the nonroot user can create its database on a fresh volume
+    asserts:
+      - equal:
+          path: spec.template.spec.securityContext.fsGroup
+          value: 65532
+      - equal:
+          path: spec.template.spec.containers[0].securityContext.runAsUser
+          value: 65532
+
+  - it: gives the read-only root filesystem a writable /tmp
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].securityContext.readOnlyRootFilesystem
+          value: true
+      - contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content:
+            name: tmp
+            mountPath: /tmp
+
+  - it: lets the digest replace the tag rather than sit beside it
+    set:
+      image.tag: 1.0.1
+      image.digest: sha256:a22799d469e7afc63eb565775b820024b835bebb6d951f626198afa3d8d759f8
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: ghcr.io/concordloom/loomwatch@sha256:a22799d469e7afc63eb565775b820024b835bebb6d951f626198afa3d8d759f8
+
+  - it: rejects a digest that is not a full sha256
+    set:
+      image.digest: sha256:deadbeef
+    asserts:
+      - failedTemplate:
+          errorPattern: "does not match pattern"
+
+  - it: honours a global registry override
+    set:
+      global.imageRegistry: harbor.example.com
+    asserts:
+      - matchRegex:
+          path: spec.template.spec.containers[0].image
+          pattern: "^harbor\\.example\\.com/concordloom/loomwatch:"
+
+  - it: probes the only route that answers without credentials
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].livenessProbe.httpGet.path
+          value: /login
+      - equal:
+          path: spec.template.spec.containers[0].readinessProbe.httpGet.path
+          value: /login
+
+  - it: falls back to an emptyDir when persistence is off
+    set:
+      persistence.enabled: false
+    asserts:
+      - exists:
+          path: spec.template.spec.volumes[0].emptyDir
+      - notExists:
+          path: spec.template.spec.volumes[0].persistentVolumeClaim
+
+  - it: does not mount a service account token it never uses
+    asserts:
+      - equal:
+          path: spec.template.spec.automountServiceAccountToken
+          value: false

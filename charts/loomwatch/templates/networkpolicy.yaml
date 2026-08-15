@@ -1,0 +1,66 @@
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "loomwatch.fullname" . }}
+  namespace: {{ include "loomwatch.namespace" . | quote }}
+  labels: {{- include "loomwatch.labels" . | nindent 4 }}
+  {{- if .Values.commonAnnotations }}
+  annotations: {{- include "loomwatch.tplvalues.render" (dict "value" .Values.commonAnnotations "context" $) | nindent 4 }}
+  {{- end }}
+spec:
+  podSelector:
+    matchLabels: {{- include "loomwatch.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: collector
+  policyTypes:
+    - Ingress
+    - Egress
+  egress:
+    {{- if .Values.networkPolicy.allowExternalEgress }}
+    {{/*
+      Egress is not narrowed by default, and that is a considered choice
+      rather than laziness: the collector's whole job is reaching third-party
+      provider APIs whose addresses are outside our control and change without
+      notice. A restrictive default would stop collection, and silent
+      non-collection is the failure mode this chart exists to prevent.
+    */}}
+    - {}
+    {{- else }}
+    # DNS must stay open or nothing resolves.
+    - ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    {{- if .Values.networkPolicy.extraEgress }}
+    {{- include "loomwatch.tplvalues.render" (dict "value" .Values.networkPolicy.extraEgress "context" $) | nindent 4 }}
+    {{- end }}
+    {{- end }}
+  ingress:
+    {{- if .Values.networkPolicy.allowExternal }}
+    - ports:
+        - port: {{ .Values.containerPort }}
+    {{- else }}
+    - ports:
+        - port: {{ .Values.containerPort }}
+      from:
+        - podSelector:
+            matchLabels:
+              {{ include "loomwatch.fullname" . }}-client: "true"
+        {{- if .Values.networkPolicy.ingressPodMatchLabels }}
+        - podSelector:
+            matchLabels: {{- include "loomwatch.tplvalues.render" (dict "value" .Values.networkPolicy.ingressPodMatchLabels "context" $) | nindent 14 }}
+        {{- end }}
+        {{- if .Values.networkPolicy.ingressNSMatchLabels }}
+        - namespaceSelector:
+            matchLabels: {{- include "loomwatch.tplvalues.render" (dict "value" .Values.networkPolicy.ingressNSMatchLabels "context" $) | nindent 14 }}
+          {{- if .Values.networkPolicy.ingressNSPodMatchLabels }}
+          podSelector:
+            matchLabels: {{- include "loomwatch.tplvalues.render" (dict "value" .Values.networkPolicy.ingressNSPodMatchLabels "context" $) | nindent 14 }}
+          {{- end }}
+        {{- end }}
+    {{- end }}
+    {{- if .Values.networkPolicy.extraIngress }}
+    {{- include "loomwatch.tplvalues.render" (dict "value" .Values.networkPolicy.extraIngress "context" $) | nindent 4 }}
+    {{- end }}
+{{- end }}

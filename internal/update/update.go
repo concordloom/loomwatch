@@ -19,20 +19,36 @@ import (
 )
 
 const (
-	githubReleasesURL     = "https://api.github.com/repos/onllm-dev/onwatch/releases/latest"
-	githubReleasesListURL = "https://api.github.com/repos/onllm-dev/onwatch/releases"
+	// githubRepoSlug is the repository the updater looks at.
+	//
+	// Fork change, deliberate: it must point at THIS repository, not upstream.
+	// A fork that checks upstream reports "update available" against a version
+	// line it does not share, and offers to replace the running binary with a
+	// build that does not contain this fork's changes - silently undoing them.
+	//
+	// Self-update is in any case unsupported for the container deployment,
+	// where the unit of delivery is the image and the binary is not writable
+	// by the runtime user. The check is still useful as a "a newer release
+	// exists" signal.
+	//
+	// Kept as a single constant so that re-applying it after an upstream sync
+	// is one edit rather than four.
+	githubRepoSlug = "concordloom/loomwatch"
+
+	githubReleasesURL     = "https://api.github.com/repos/" + githubRepoSlug + "/releases/latest"
+	githubReleasesListURL = "https://api.github.com/repos/" + githubRepoSlug + "/releases"
 	// githubReleasesRedirectURL is the github.com (NOT api.github.com) web
 	// endpoint that 302-redirects to the newest release's tag page. It is not
 	// subject to the REST API's 60-req/hr unauthenticated rate limit, so it is
 	// our fallback when the API returns 403 (see issue #81).
-	githubReleasesRedirectURL = "https://github.com/onllm-dev/onwatch/releases/latest"
-	downloadBaseURL           = "https://github.com/onllm-dev/onwatch/releases/download"
-	defaultCacheTTL       = 1 * time.Hour
-	downloadTimeout       = 10 * time.Minute
-	downloadRetryBackoff  = 2 * time.Second
-	downloadMaxAttempts   = 2
-	checkRetryBackoff     = 2 * time.Second
-	checkMaxAttempts      = 3
+	githubReleasesRedirectURL = "https://github.com/" + githubRepoSlug + "/releases/latest"
+	downloadBaseURL           = "https://github.com/" + githubRepoSlug + "/releases/download"
+	defaultCacheTTL           = 1 * time.Hour
+	downloadTimeout           = 10 * time.Minute
+	downloadRetryBackoff      = 2 * time.Second
+	downloadMaxAttempts       = 2
+	checkRetryBackoff         = 2 * time.Second
+	checkMaxAttempts          = 3
 )
 
 var (

@@ -1,0 +1,132 @@
+{{- if .Values.metrics.prometheusRule.enabled }}
+{{- $sel := printf "provider=~\"%s\",quota_type!~\"%s\"" .Values.metrics.prometheusRule.providers .Values.metrics.prometheusRule.ignoredQuotaTypes }}
+{{- $by := "max by (provider, quota_type, account_id)" }}
+{{- $remaining := printf "%s (onwatch_quota_reset_timestamp_seconds{%s} - time())" $by $sel }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "loomwatch.fullname" . }}
+  namespace: {{ default (include "loomwatch.namespace" .) .Values.metrics.prometheusRule.namespace | quote }}
+  labels: {{- include "loomwatch.labels" . | nindent 4 }}
+    app.kubernetes.io/component: metrics
+    {{- if .Values.metrics.prometheusRule.labels }}
+    {{- include "loomwatch.tplvalues.render" (dict "value" .Values.metrics.prometheusRule.labels "context" $) | nindent 4 }}
+    {{- end }}
+  {{- if or .Values.metrics.prometheusRule.annotations .Values.commonAnnotations }}
+  annotations:
+    {{- if .Values.commonAnnotations }}
+    {{- include "loomwatch.tplvalues.render" (dict "value" .Values.commonAnnotations "context" $) | nindent 4 }}
+    {{- end }}
+    {{- if .Values.metrics.prometheusRule.annotations }}
+    {{- include "loomwatch.tplvalues.render" (dict "value" .Values.metrics.prometheusRule.annotations "context" $) | nindent 4 }}
+    {{- end }}
+  {{- end }}
+spec:
+  groups:
+    - name: loomwatch.quotas
+      rules:
+        {{- if .Values.metrics.prometheusRule.defaultRules.quotaHigh }}
+        # Utilisation is already expressed as a share of the plan's own limit,
+        # so the threshold is a share of the quota rather than a guess about
+        # what counts as "a lot of tokens". 100 is the quota itself.
+        - alert: LoomwatchQuotaHigh
+          expr: >-
+            {{ $by }} (onwatch_quota_utilization_percent{ {{- $sel -}} }) > {{ .Values.metrics.prometheusRule.highThreshold }}
+          for: 10m
+          labels:
+            severity: warning
+            subsystem: llm-quota
+          annotations:
+            summary: >-
+              Quota {{ "{{ $labels.quota_type }}" }} of {{ "{{ $labels.provider }}" }} (account {{ "{{ $labels.account_id }}" }}) is over {{ .Values.metrics.prometheusRule.highThreshold }}% used
+            description: >-
+              There may not be enough left before the window resets. Check what
+              is consuming it and consider pausing background workloads.
+        {{- end }}
+        {{- if .Values.metrics.prometheusRule.defaultRules.quotaCritical }}
+        - alert: LoomwatchQuotaCritical
+          expr: >-
+            {{ $by }} (onwatch_quota_utilization_percent{ {{- $sel -}} }) > {{ .Values.metrics.prometheusRule.criticalThreshold }}
+          for: 5m
+          labels:
+            severity: critical
+            subsystem: llm-quota
+          annotations:
+            summary: >-
+              Quota {{ "{{ $labels.quota_type }}" }} of {{ "{{ $labels.provider }}" }} (account {{ "{{ $labels.account_id }}" }}) is over {{ .Values.metrics.prometheusRule.criticalThreshold }}% used
+            description: >-
+              The provider will start refusing requests shortly and anything
+              depending on it will fail. Stop optional workloads or raise the plan.
+        {{- end }}
+        {{- if .Values.metrics.prometheusRule.defaultRules.burnRate }}
+        # `current + slope * seconds_remaining`, written out rather than using
+        # predict_linear: that function takes a scalar horizon and therefore
+        # cannot use each series' own reset time. Feeding it the reset vector is
+        # a parse error, and a rule that never evaluates is worse than no rule -
+        # it looks like coverage.
+        #
+        # The second clause is the horizon gate. Extrapolating the trend window
+        # across a much longer horizon is noise amplification, not evidence.
+        - alert: LoomwatchQuotaBurnsBeforeReset
+          expr: >-
+            (
+            (
+            {{ $by }} (onwatch_quota_utilization_percent{ {{- $sel -}} })
+            + {{ $by }} (deriv(onwatch_quota_utilization_percent{ {{- $sel -}} }[{{ .Values.metrics.prometheusRule.burn.trendWindow }}]))
+            * {{ $remaining }}
+            ) > 100
+            )
+            and
+            {{ $remaining }} < {{ .Values.metrics.prometheusRule.burn.maxHorizonSeconds }}
+          for: 30m
+          labels:
+            severity: warning
+            subsystem: llm-quota
+          annotations:
+            summary: >-
+              Quota {{ "{{ $labels.quota_type }}" }} of {{ "{{ $labels.provider }}" }} (account {{ "{{ $labels.account_id }}" }}) is on track to run out before it resets
+            description: >-
+              This is high consumption in the only measurable sense: not an
+              absolute number of tokens, but the rate relative to the plan's own
+              quota, projected to the moment that quota resets.
+        {{- end }}
+        {{- if .Values.metrics.prometheusRule.defaultRules.collectorNotPolling }}
+        # Threshold derived from pollInterval rather than hand-picked, so it
+        # moves when the interval does instead of silently going stale.
+        - alert: LoomwatchCollectorNotPolling
+          expr: >-
+            max by (provider) (onwatch_agent_last_cycle_age_seconds{provider=~"{{ .Values.metrics.prometheusRule.providers }}"}) > {{ mul .Values.pollInterval 5 }}
+          for: 10m
+          labels:
+            severity: warning
+            subsystem: llm-quota
+          annotations:
+            summary: Quota collector stopped polling {{ "{{ $labels.provider }}" }}
+            description: >-
+              Distinct from LoomwatchCollectorStale: this catches the collector
+              itself stalling, where its own health flag stays at 1 and reports
+              nothing. Check the loomwatch container logs.
+        {{- end }}
+        {{- if .Values.metrics.prometheusRule.defaultRules.collectorStale }}
+        # Startup is suppressed by `for`, not by a condition on process start
+        # time. Such a condition yields an EMPTY result when unmet, and an empty
+        # result is indistinguishable from a healthy one - the guard against
+        # false alarms would become their source.
+        - alert: LoomwatchCollectorStale
+          expr: >-
+            min by (provider) (onwatch_agent_healthy{provider=~"{{ .Values.metrics.prometheusRule.providers }}"}) < 1
+          for: 15m
+          labels:
+            severity: warning
+            subsystem: llm-quota
+          annotations:
+            summary: Quota collector is not receiving data from {{ "{{ $labels.provider }}" }}
+            description: >-
+              Remaining quota stopped updating, which means every other quota
+              rule here is blind and its silence no longer means anything. The
+              usual cause is an expired provider key or an unreachable API.
+        {{- end }}
+        {{- if .Values.metrics.prometheusRule.extraRules }}
+        {{- include "loomwatch.tplvalues.render" (dict "value" .Values.metrics.prometheusRule.extraRules "context" $) | nindent 8 }}
+        {{- end }}
+{{- end }}

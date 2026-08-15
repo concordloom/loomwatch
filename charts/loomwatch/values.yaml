@@ -1,0 +1,688 @@
+## @section Global parameters
+## Global values are propagated to every object rendered by this chart.
+##
+
+## @param global.imageRegistry Global Docker image registry
+## @param global.imagePullSecrets Global Docker registry secret names as an array
+## @param global.storageClass Global StorageClass for Persistent Volume(s)
+## @param global.defaultStorageClass Global default StorageClass for Persistent Volume(s)
+##
+global:
+  imageRegistry: ""
+  ## E.g.
+  ## imagePullSecrets:
+  ##   - myRegistryKeySecretName
+  ##
+  imagePullSecrets: []
+  storageClass: ""
+  defaultStorageClass: ""
+
+## @section Common parameters
+##
+
+## @param kubeVersion Override Kubernetes version
+##
+kubeVersion: ""
+## @param nameOverride String to partially override loomwatch.fullname
+##
+nameOverride: ""
+## @param fullnameOverride String to fully override loomwatch.fullname
+##
+fullnameOverride: ""
+## @param namespaceOverride String to fully override the deployment namespace
+##
+namespaceOverride: ""
+## @param commonLabels Labels to add to all deployed objects
+##
+commonLabels: {}
+## @param commonAnnotations Annotations to add to all deployed objects
+##
+commonAnnotations: {}
+## @param clusterDomain Kubernetes cluster domain name
+##
+clusterDomain: cluster.local
+## @param extraDeploy Array of extra objects to deploy with the release
+##
+extraDeploy: []
+
+## Enable diagnostic mode in the deployment.
+## The image is distroless and has no shell, so the override below is a no-op
+## unless you also point image.repository at a shell-bearing variant. Upstream
+## publishes one as the `alpine` tag.
+## @param diagnosticMode.enabled Enable diagnostic mode (all probes will be disabled and the command will be overridden)
+## @param diagnosticMode.command Command to override all containers in the deployment
+## @param diagnosticMode.args Args to override all containers in the deployment
+##
+diagnosticMode:
+  enabled: false
+  command:
+    - sleep
+  args:
+    - infinity
+
+## @section loomwatch Image parameters
+##
+
+## loomwatch image
+## ref: https://github.com/concordloom/loomwatch/pkgs/container/loomwatch
+## @param image.registry [default: ghcr.io] loomwatch image registry
+## @param image.repository loomwatch image repository
+## @param image.tag loomwatch image tag (immutable tags are recommended)
+## @param image.digest loomwatch image digest in the way sha256:aa.... Please note this parameter, if set, will override the tag
+## @param image.pullPolicy loomwatch image pull policy
+## @param image.pullSecrets loomwatch image pull secrets
+##
+image:
+  registry: ghcr.io
+  repository: concordloom/loomwatch
+  tag: 1.0.2
+  ## Pinning by digest is strongly recommended for a component whose readings
+  ## alerts are built on: a moving tag lets the running version change with no
+  ## diff in whatever declares it.
+  ##
+  digest: ""
+  pullPolicy: IfNotPresent
+  ## E.g.
+  ## pullSecrets:
+  ##   - myRegistryKeySecretName
+  ##
+  pullSecrets: []
+
+## @section loomwatch configuration parameters
+##
+
+## @param containerPort loomwatch HTTP container port
+##
+containerPort: 9211
+## @param logLevel loomwatch log level. Allowed values: `debug`, `info`, `warn`, `error`
+##
+logLevel: info
+## @param pollInterval Seconds between provider quota polls
+## The collector-liveness alert rule derives its threshold from this value, so
+## changing it moves the alert with it rather than leaving a hand-picked number
+## behind.
+##
+pollInterval: 120
+## @param databasePath Path of the SQLite database inside the container
+## Must live under persistence.mountPath when persistence is enabled.
+##
+databasePath: /data/onwatch.db
+## @param extraEnvVars Array with extra environment variables to add to the loomwatch container
+##
+extraEnvVars: []
+## @param extraEnvVarsCM Name of existing ConfigMap containing extra env vars
+##
+extraEnvVarsCM: ""
+## @param extraEnvVarsSecret Name of existing Secret containing extra env vars
+##
+extraEnvVarsSecret: ""
+
+## @section Credentials parameters
+##
+
+## loomwatch credentials.
+##
+## Providers are a free-form map rather than named fields on purpose: upstream
+## supports more than ten providers and the set changes between releases, so a
+## fixed list would go stale. The key is the environment variable the collector
+## reads (`MINIMAX_API_KEY`, `ZAI_API_KEY`, ...).
+##
+## @param auth.adminPassword Password for the built-in `admin` panel user. Generated randomly if empty and no existing secret is given
+## @param auth.metricsToken Bearer token required on /metrics. Generated randomly if empty and no existing secret is given
+## @param auth.providers [object] Map of provider credential environment variables to their values
+## @param auth.existingSecret Name of an existing Secret holding all credentials. Takes precedence over the values above
+## @param auth.secretKeys.adminPasswordKey Key in the existing Secret holding the admin password
+## @param auth.secretKeys.metricsTokenKey Key in the existing Secret holding the metrics token
+##
+auth:
+  adminPassword: ""
+  metricsToken: ""
+  ## E.g.
+  ## providers:
+  ##   MINIMAX_API_KEY: "..."
+  ##   ZAI_API_KEY: "..."
+  ##
+  providers: {}
+  existingSecret: ""
+  secretKeys:
+    adminPasswordKey: ONWATCH_ADMIN_PASS
+    metricsTokenKey: ONWATCH_METRICS_TOKEN
+
+## @section loomwatch deployment parameters
+##
+
+## @param replicaCount Number of loomwatch replicas to deploy
+## Kept at 1 and not exposed to autoscaling: the collector is a single writer
+## against a SQLite file on a ReadWriteOnce volume. A second replica would not
+## share the volume and would double every provider poll.
+##
+replicaCount: 1
+## @param updateStrategy.type loomwatch deployment strategy type
+## `Recreate` is not a default carried over by accident. With a ReadWriteOnce
+## volume a RollingUpdate schedules the new Pod before the old one is gone; if
+## it lands on another node it deadlocks on Multi-Attach and the rollout never
+## completes.
+##
+updateStrategy:
+  type: Recreate
+## @param priorityClassName loomwatch pod priority class name
+##
+priorityClassName: ""
+## @param schedulerName Name of the Kubernetes scheduler (other than default)
+##
+schedulerName: ""
+## @param terminationGracePeriodSeconds Seconds loomwatch pod needs to terminate gracefully
+##
+terminationGracePeriodSeconds: ""
+## @param topologySpreadConstraints Topology Spread Constraints for pod assignment
+##
+topologySpreadConstraints: []
+## @param podLabels Extra labels for loomwatch pods
+##
+podLabels: {}
+## @param podAnnotations Annotations for loomwatch pods
+##
+podAnnotations: {}
+## @param podAffinityPreset Pod affinity preset. Ignored if `affinity` is set. Allowed values: `soft` or `hard`
+##
+podAffinityPreset: ""
+## @param podAntiAffinityPreset Pod anti-affinity preset. Ignored if `affinity` is set. Allowed values: `soft` or `hard`
+##
+podAntiAffinityPreset: soft
+## Node affinity preset
+## @param nodeAffinityPreset.type Node affinity preset type. Ignored if `affinity` is set. Allowed values: `soft` or `hard`
+## @param nodeAffinityPreset.key Node label key to match. Ignored if `affinity` is set
+## @param nodeAffinityPreset.values Node label values to match. Ignored if `affinity` is set
+##
+nodeAffinityPreset:
+  type: ""
+  key: ""
+  values: []
+## @param affinity Affinity for pod assignment
+##
+affinity: {}
+## @param nodeSelector Node labels for pod assignment
+##
+nodeSelector: {}
+## @param tolerations Tolerations for pod assignment
+##
+tolerations: []
+## loomwatch pods' Security Context
+## @param podSecurityContext.enabled Enabled loomwatch pods' Security Context
+## @param podSecurityContext.fsGroupChangePolicy Set filesystem group change policy
+## @param podSecurityContext.supplementalGroups Set filesystem extra groups
+## @param podSecurityContext.fsGroup Set loomwatch pod's Security Context fsGroup
+##
+podSecurityContext:
+  enabled: true
+  fsGroupChangePolicy: Always
+  supplementalGroups: []
+  ## The image runs as the distroless `nonroot` user (65532). A freshly
+  ## provisioned volume is owned by root, so without fsGroup the process cannot
+  ## create its database and the container exits with "database path is not
+  ## writable". An emptyDir never showed this because it is world-writable.
+  ##
+  fsGroup: 65532
+## loomwatch containers' Security Context
+## @param containerSecurityContext.enabled Enabled loomwatch containers' Security Context
+## @param containerSecurityContext.seLinuxOptions [object,nullable] Set SELinux options in container
+## @param containerSecurityContext.runAsUser Set loomwatch containers' Security Context runAsUser
+## @param containerSecurityContext.runAsGroup Set loomwatch containers' Security Context runAsGroup
+## @param containerSecurityContext.runAsNonRoot Set loomwatch containers' Security Context runAsNonRoot
+## @param containerSecurityContext.readOnlyRootFilesystem Set loomwatch containers' Security Context readOnlyRootFilesystem
+## @param containerSecurityContext.privileged Set loomwatch containers' Security Context privileged
+## @param containerSecurityContext.allowPrivilegeEscalation Set loomwatch containers' Security Context allowPrivilegeEscalation
+## @param containerSecurityContext.capabilities.drop List of capabilities to be dropped
+## @param containerSecurityContext.seccompProfile.type Set container's Security Context seccomp profile
+##
+containerSecurityContext:
+  enabled: true
+  seLinuxOptions: {}
+  runAsUser: 65532
+  runAsGroup: 65532
+  runAsNonRoot: true
+  ## The binary writes only to the mounted volume, so the root filesystem can
+  ## stay read-only. This also removes the last theoretical path for the
+  ## built-in self-update to overwrite /app/onwatch.
+  ##
+  readOnlyRootFilesystem: true
+  privileged: false
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop: ["ALL"]
+  seccompProfile:
+    type: RuntimeDefault
+## loomwatch containers' resource requests and limits
+## @param resourcesPreset Set container resources according to one common preset. Ignored if `resources` is set
+## @param resources Set container requests and limits for different resources like CPU or memory
+##
+resourcesPreset: nano
+resources: {}
+## Configure extra options for loomwatch containers' liveness and readiness probes
+##
+## The probes hit `/login`, which is the only route that answers 200 without
+## credentials. There is no dedicated health endpoint upstream: `/` answers 302
+## to the login page, and `/metrics` answers 401 unless the bearer token is
+## presented - and a probe is not a place to put a secret.
+## @param livenessProbe.enabled Enable livenessProbe on loomwatch containers
+## @param livenessProbe.initialDelaySeconds Initial delay seconds for livenessProbe
+## @param livenessProbe.periodSeconds Period seconds for livenessProbe
+## @param livenessProbe.timeoutSeconds Timeout seconds for livenessProbe
+## @param livenessProbe.failureThreshold Failure threshold for livenessProbe
+## @param livenessProbe.successThreshold Success threshold for livenessProbe
+##
+livenessProbe:
+  enabled: true
+  initialDelaySeconds: 10
+  periodSeconds: 20
+  timeoutSeconds: 5
+  failureThreshold: 6
+  successThreshold: 1
+## @param readinessProbe.enabled Enable readinessProbe on loomwatch containers
+## @param readinessProbe.initialDelaySeconds Initial delay seconds for readinessProbe
+## @param readinessProbe.periodSeconds Period seconds for readinessProbe
+## @param readinessProbe.timeoutSeconds Timeout seconds for readinessProbe
+## @param readinessProbe.failureThreshold Failure threshold for readinessProbe
+## @param readinessProbe.successThreshold Success threshold for readinessProbe
+##
+readinessProbe:
+  enabled: true
+  initialDelaySeconds: 5
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 6
+  successThreshold: 1
+## @param startupProbe.enabled Enable startupProbe on loomwatch containers
+## @param startupProbe.initialDelaySeconds Initial delay seconds for startupProbe
+## @param startupProbe.periodSeconds Period seconds for startupProbe
+## @param startupProbe.timeoutSeconds Timeout seconds for startupProbe
+## @param startupProbe.failureThreshold Failure threshold for startupProbe
+## @param startupProbe.successThreshold Success threshold for startupProbe
+##
+startupProbe:
+  enabled: false
+  initialDelaySeconds: 5
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 30
+  successThreshold: 1
+## @param customLivenessProbe Custom livenessProbe that overrides the default one
+##
+customLivenessProbe: {}
+## @param customReadinessProbe Custom readinessProbe that overrides the default one
+##
+customReadinessProbe: {}
+## @param customStartupProbe Custom startupProbe that overrides the default one
+##
+customStartupProbe: {}
+## @param lifecycleHooks for the loomwatch container(s) to automate configuration before or after startup
+##
+lifecycleHooks: {}
+## @param command Override default container command (useful when using custom images)
+##
+command: []
+## @param args Override default container args (useful when using custom images)
+##
+args: []
+## @param automountServiceAccountToken Mount Service Account token in loomwatch pods
+## The collector talks to provider APIs, never to the Kubernetes API.
+##
+automountServiceAccountToken: false
+## @param hostAliases loomwatch pods host aliases
+##
+hostAliases: []
+## @param extraVolumes Optionally specify extra list of additional volumes for the loomwatch pod(s)
+##
+extraVolumes: []
+## @param extraVolumeMounts Optionally specify extra list of additional volumeMounts for the loomwatch container(s)
+##
+extraVolumeMounts: []
+## @param sidecars Add additional sidecar containers to the loomwatch pod(s)
+## A proxy sidecar belongs here rather than in a dedicated chart section: which
+## providers are reachable from a given cluster is a property of that network,
+## not of loomwatch.
+##
+sidecars: []
+## @param initContainers Add additional init containers to the loomwatch pod(s)
+##
+initContainers: []
+
+## @section Traffic Exposure Parameters
+##
+
+## loomwatch service parameters
+##
+service:
+  ## @param service.type loomwatch service type
+  ##
+  type: ClusterIP
+  ## @param service.ports.http loomwatch service HTTP port
+  ##
+  ports:
+    http: 9211
+  ## @param service.nodePorts.http Node port for HTTP
+  ##
+  nodePorts:
+    http: ""
+  ## @param service.clusterIP loomwatch service Cluster IP
+  ##
+  clusterIP: ""
+  ## @param service.loadBalancerIP loomwatch service Load Balancer IP
+  ##
+  loadBalancerIP: ""
+  ## @param service.loadBalancerSourceRanges loomwatch service Load Balancer sources
+  ##
+  loadBalancerSourceRanges: []
+  ## @param service.externalTrafficPolicy loomwatch service external traffic policy
+  ##
+  externalTrafficPolicy: Cluster
+  ## @param service.sessionAffinity Control where client requests go, to the same pod or round-robin
+  ##
+  sessionAffinity: None
+  ## @param service.annotations Additional custom annotations for loomwatch service
+  ##
+  annotations: {}
+  ## @param service.extraPorts Extra ports to expose in loomwatch service (normally used with the `sidecars` value)
+  ##
+  extraPorts: []
+
+## loomwatch ingress parameters
+##
+## The panel carries the whole product surface behind a single password and has
+## no second factor. Exposing it is a deliberate act, so this is off by default
+## even though the chart makes it a one-liner.
+##
+ingress:
+  ## @param ingress.enabled Enable ingress record generation for loomwatch
+  ##
+  enabled: false
+  ## @param ingress.pathType Ingress path type
+  ##
+  pathType: ImplementationSpecific
+  ## @param ingress.apiVersion Force Ingress API version (automatically detected if not set)
+  ##
+  apiVersion: ""
+  ## @param ingress.hostname Default host for the ingress record
+  ##
+  hostname: loomwatch.local
+  ## @param ingress.ingressClassName IngressClass that will be used to implement the Ingress
+  ##
+  ingressClassName: ""
+  ## @param ingress.path Default path for the ingress record
+  ##
+  path: /
+  ## @param ingress.annotations Additional annotations for the Ingress resource
+  ##
+  annotations: {}
+  ## @param ingress.tls Enable TLS configuration for the host defined at `ingress.hostname` parameter
+  ##
+  tls: false
+  ## @param ingress.selfSigned Create a TLS secret for this ingress record using self-signed certificates generated by Helm
+  ##
+  selfSigned: false
+  ## @param ingress.extraHosts An array with additional hostname(s) to be covered with the ingress record
+  ##
+  extraHosts: []
+  ## @param ingress.extraPaths An array with additional arbitrary paths that may need to be added to the ingress under the main host
+  ##
+  extraPaths: []
+  ## @param ingress.extraTls TLS configuration for additional hostname(s) to be covered with this ingress record
+  ##
+  extraTls: []
+  ## @param ingress.secrets Custom TLS certificates as secrets
+  ##
+  secrets: []
+  ## @param ingress.extraRules Additional rules to be covered with this ingress record
+  ##
+  extraRules: []
+
+## @section Persistence Parameters
+##
+
+## Persistence parameters
+##
+## Persistence is on by default, and that is not the cautious default it looks
+## like. Provider accounts and the panel password live in this database and can
+## only be created through the UI, so on an ephemeral volume a second account
+## disappears at the first Pod replacement - and you find out when its quota
+## burns unwatched. Quota history itself is disposable; Prometheus keeps that.
+##
+persistence:
+  ## @param persistence.enabled Enable persistence using Persistent Volume Claims
+  ##
+  enabled: true
+  ## @param persistence.mountPath Path to mount the volume at
+  ##
+  mountPath: /data
+  ## @param persistence.subPath The subdirectory of the volume to mount to
+  ##
+  subPath: ""
+  ## @param persistence.storageClass Storage class of backing PVC
+  ##
+  storageClass: ""
+  ## @param persistence.annotations Persistent Volume Claim annotations
+  ##
+  annotations: {}
+  ## @param persistence.labels Persistent Volume Claim labels
+  ##
+  labels: {}
+  ## @param persistence.accessModes Persistent Volume Access Modes
+  ##
+  accessModes:
+    - ReadWriteOnce
+  ## @param persistence.size Size of data volume
+  ##
+  size: 1Gi
+  ## @param persistence.selector Selector to match an existing Persistent Volume for the data PVC
+  ##
+  selector: {}
+  ## @param persistence.dataSource Custom PVC data source
+  ##
+  dataSource: {}
+  ## @param persistence.existingClaim The name of an existing PVC to use for persistence
+  ##
+  existingClaim: ""
+
+## @section Other Parameters
+##
+
+## Service account for loomwatch to use
+##
+serviceAccount:
+  ## @param serviceAccount.create Enable creation of ServiceAccount for loomwatch pod
+  ##
+  create: true
+  ## @param serviceAccount.name The name of the ServiceAccount to use
+  ##
+  name: ""
+  ## @param serviceAccount.annotations Additional Service Account annotations
+  ##
+  annotations: {}
+  ## @param serviceAccount.automountServiceAccountToken Automount service account token for the deployment controller service account
+  ##
+  automountServiceAccountToken: false
+
+## loomwatch Pod Disruption Budget
+##
+pdb:
+  ## @param pdb.create Enable/disable a Pod Disruption Budget creation
+  ## Off by default: at a single replica any budget either permits the eviction
+  ## or blocks node drains outright, and silently blocking drains is worse than
+  ## a short gap in polling.
+  ##
+  create: false
+  ## @param pdb.minAvailable Minimum number/percentage of pods that should remain scheduled
+  ##
+  minAvailable: ""
+  ## @param pdb.maxUnavailable Maximum number/percentage of pods that may be made unavailable
+  ##
+  maxUnavailable: ""
+
+## Network Policy configuration
+##
+networkPolicy:
+  ## @param networkPolicy.enabled Specifies whether a NetworkPolicy should be created
+  ##
+  enabled: true
+  ## @param networkPolicy.allowExternal Don't require server label for connections
+  ##
+  allowExternal: true
+  ## @param networkPolicy.allowExternalEgress Allow the pod to access any range of port and all destinations
+  ## Egress cannot be meaningfully narrowed here: provider APIs are third-party
+  ## endpoints whose addresses change, and denying them stops all collection.
+  ##
+  allowExternalEgress: true
+  ## @param networkPolicy.extraIngress Add extra ingress rules to the NetworkPolicy
+  ##
+  extraIngress: []
+  ## @param networkPolicy.extraEgress Add extra egress rules to the NetworkPolicy
+  ##
+  extraEgress: []
+  ## @param networkPolicy.ingressPodMatchLabels [object] Labels to match to allow traffic from other pods
+  ##
+  ingressPodMatchLabels: {}
+  ## @param networkPolicy.ingressNSMatchLabels [object] Labels to match to allow traffic from other namespaces
+  ##
+  ingressNSMatchLabels: {}
+  ## @param networkPolicy.ingressNSPodMatchLabels [object] Pod labels to match to allow traffic from other namespaces
+  ##
+  ingressNSPodMatchLabels: {}
+
+## @section Metrics Parameters
+##
+
+metrics:
+  ## @param metrics.enabled Protect the /metrics endpoint with a bearer token
+  ## The endpoint itself is always served; this controls whether a token is
+  ## required. Leaving it unprotected exposes which providers you use and how
+  ## much of each plan you have burned.
+  ##
+  enabled: true
+  ## Prometheus Operator ServiceMonitor configuration
+  ##
+  serviceMonitor:
+    ## @param metrics.serviceMonitor.enabled Create a ServiceMonitor resource for scraping metrics using Prometheus Operator
+    ##
+    enabled: false
+    ## @param metrics.serviceMonitor.namespace Namespace in which the ServiceMonitor will be created
+    ##
+    namespace: ""
+    ## @param metrics.serviceMonitor.interval Scrape interval. If not set, the Prometheus default scrape interval is used
+    ##
+    interval: 60s
+    ## @param metrics.serviceMonitor.scrapeTimeout Timeout after which the scrape is ended
+    ##
+    scrapeTimeout: ""
+    ## @param metrics.serviceMonitor.labels Additional labels for the ServiceMonitor. Usually needed for the Prometheus Operator to pick it up
+    ##
+    labels: {}
+    ## @param metrics.serviceMonitor.annotations Additional annotations for the ServiceMonitor
+    ##
+    annotations: {}
+    ## @param metrics.serviceMonitor.honorLabels Specify honorLabels parameter to add the scrape endpoint
+    ##
+    honorLabels: false
+    ## @param metrics.serviceMonitor.relabelings Metric relabelings to apply to samples before ingestion
+    ##
+    relabelings: []
+    ## @param metrics.serviceMonitor.metricRelabelings Metrics relabelings to apply to samples before ingestion
+    ##
+    metricRelabelings: []
+    ## @param metrics.serviceMonitor.jobLabel The name of the label on the target service to use as the job name
+    ##
+    jobLabel: ""
+    ## @param metrics.serviceMonitor.selector Prometheus instance selector labels
+    ##
+    selector: {}
+  ## Prometheus Operator PrometheusRule configuration
+  ##
+  ## These are the rules the chart exists for. Every threshold below is a share
+  ## of the plan's own limit, not a guess about what "a lot of tokens" means -
+  ## the collector already reports utilisation as a percentage of the limit, so
+  ## 100 is the quota itself.
+  ##
+  prometheusRule:
+    ## @param metrics.prometheusRule.enabled Create a PrometheusRule resource for alerting on quota exhaustion
+    ##
+    enabled: false
+    ## @param metrics.prometheusRule.namespace Namespace in which the PrometheusRule will be created
+    ##
+    namespace: ""
+    ## @param metrics.prometheusRule.labels Additional labels for the PrometheusRule
+    ##
+    labels: {}
+    ## @param metrics.prometheusRule.annotations Additional annotations for the PrometheusRule
+    ##
+    annotations: {}
+    ## @param metrics.prometheusRule.providers Regex of providers the default rules observe
+    ## Alerting on a provider you have not configured is noise, so this is an
+    ## explicit list rather than a catch-all.
+    ##
+    providers: ".+"
+    ## @param metrics.prometheusRule.ignoredQuotaTypes Regex of quota types excluded from the default rules
+    ## Anchored on purpose. PromQL label matchers compare the whole string, so
+    ## `video` would NOT exclude `weekly_video`; the leading `.*` is what makes
+    ## this mean "any video quota, in any window".
+    ##
+    ignoredQuotaTypes: ".*video"
+    ## @param metrics.prometheusRule.highThreshold Utilisation percentage above which LoomwatchQuotaHigh fires
+    ##
+    highThreshold: 80
+    ## @param metrics.prometheusRule.criticalThreshold Utilisation percentage above which LoomwatchQuotaCritical fires
+    ##
+    criticalThreshold: 95
+    ## Burn prediction: will this quota cross 100% before its own window resets?
+    ##
+    ## Two things here are deliberate and were arrived at the hard way.
+    ##
+    ## The prediction is written as vector arithmetic (`current + slope *
+    ## seconds_remaining`) rather than with `predict_linear`. predict_linear
+    ## takes a SCALAR horizon, so it cannot use each series' own reset time -
+    ## passing the reset vector to it is a parse error and the rule never
+    ## evaluates at all, while still reporting healthy in some UIs.
+    ##
+    ## The horizon gate matters just as much. Extrapolating a one-day trend
+    ## across a week is not evidence, it is noise amplified sixfold - a single
+    ## batch job can project a breach that will never happen. Beyond the gate
+    ## the rule stays silent rather than guessing. Note that the horizon is a
+    ## property of the series, not of its name: a token quota can reset weekly
+    ## while a "general" quota resets every five hours.
+    ##
+    ## @param metrics.prometheusRule.burn.trendWindow Range over which the burn slope is measured
+    ## @param metrics.prometheusRule.burn.maxHorizonSeconds Do not predict for windows resetting further away than this
+    ##
+    burn:
+      trendWindow: 24h
+      maxHorizonSeconds: 172800
+    ## @param metrics.prometheusRule.defaultRules.quotaHigh Enable the LoomwatchQuotaHigh rule
+    ## @param metrics.prometheusRule.defaultRules.quotaCritical Enable the LoomwatchQuotaCritical rule
+    ## @param metrics.prometheusRule.defaultRules.burnRate Enable the LoomwatchQuotaBurnsBeforeReset rule
+    ## @param metrics.prometheusRule.defaultRules.collectorNotPolling Enable the LoomwatchCollectorNotPolling rule
+    ## @param metrics.prometheusRule.defaultRules.collectorStale Enable the LoomwatchCollectorStale rule
+    ##
+    defaultRules:
+      quotaHigh: true
+      quotaCritical: true
+      burnRate: true
+      collectorNotPolling: true
+      collectorStale: true
+    ## @param metrics.prometheusRule.extraRules Additional rules appended to the generated group
+    ##
+    extraRules: []
+
+## Grafana dashboard
+##
+dashboard:
+  ## @param dashboard.enabled Ship the quota dashboard as a ConfigMap for the Grafana sidecar to import
+  ##
+  enabled: false
+  ## @param dashboard.namespace Namespace in which the dashboard ConfigMap will be created
+  ##
+  namespace: ""
+  ## @param dashboard.labels [object] Labels the Grafana dashboard sidecar selects on
+  ##
+  labels:
+    grafana_dashboard: "1"
+  ## @param dashboard.annotations Additional annotations for the dashboard ConfigMap
+  ##
+  annotations: {}

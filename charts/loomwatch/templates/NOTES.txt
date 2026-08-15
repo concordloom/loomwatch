@@ -1,0 +1,111 @@
+CHART NAME: {{ .Chart.Name }}
+CHART VERSION: {{ .Chart.Version }}
+APP VERSION: {{ .Chart.AppVersion }}
+
+** Please be patient while the chart is being deployed **
+
+loomwatch collects LLM subscription quotas and exposes them to Prometheus.
+
+1. Reach the dashboard:
+
+{{- if .Values.ingress.enabled }}
+
+  http{{ if .Values.ingress.tls }}s{{ end }}://{{ .Values.ingress.hostname }}{{ .Values.ingress.path }}
+
+{{- else }}
+
+  kubectl port-forward --namespace {{ include "loomwatch.namespace" . }} svc/{{ include "loomwatch.fullname" . }} 9211:{{ .Values.service.ports.http }}
+  echo "Visit http://127.0.0.1:9211"
+
+{{- end }}
+
+2. Log in as `admin`. Get the password with:
+
+{{- if .Values.auth.existingSecret }}
+
+  kubectl get secret --namespace {{ include "loomwatch.namespace" . }} {{ include "loomwatch.secretName" . }} -o jsonpath="{.data.{{ .Values.auth.secretKeys.adminPasswordKey }}}" | base64 -d
+
+{{- else }}
+
+  kubectl get secret --namespace {{ include "loomwatch.namespace" . }} {{ include "loomwatch.secretName" . }} -o jsonpath="{.data.{{ .Values.auth.secretKeys.adminPasswordKey }}}" | base64 -d
+
+{{- end }}
+
+3. Quota series appear once each provider has been polled at least once, which
+   takes up to {{ .Values.pollInterval }} seconds:
+
+  onwatch_quota_utilization_percent{provider="...",quota_type="...",account_id="..."}
+
+  A series is present when the provider DECLARES the quota, not when it has been
+  consumed. An absent series means the plan has no such quota; zero utilisation
+  is a real reading.
+
+{{- if not .Values.auth.providers }}
+{{- if not .Values.auth.existingSecret }}
+
+##############################################################################
+#### WARNING: no provider credentials configured                          ####
+##############################################################################
+
+loomwatch will start, serve an empty dashboard and export no quota series at
+all. Set `auth.providers`, or point `auth.existingSecret` at a Secret holding
+them:
+
+  auth:
+    providers:
+      MINIMAX_API_KEY: "..."
+      ZAI_API_KEY: "..."
+
+{{- end }}
+{{- end }}
+
+{{- if not .Values.metrics.enabled }}
+
+##############################################################################
+#### WARNING: /metrics is unauthenticated                                 ####
+##############################################################################
+
+Anyone able to reach the Service can read which providers you use and how much
+of each plan you have burned. Set `metrics.enabled=true` unless the endpoint is
+otherwise restricted.
+
+{{- end }}
+
+{{- if not .Values.persistence.enabled }}
+
+##############################################################################
+#### WARNING: persistence is disabled                                     ####
+##############################################################################
+
+Provider accounts added through the dashboard, and the panel password, live in
+the database. On an ephemeral volume they disappear at the first Pod
+replacement - and you find out when the quota of a forgotten account burns
+unwatched. Quota history itself is disposable; Prometheus keeps that.
+
+{{- end }}
+
+{{- if and .Values.ingress.enabled (not .Values.ingress.tls) }}
+
+##############################################################################
+#### WARNING: ingress without TLS                                         ####
+##############################################################################
+
+The panel is protected by a single password with no second factor, and it would
+be submitted in clear text over this ingress.
+
+{{- end }}
+
+{{- if not .Values.metrics.prometheusRule.enabled }}
+
+##############################################################################
+#### NOTE: no alerting rules were installed                               ####
+##############################################################################
+
+Collecting quota metrics without alerting on them only tells you what happened
+after it mattered. If you run the Prometheus Operator, enable:
+
+  metrics:
+    prometheusRule:
+      enabled: true
+
+{{- end }}

@@ -1,0 +1,96 @@
+suite: prometheus rule
+templates:
+  - prometheusrule.yaml
+tests:
+  - it: is not installed unless asked for
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: ships the five default rules
+    set:
+      metrics.prometheusRule.enabled: true
+    asserts:
+      - equal:
+          path: spec.groups[0].rules[0].alert
+          value: LoomwatchQuotaHigh
+      - equal:
+          path: spec.groups[0].rules[1].alert
+          value: LoomwatchQuotaCritical
+      - equal:
+          path: spec.groups[0].rules[2].alert
+          value: LoomwatchQuotaBurnsBeforeReset
+      - equal:
+          path: spec.groups[0].rules[3].alert
+          value: LoomwatchCollectorNotPolling
+      - equal:
+          path: spec.groups[0].rules[4].alert
+          value: LoomwatchCollectorStale
+
+  # The exclusion pattern is anchored on both sides by PromQL, so a bare
+  # `video` would silently let `weekly_video` into the consumption rules.
+  # Regressing this would widen the alert with no visible diff in the rules.
+  - it: excludes video quotas in every window, not only the one literally named video
+    set:
+      metrics.prometheusRule.enabled: true
+    asserts:
+      - matchRegex:
+          path: spec.groups[0].rules[0].expr
+          pattern: 'quota_type!~"\.\*video"'
+
+  # predict_linear takes a scalar horizon, so it cannot use each series' own
+  # reset time; passing the reset vector to it is a parse error and the rule
+  # never evaluates while still looking healthy. The prediction must therefore
+  # stay written as vector arithmetic.
+  - it: predicts with vector arithmetic rather than predict_linear
+    set:
+      metrics.prometheusRule.enabled: true
+    asserts:
+      - notMatchRegex:
+          path: spec.groups[0].rules[2].expr
+          pattern: "predict_linear"
+      - matchRegex:
+          path: spec.groups[0].rules[2].expr
+          pattern: "deriv\\("
+
+  - it: refuses to predict past the horizon gate
+    set:
+      metrics.prometheusRule.enabled: true
+    asserts:
+      - matchRegex:
+          path: spec.groups[0].rules[2].expr
+          pattern: "< 172800"
+
+  # The collector-liveness threshold is derived from the poll interval so that
+  # changing the interval moves the alert with it instead of leaving a stale
+  # hand-picked number behind.
+  - it: derives the polling threshold from pollInterval
+    set:
+      metrics.prometheusRule.enabled: true
+      pollInterval: 60
+    asserts:
+      - matchRegex:
+          path: spec.groups[0].rules[3].expr
+          pattern: "> 300$"
+
+  - it: honours custom thresholds
+    set:
+      metrics.prometheusRule.enabled: true
+      metrics.prometheusRule.highThreshold: 70
+      metrics.prometheusRule.criticalThreshold: 90
+    asserts:
+      - matchRegex:
+          path: spec.groups[0].rules[0].expr
+          pattern: "> 70$"
+      - matchRegex:
+          path: spec.groups[0].rules[1].expr
+          pattern: "> 90$"
+
+  - it: lets individual rules be switched off
+    set:
+      metrics.prometheusRule.enabled: true
+      metrics.prometheusRule.defaultRules.quotaHigh: false
+    asserts:
+      - equal:
+          path: spec.groups[0].rules[0].alert
+          value: LoomwatchQuotaCritical

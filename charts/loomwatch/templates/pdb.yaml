@@ -1,0 +1,21 @@
+{{- if .Values.pdb.create }}
+apiVersion: {{ include "loomwatch.pdb.apiVersion" . }}
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "loomwatch.fullname" . }}
+  namespace: {{ include "loomwatch.namespace" . | quote }}
+  labels: {{- include "loomwatch.labels" . | nindent 4 }}
+  {{- if .Values.commonAnnotations }}
+  annotations: {{- include "loomwatch.tplvalues.render" (dict "value" .Values.commonAnnotations "context" $) | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if .Values.pdb.minAvailable }}
+  minAvailable: {{ .Values.pdb.minAvailable }}
+  {{- end }}
+  {{- if or .Values.pdb.maxUnavailable (not .Values.pdb.minAvailable) }}
+  maxUnavailable: {{ default 1 .Values.pdb.maxUnavailable }}
+  {{- end }}
+  selector:
+    matchLabels: {{- include "loomwatch.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: collector
+{{- end }}

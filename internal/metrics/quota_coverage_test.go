@@ -43,9 +43,18 @@ func TestMetrics_ZaiTokenQuotaExportedWhenUsageIsZero(t *testing.T) {
 		TimePercentage:      0,
 		TokensPercentage:    68,
 		TokensNextResetTime: &futureReset,
-	}); err != nil {
+	}, 0); err != nil {
 		t.Fatalf("InsertZaiSnapshot: %v", err)
 	}
+
+	// Fork change: Z.ai series are labelled with the real provider account id
+	// now that the provider is multi-account, so the expectation resolves the
+	// default account instead of the old single-account sentinel.
+	zaiAccount, err := s.DefaultZaiAccountID()
+	if err != nil {
+		t.Fatalf("DefaultZaiAccountID: %v", err)
+	}
+	zaiAccountLabel := strconv.FormatInt(zaiAccount, 10)
 
 	m := New()
 	m.Scrape(s, time.Minute)
@@ -57,7 +66,7 @@ func TestMetrics_ZaiTokenQuotaExportedWhenUsageIsZero(t *testing.T) {
 	tokenLabels := map[string]string{
 		"provider":   "zai",
 		"quota_type": "tokens",
-		"account_id": "default",
+		"account_id": zaiAccountLabel,
 	}
 	assertGaugeValue(t, families, "onwatch_quota_utilization_percent", tokenLabels, 68)
 	assertGaugeValue(t, families, "onwatch_quota_reset_timestamp_seconds", tokenLabels, float64(futureReset.Unix()))
@@ -67,7 +76,7 @@ func TestMetrics_ZaiTokenQuotaExportedWhenUsageIsZero(t *testing.T) {
 	assertGaugeValue(t, families, "onwatch_quota_utilization_percent", map[string]string{
 		"provider":   "zai",
 		"quota_type": "time",
-		"account_id": "default",
+		"account_id": zaiAccountLabel,
 	}, 0)
 }
 
@@ -88,9 +97,15 @@ func TestMetrics_ZaiUndeclaredQuotaIsNotExported(t *testing.T) {
 		// No TOKENS_LIMIT in the provider response at all.
 		TokensLimit:      0,
 		TokensPercentage: 0,
-	}); err != nil {
+	}, 0); err != nil {
 		t.Fatalf("InsertZaiSnapshot: %v", err)
 	}
+
+	zaiAccount, err := s.DefaultZaiAccountID()
+	if err != nil {
+		t.Fatalf("DefaultZaiAccountID: %v", err)
+	}
+	zaiAccountLabel := strconv.FormatInt(zaiAccount, 10)
 
 	m := New()
 	m.Scrape(s, time.Minute)
@@ -102,7 +117,7 @@ func TestMetrics_ZaiUndeclaredQuotaIsNotExported(t *testing.T) {
 	if hasGaugeMetric(families, "onwatch_quota_utilization_percent", map[string]string{
 		"provider":   "zai",
 		"quota_type": "tokens",
-		"account_id": "default",
+		"account_id": zaiAccountLabel,
 	}) {
 		t.Fatal("token quota series exported although the plan declares no token limit")
 	}

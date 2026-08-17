@@ -429,7 +429,7 @@ func TestZaiAgent_SetPollingCheck_DisablesPolling(t *testing.T) {
 	<-ctx.Done()
 	waitForAgentStop(t, errCh, 2*time.Second)
 
-	latest, _ := str.QueryLatestZai()
+	latest, _ := str.QueryLatestZai(0)
 	if latest != nil {
 		t.Error("expected no Z.ai snapshot when polling disabled")
 	}

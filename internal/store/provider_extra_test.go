@@ -256,7 +256,7 @@ func TestZaiStore_QueryZaiCycleOverview_NoCycles(t *testing.T) {
 	}
 	defer s.Close()
 
-	rows, err := s.QueryZaiCycleOverview("tokens", 10)
+	rows, err := s.QueryZaiCycleOverview("tokens", 10, 0)
 	if err != nil {
 		t.Fatalf("QueryZaiCycleOverview: %v", err)
 	}
@@ -277,7 +277,7 @@ func TestZaiStore_QueryZaiCycleOverview_WithData(t *testing.T) {
 	nextReset := base.Add(24 * time.Hour)
 
 	// Create a cycle
-	_, err = s.CreateZaiCycle("tokens", base, &nextReset)
+	_, err = s.CreateZaiCycle("tokens", base, &nextReset, 0)
 	if err != nil {
 		t.Fatalf("CreateZaiCycle: %v", err)
 	}
@@ -301,19 +301,19 @@ func TestZaiStore_QueryZaiCycleOverview_WithData(t *testing.T) {
 			TokensRemaining:    float64(1000000 - i*100000),
 			TokensPercentage:   i * 10,
 		}
-		_, err := s.InsertZaiSnapshot(snapshot)
+		_, err := s.InsertZaiSnapshot(snapshot, 0)
 		if err != nil {
 			t.Fatalf("InsertZaiSnapshot: %v", err)
 		}
 	}
 
 	// Close the cycle
-	err = s.CloseZaiCycle("tokens", base.Add(5*time.Hour), 400000, 400000)
+	err = s.CloseZaiCycle("tokens", base.Add(5*time.Hour), 400000, 400000, 0)
 	if err != nil {
 		t.Fatalf("CloseZaiCycle: %v", err)
 	}
 
-	rows, err := s.QueryZaiCycleOverview("tokens", 10)
+	rows, err := s.QueryZaiCycleOverview("tokens", 10, 0)
 	if err != nil {
 		t.Fatalf("QueryZaiCycleOverview: %v", err)
 	}
@@ -341,16 +341,16 @@ func TestZaiStore_QueryZaiCycleOverview_TimePeakCol(t *testing.T) {
 	base := time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)
 	nextReset := base.Add(24 * time.Hour)
 
-	_, err = s.CreateZaiCycle("time", base, &nextReset)
+	_, err = s.CreateZaiCycle("time", base, &nextReset, 0)
 	if err != nil {
 		t.Fatalf("CreateZaiCycle: %v", err)
 	}
-	err = s.CloseZaiCycle("time", base.Add(5*time.Hour), 50, 50)
+	err = s.CloseZaiCycle("time", base.Add(5*time.Hour), 50, 50, 0)
 	if err != nil {
 		t.Fatalf("CloseZaiCycle: %v", err)
 	}
 
-	rows, err := s.QueryZaiCycleOverview("time", 10)
+	rows, err := s.QueryZaiCycleOverview("time", 10, 0)
 	if err != nil {
 		t.Fatalf("QueryZaiCycleOverview: %v", err)
 	}
@@ -378,11 +378,11 @@ func TestZaiStore_QueryZaiCyclesSince(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		start := base.Add(time.Duration(i) * 24 * time.Hour)
 		nr := nextReset.Add(time.Duration(i) * 24 * time.Hour)
-		_, err := s.CreateZaiCycle("tokens", start, &nr)
+		_, err := s.CreateZaiCycle("tokens", start, &nr, 0)
 		if err != nil {
 			t.Fatalf("CreateZaiCycle %d: %v", i, err)
 		}
-		err = s.CloseZaiCycle("tokens", start.Add(12*time.Hour), int64(i*1000), int64(i*500))
+		err = s.CloseZaiCycle("tokens", start.Add(12*time.Hour), int64(i*1000), int64(i*500), 0)
 		if err != nil {
 			t.Fatalf("CloseZaiCycle %d: %v", i, err)
 		}
@@ -390,7 +390,7 @@ func TestZaiStore_QueryZaiCyclesSince(t *testing.T) {
 
 	// Query since day 1
 	since := base.Add(24 * time.Hour)
-	cycles, err := s.QueryZaiCyclesSince("tokens", since)
+	cycles, err := s.QueryZaiCyclesSince("tokens", since, 0)
 	if err != nil {
 		t.Fatalf("QueryZaiCyclesSince: %v", err)
 	}
@@ -412,7 +412,7 @@ func TestZaiStore_QueryZaiCyclesSince_Empty(t *testing.T) {
 	}
 	defer s.Close()
 
-	cycles, err := s.QueryZaiCyclesSince("tokens", time.Now())
+	cycles, err := s.QueryZaiCyclesSince("tokens", time.Now(), 0)
 	if err != nil {
 		t.Fatalf("QueryZaiCyclesSince: %v", err)
 	}

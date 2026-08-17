@@ -772,17 +772,10 @@ func run() error {
 
 	// Create API clients based on configured providers
 	var syntheticClient *api.Client
-	var zaiClient *api.ZaiClient
 
 	if cfg.HasProvider("synthetic") {
 		syntheticClient = api.NewClient(cfg.SyntheticAPIKey, logger)
 		logger.Info("Synthetic API client configured")
-	}
-
-	if cfg.HasProvider("zai") {
-		zaiBaseURL := cfg.ZaiBaseURL + "/monitor/usage/quota/limit"
-		zaiClient = api.NewZaiClient(cfg.ZaiAPIKey, logger, api.WithZaiBaseURL(zaiBaseURL))
-		logger.Info("Z.ai API client configured", "base_url", cfg.ZaiBaseURL, "region", cfg.ZaiRegion)
 	}
 
 	var anthropicClient *api.AnthropicClient
@@ -917,10 +910,27 @@ func run() error {
 		zaiTr = tracker.NewZaiTracker(db, logger)
 	}
 
-	var zaiAg *agent.ZaiAgent
-	if zaiClient != nil {
-		zaiSm := agent.NewSessionManager(db, "zai", idleTimeout, logger)
-		zaiAg = agent.NewZaiAgent(zaiClient, db, zaiTr, cfg.PollInterval, logger, zaiSm)
+	// Fork change: Z.ai agent manager for multi-account support.
+	// A legacy ZAI_API_KEY seeds the default account, so an existing install
+	// keeps polling exactly as before; further subscriptions are added through
+	// /api/zai/accounts and start without a restart.
+	var zaiMgr *agent.ZaiAgentManager
+	if cfg.HasProvider("zai") || zaiTr != nil {
+		zaiMgr = agent.NewZaiAgentManager(db, zaiTr, cfg.PollInterval, logger)
+		zaiMgr.SetBaseURL(cfg.ZaiBaseURL + "/monitor/usage/quota/limit")
+		if cfg.ZaiAPIKey != "" {
+			if accounts, err := db.QueryActiveProviderAccounts("zai"); err == nil {
+				for _, acc := range accounts {
+					if acc.Name == "default" && (acc.Metadata == "" || acc.Metadata == "{}") {
+						meta := fmt.Sprintf(`{"api_key":%q}`, cfg.ZaiAPIKey)
+						db.UpdateProviderAccountMetadata(acc.ID, meta)
+						logger.Info("Seeded default Z.ai account with legacy API key", "id", acc.ID)
+						break
+					}
+				}
+			}
+		}
+		logger.Info("Z.ai agent manager configured", "base_url", cfg.ZaiBaseURL, "region", cfg.ZaiRegion)
 	}
 
 	// Create Anthropic tracker
@@ -1198,8 +1208,8 @@ func run() error {
 	if ag != nil {
 		ag.SetNotifier(notifier)
 	}
-	if zaiAg != nil {
-		zaiAg.SetNotifier(notifier)
+	if zaiMgr != nil {
+		zaiMgr.SetNotifier(notifier)
 	}
 	if anthropicAg != nil {
 		anthropicAg.SetNotifier(notifier)
@@ -1258,11 +1268,36 @@ func run() error {
 		}
 		return true
 	}
+	// Fork change: per-account polling switch, same shape as the MiniMax one
+	// below. Settings carry a flat key per account ("zai:3"), so a single
+	// subscription can be paused without silencing the whole provider.
+	isAccountPollingEnabled := func(providerKey string, accountID int64) bool {
+		v, err := db.GetSetting("provider_visibility")
+		if err != nil || v == "" {
+			return true
+		}
+		var vis map[string]interface{}
+		if json.Unmarshal([]byte(v), &vis) != nil {
+			return true
+		}
+		accountKey := fmt.Sprintf("%s:%d", providerKey, accountID)
+		if accountVis, ok := vis[accountKey].(map[string]interface{}); ok {
+			if polling, exists := accountVis["polling"]; exists {
+				if p, ok := polling.(bool); ok {
+					return p
+				}
+			}
+		}
+		return true
+	}
 	if ag != nil {
 		ag.SetPollingCheck(func() bool { return isPollingEnabled("synthetic") })
 	}
-	if zaiAg != nil {
-		zaiAg.SetPollingCheck(func() bool { return isPollingEnabled("zai") })
+	if zaiMgr != nil {
+		zaiMgr.SetPollingCheck(func() bool { return isPollingEnabled("zai") })
+		zaiMgr.SetAccountPollingCheck(func(accountID int64) bool {
+			return isAccountPollingEnabled("zai", accountID)
+		})
 	}
 	if anthropicAg != nil {
 		anthropicAg.SetPollingCheck(func() bool { return isPollingEnabled("anthropic") })
@@ -1525,8 +1560,8 @@ func run() error {
 	if ag != nil {
 		agentMgr.RegisterFactory("synthetic", func() (agent.AgentRunner, error) { return ag, nil })
 	}
-	if zaiAg != nil {
-		agentMgr.RegisterFactory("zai", func() (agent.AgentRunner, error) { return zaiAg, nil })
+	if zaiMgr != nil {
+		agentMgr.RegisterFactory("zai", func() (agent.AgentRunner, error) { return zaiMgr, nil })
 	}
 	if anthropicAg != nil {
 		agentMgr.RegisterFactory("anthropic", func() (agent.AgentRunner, error) { return anthropicAg, nil })
@@ -1572,6 +1607,9 @@ func run() error {
 		agentMgr.RegisterFactory("api_integrations", func() (agent.AgentRunner, error) { return apiIntegrationsAg, nil })
 	}
 	handler.SetAgentManager(agentMgr)
+	if zaiMgr != nil {
+		handler.SetZaiAgentManager(zaiMgr)
+	}
 	if minimaxMgr != nil {
 		handler.SetMiniMaxAgentManager(minimaxMgr)
 	}

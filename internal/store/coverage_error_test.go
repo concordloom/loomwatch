@@ -667,7 +667,7 @@ func TestClosedDB_InsertZaiSnapshot(t *testing.T) {
 	s := closedStore(t)
 	_, err := s.InsertZaiSnapshot(&api.ZaiSnapshot{
 		CapturedAt: time.Now().UTC(),
-	})
+	}, 0)
 	if err == nil {
 		t.Fatal("Expected error from InsertZaiSnapshot on closed DB")
 	}
@@ -676,7 +676,7 @@ func TestClosedDB_InsertZaiSnapshot(t *testing.T) {
 func TestClosedDB_QueryLatestZai(t *testing.T) {
 	t.Parallel()
 	s := closedStore(t)
-	_, err := s.QueryLatestZai()
+	_, err := s.QueryLatestZai(0)
 	if err == nil {
 		t.Fatal("Expected error from QueryLatestZai on closed DB")
 	}
@@ -686,7 +686,7 @@ func TestClosedDB_QueryZaiRange(t *testing.T) {
 	t.Parallel()
 	s := closedStore(t)
 	now := time.Now().UTC()
-	_, err := s.QueryZaiRange(now.Add(-time.Hour), now)
+	_, err := s.QueryZaiRange(now.Add(-time.Hour), now, 0)
 	if err == nil {
 		t.Fatal("Expected error from QueryZaiRange on closed DB")
 	}
@@ -695,7 +695,7 @@ func TestClosedDB_QueryZaiRange(t *testing.T) {
 func TestClosedDB_CreateZaiCycle(t *testing.T) {
 	t.Parallel()
 	s := closedStore(t)
-	_, err := s.CreateZaiCycle("tokens", time.Now().UTC(), nil)
+	_, err := s.CreateZaiCycle("tokens", time.Now().UTC(), nil, 0)
 	if err == nil {
 		t.Fatal("Expected error from CreateZaiCycle on closed DB")
 	}
@@ -704,7 +704,7 @@ func TestClosedDB_CreateZaiCycle(t *testing.T) {
 func TestClosedDB_CloseZaiCycle(t *testing.T) {
 	t.Parallel()
 	s := closedStore(t)
-	err := s.CloseZaiCycle("tokens", time.Now().UTC(), 500000, 200000)
+	err := s.CloseZaiCycle("tokens", time.Now().UTC(), 500000, 200000, 0)
 	if err == nil {
 		t.Fatal("Expected error from CloseZaiCycle on closed DB")
 	}
@@ -713,7 +713,7 @@ func TestClosedDB_CloseZaiCycle(t *testing.T) {
 func TestClosedDB_UpdateZaiCycle(t *testing.T) {
 	t.Parallel()
 	s := closedStore(t)
-	err := s.UpdateZaiCycle("tokens", 500000, 200000)
+	err := s.UpdateZaiCycle("tokens", 500000, 200000, 0)
 	if err == nil {
 		t.Fatal("Expected error from UpdateZaiCycle on closed DB")
 	}
@@ -722,7 +722,7 @@ func TestClosedDB_UpdateZaiCycle(t *testing.T) {
 func TestClosedDB_QueryActiveZaiCycle(t *testing.T) {
 	t.Parallel()
 	s := closedStore(t)
-	_, err := s.QueryActiveZaiCycle("tokens")
+	_, err := s.QueryActiveZaiCycle("tokens", 0)
 	if err == nil {
 		t.Fatal("Expected error from QueryActiveZaiCycle on closed DB")
 	}
@@ -750,7 +750,7 @@ func TestClosedDB_QueryZaiHourlyUsage(t *testing.T) {
 func TestClosedDB_QueryZaiCycleHistory(t *testing.T) {
 	t.Parallel()
 	s := closedStore(t)
-	_, err := s.QueryZaiCycleHistory("tokens")
+	_, err := s.QueryZaiCycleHistory("tokens", 0)
 	if err == nil {
 		t.Fatal("Expected error from QueryZaiCycleHistory on closed DB")
 	}
@@ -759,7 +759,7 @@ func TestClosedDB_QueryZaiCycleHistory(t *testing.T) {
 func TestClosedDB_QueryZaiCycleOverview(t *testing.T) {
 	t.Parallel()
 	s := closedStore(t)
-	_, err := s.QueryZaiCycleOverview("tokens", 10)
+	_, err := s.QueryZaiCycleOverview("tokens", 10, 0)
 	if err == nil {
 		t.Fatal("Expected error from QueryZaiCycleOverview on closed DB")
 	}
@@ -768,7 +768,7 @@ func TestClosedDB_QueryZaiCycleOverview(t *testing.T) {
 func TestClosedDB_QueryZaiCyclesSince(t *testing.T) {
 	t.Parallel()
 	s := closedStore(t)
-	_, err := s.QueryZaiCyclesSince("tokens", time.Now().UTC())
+	_, err := s.QueryZaiCyclesSince("tokens", time.Now().UTC(), 0)
 	if err == nil {
 		t.Fatal("Expected error from QueryZaiCyclesSince on closed DB")
 	}

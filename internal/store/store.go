@@ -1103,6 +1103,75 @@ func (s *Store) migrateSchema() error {
 		}
 	}
 
+	// Fork change: Z.ai multi-account support.
+	//
+	// Upstream tracks a single Z.ai key, so one subscription hid the others.
+	// A Coding Plan quota is per account, so several subscriptions have to be
+	// observed side by side or the ones left out burn unseen.
+	//
+	// Mirrors the MiniMax migration above: placeholder 0, then a backfill onto
+	// the real provider_accounts.id. zai_hourly_usage is deliberately left
+	// alone — nothing writes it (its UNIQUE(hour) would force a table rebuild
+	// for no gain).
+	for _, table := range []string{"zai_snapshots", "zai_reset_cycles"} {
+		if _, err := s.db.Exec(
+			`ALTER TABLE ` + table + ` ADD COLUMN account_id INTEGER NOT NULL DEFAULT 0`,
+		); err != nil {
+			if !strings.Contains(err.Error(), "duplicate column name") &&
+				!strings.Contains(err.Error(), "no such table") {
+				return fmt.Errorf("failed to add account_id to %s: %w", table, err)
+			}
+		}
+	}
+
+	// Ensure the default Z.ai provider account exists. provider_accounts.id is
+	// global across providers, so Z.ai cannot assume a fixed ID.
+	if _, err := s.db.Exec(`
+		INSERT OR IGNORE INTO provider_accounts (provider, name, created_at)
+		VALUES ('zai', 'default', datetime('now'))
+	`); err != nil {
+		if !strings.Contains(err.Error(), "no such table") {
+			return fmt.Errorf("failed to insert default zai account: %w", err)
+		}
+	}
+
+	// Backfill historical Z.ai rows from placeholder 0 onto the real default
+	// account, so existing history keeps showing up once queries scope by
+	// account. One transaction: a half-applied backfill would split history.
+	var zaiDefaultAccountID int64
+	if err := s.db.QueryRow(`
+		SELECT id FROM provider_accounts WHERE provider = 'zai' AND name = 'default'
+	`).Scan(&zaiDefaultAccountID); err == nil && zaiDefaultAccountID > 0 {
+		tx, txErr := s.db.Begin()
+		if txErr != nil {
+			return fmt.Errorf("failed to begin zai backfill transaction: %w", txErr)
+		}
+		for _, table := range []string{"zai_snapshots", "zai_reset_cycles"} {
+			if _, err := tx.Exec(
+				`UPDATE `+table+` SET account_id = ? WHERE account_id = 0`,
+				zaiDefaultAccountID,
+			); err != nil && !strings.Contains(err.Error(), "no such table") {
+				tx.Rollback()
+				return fmt.Errorf("failed to backfill %s account_id: %w", table, err)
+			}
+		}
+		if err := tx.Commit(); err != nil {
+			return fmt.Errorf("failed to commit zai backfill transaction: %w", err)
+		}
+	}
+
+	// Add Z.ai multi-account indexes.
+	for _, stmt := range []string{
+		`CREATE INDEX IF NOT EXISTS idx_zai_snapshots_account ON zai_snapshots(account_id, captured_at)`,
+		`CREATE INDEX IF NOT EXISTS idx_zai_cycles_account ON zai_reset_cycles(account_id, quota_type)`,
+	} {
+		if _, err := s.db.Exec(stmt); err != nil {
+			if !strings.Contains(err.Error(), "no such table") {
+				return fmt.Errorf("failed zai account index migration: %w", err)
+			}
+		}
+	}
+
 	// Add weekly quota columns to minimax_model_values.
 	// Only accounts purchased from 2026-03-23 onwards have weekly limits.
 	for _, col := range []string{

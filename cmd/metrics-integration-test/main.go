@@ -224,7 +224,13 @@ func seedAll(s *store.Store, now, future time.Time) error {
 		return fmt.Errorf("copilot: %w", err)
 	}
 
-	// zai - pass future reset so we can assert Unix() value
+	// zai - pass future reset so we can assert Unix() value.
+	// Fork change: Z.ai snapshots are scoped to a provider account, so the
+	// fixture writes under the default one the migration creates.
+	zaiAccountID, err := s.DefaultZaiAccountID()
+	if err != nil {
+		return fmt.Errorf("zai account: %w", err)
+	}
 	if _, err := s.InsertZaiSnapshot(&api.ZaiSnapshot{
 		CapturedAt:          now,
 		TokensUsage:         100,
@@ -234,7 +240,7 @@ func seedAll(s *store.Store, now, future time.Time) error {
 		TimeUsage:           80,
 		TimeCurrentValue:    20,
 		TimePercentage:      25,
-	}); err != nil {
+	}, zaiAccountID); err != nil {
 		return fmt.Errorf("zai: %w", err)
 	}
 

@@ -264,7 +264,7 @@ func TestZaiStore_QueryZaiCycleOverview_DefaultGroupBy(t *testing.T) {
 	defer s.Close()
 
 	// Using default groupBy (not "tokens" or "time")
-	rows, err := s.QueryZaiCycleOverview("other", 10)
+	rows, err := s.QueryZaiCycleOverview("other", 10, 0)
 	if err != nil {
 		t.Fatalf("QueryZaiCycleOverview: %v", err)
 	}
@@ -601,7 +601,7 @@ func TestZaiStore_QueryZaiCycleOverview_ZeroLimit(t *testing.T) {
 	}
 	defer s.Close()
 
-	rows, err := s.QueryZaiCycleOverview("tokens", 0)
+	rows, err := s.QueryZaiCycleOverview("tokens", 0, 0)
 	if err != nil {
 		t.Fatalf("QueryZaiCycleOverview: %v", err)
 	}

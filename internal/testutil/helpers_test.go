@@ -45,7 +45,7 @@ func TestInMemoryStoreWithSnapshots_PopulatesAllProviders(t *testing.T) {
 		t.Fatalf("unexpected synthetic values: first=%v last=%v", synthetic[0].Sub.Requests, synthetic[2].Sub.Requests)
 	}
 
-	zai, err := s.QueryZaiRange(start, end)
+	zai, err := s.QueryZaiRange(start, end, 0)
 	if err != nil {
 		t.Fatalf("query zai range: %v", err)
 	}

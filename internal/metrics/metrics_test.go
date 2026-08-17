@@ -1,6 +1,7 @@
 package metrics
 
 import (
+	"strconv"
 	"testing"
 	"time"
 
@@ -19,6 +20,14 @@ func TestMetrics_ScrapeExportsUsedPercentagesAndNoMisleadingCounters(t *testing.
 	now := time.Now().UTC()
 	futureReset := now.Add(2 * time.Hour)
 	pastReset := now.Add(-5 * time.Minute)
+
+	// Fork change: Z.ai is multi-account, so its series carry the real provider
+	// account id instead of the single-account sentinel.
+	zaiAccount, err := s.DefaultZaiAccountID()
+	if err != nil {
+		t.Fatalf("DefaultZaiAccountID: %v", err)
+	}
+	zaiAccountLabel := strconv.FormatInt(zaiAccount, 10)
 
 	if _, err := s.InsertCopilotSnapshot(&api.CopilotSnapshot{
 		CapturedAt:  now,
@@ -80,7 +89,7 @@ func TestMetrics_ScrapeExportsUsedPercentagesAndNoMisleadingCounters(t *testing.
 		TimeUsage:           80,
 		TimeCurrentValue:    20,
 		TimePercentage:      25,
-	}); err != nil {
+	}, 0); err != nil {
 		t.Fatalf("InsertZaiSnapshot: %v", err)
 	}
 
@@ -114,12 +123,12 @@ func TestMetrics_ScrapeExportsUsedPercentagesAndNoMisleadingCounters(t *testing.
 	assertGaugeValue(t, families, "onwatch_quota_utilization_percent", map[string]string{
 		"provider":   "zai",
 		"quota_type": "tokens",
-		"account_id": "default",
+		"account_id": zaiAccountLabel,
 	}, 15)
 	assertGaugeValue(t, families, "onwatch_quota_utilization_percent", map[string]string{
 		"provider":   "zai",
 		"quota_type": "time",
-		"account_id": "default",
+		"account_id": zaiAccountLabel,
 	}, 25)
 
 	// #1: reset timestamps are absolute Unix seconds (not countdowns).

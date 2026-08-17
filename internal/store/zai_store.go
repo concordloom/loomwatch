@@ -31,8 +31,47 @@ type ZaiHourlyUsage struct {
 	FetchedAt       time.Time
 }
 
-// InsertZaiSnapshot inserts a Z.ai quota snapshot
-func (s *Store) InsertZaiSnapshot(snapshot *api.ZaiSnapshot) (int64, error) {
+// DefaultZaiAccountID returns provider_accounts.id of the default Z.ai account.
+//
+// Fork change: callers that have no account of their own (the single-account
+// web views, legacy helpers) resolve through here instead of assuming a fixed
+// id — provider_accounts.id is global across providers, so Z.ai cannot count
+// on any particular number.
+func (s *Store) DefaultZaiAccountID() (int64, error) {
+	var id int64
+	err := s.db.QueryRow(
+		`SELECT id FROM provider_accounts WHERE provider = 'zai' AND name = 'default'`,
+	).Scan(&id)
+	if err == sql.ErrNoRows {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, fmt.Errorf("failed to query default zai account: %w", err)
+	}
+	return id, nil
+}
+
+// resolveZaiAccount maps a non-positive account id onto the default Z.ai
+// account.
+//
+// Fork change: provider_accounts.id is assigned at migration time and is never
+// zero, so a zero here means "caller has no account of its own". Writing that
+// straight into the column would file rows under an account nothing reads —
+// the snapshot would be stored and still invisible. Resolving keeps such
+// callers on the account a single-key install already used.
+func (s *Store) resolveZaiAccount(accountID int64) int64 {
+	if accountID > 0 {
+		return accountID
+	}
+	if id, err := s.DefaultZaiAccountID(); err == nil && id > 0 {
+		return id
+	}
+	return accountID
+}
+
+// InsertZaiSnapshot inserts a Z.ai quota snapshot for the given account.
+func (s *Store) InsertZaiSnapshot(snapshot *api.ZaiSnapshot, accountID int64) (int64, error) {
+	accountID = s.resolveZaiAccount(accountID)
 	var tokensNextReset interface{}
 	if snapshot.TokensNextResetTime != nil {
 		tokensNextReset = snapshot.TokensNextResetTime.Format(time.RFC3339Nano)
@@ -45,8 +84,9 @@ func (s *Store) InsertZaiSnapshot(snapshot *api.ZaiSnapshot) (int64, error) {
 		(provider, captured_at, time_limit, time_unit, time_number, time_usage,
 		 time_current_value, time_remaining, time_percentage, time_usage_details,
 		 tokens_limit, tokens_unit, tokens_number, tokens_usage,
-		 tokens_current_value, tokens_remaining, tokens_percentage, tokens_next_reset)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		 tokens_current_value, tokens_remaining, tokens_percentage, tokens_next_reset,
+		 account_id)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		"zai",
 		snapshot.CapturedAt.Format(time.RFC3339Nano),
 		snapshot.TimeLimit, snapshot.TimeUnit, snapshot.TimeNumber,
@@ -55,6 +95,7 @@ func (s *Store) InsertZaiSnapshot(snapshot *api.ZaiSnapshot) (int64, error) {
 		snapshot.TokensLimit, snapshot.TokensUnit, snapshot.TokensNumber,
 		snapshot.TokensUsage, snapshot.TokensCurrentValue, snapshot.TokensRemaining, snapshot.TokensPercentage,
 		tokensNextReset,
+		accountID,
 	)
 	if err != nil {
 		return 0, fmt.Errorf("failed to insert zai snapshot: %w", err)
@@ -68,8 +109,9 @@ func (s *Store) InsertZaiSnapshot(snapshot *api.ZaiSnapshot) (int64, error) {
 	return id, nil
 }
 
-// QueryLatestZai returns the most recent Z.ai snapshot
-func (s *Store) QueryLatestZai() (*api.ZaiSnapshot, error) {
+// QueryLatestZai returns the most recent Z.ai snapshot for the given account.
+func (s *Store) QueryLatestZai(accountID int64) (*api.ZaiSnapshot, error) {
+	accountID = s.resolveZaiAccount(accountID)
 	var snapshot api.ZaiSnapshot
 	var capturedAt string
 	var tokensNextReset sql.NullString
@@ -79,7 +121,8 @@ func (s *Store) QueryLatestZai() (*api.ZaiSnapshot, error) {
 		 time_current_value, time_remaining, time_percentage, time_usage_details,
 		 tokens_limit, tokens_unit, tokens_number, tokens_usage,
 		 tokens_current_value, tokens_remaining, tokens_percentage, tokens_next_reset
-		FROM zai_snapshots ORDER BY captured_at DESC LIMIT 1`,
+		FROM zai_snapshots WHERE account_id = ? ORDER BY captured_at DESC LIMIT 1`,
+		accountID,
 	).Scan(
 		&snapshot.ID, &capturedAt, &snapshot.TimeLimit, &snapshot.TimeUnit, &snapshot.TimeNumber,
 		&snapshot.TimeUsage, &snapshot.TimeCurrentValue, &snapshot.TimeRemaining, &snapshot.TimePercentage,
@@ -105,16 +148,18 @@ func (s *Store) QueryLatestZai() (*api.ZaiSnapshot, error) {
 	return &snapshot, nil
 }
 
-// QueryZaiRange returns Z.ai snapshots within a time range with optional limit.
-func (s *Store) QueryZaiRange(start, end time.Time, limit ...int) ([]*api.ZaiSnapshot, error) {
+// QueryZaiRange returns Z.ai snapshots for one account within a time range,
+// with an optional limit.
+func (s *Store) QueryZaiRange(start, end time.Time, accountID int64, limit ...int) ([]*api.ZaiSnapshot, error) {
+	accountID = s.resolveZaiAccount(accountID)
 	query := `SELECT id, captured_at, time_limit, time_unit, time_number, time_usage,
 		 time_current_value, time_remaining, time_percentage, time_usage_details,
 		 tokens_limit, tokens_unit, tokens_number, tokens_usage,
 		 tokens_current_value, tokens_remaining, tokens_percentage, tokens_next_reset
 		FROM zai_snapshots
-		WHERE captured_at BETWEEN ? AND ?
+		WHERE account_id = ? AND captured_at BETWEEN ? AND ?
 		ORDER BY captured_at ASC`
-	args := []interface{}{start.Format(time.RFC3339Nano), end.Format(time.RFC3339Nano)}
+	args := []interface{}{accountID, start.Format(time.RFC3339Nano), end.Format(time.RFC3339Nano)}
 	if len(limit) > 0 && limit[0] > 0 {
 		query = `SELECT id, captured_at, time_limit, time_unit, time_number, time_usage,
 			 time_current_value, time_remaining, time_percentage, time_usage_details,
@@ -126,7 +171,7 @@ func (s *Store) QueryZaiRange(start, end time.Time, limit ...int) ([]*api.ZaiSna
 					 tokens_limit, tokens_unit, tokens_number, tokens_usage,
 					 tokens_current_value, tokens_remaining, tokens_percentage, tokens_next_reset
 				FROM zai_snapshots
-				WHERE captured_at BETWEEN ? AND ?
+				WHERE account_id = ? AND captured_at BETWEEN ? AND ?
 				ORDER BY captured_at DESC
 				LIMIT ?
 			) recent
@@ -169,8 +214,9 @@ func (s *Store) QueryZaiRange(start, end time.Time, limit ...int) ([]*api.ZaiSna
 	return snapshots, rows.Err()
 }
 
-// CreateZaiCycle creates a new Z.ai reset cycle
-func (s *Store) CreateZaiCycle(quotaType string, cycleStart time.Time, nextReset *time.Time) (int64, error) {
+// CreateZaiCycle creates a new Z.ai reset cycle for the given account.
+func (s *Store) CreateZaiCycle(quotaType string, cycleStart time.Time, nextReset *time.Time, accountID int64) (int64, error) {
+	accountID = s.resolveZaiAccount(accountID)
 	var nextResetValue interface{}
 	if nextReset != nil {
 		nextResetValue = nextReset.Format(time.RFC3339Nano)
@@ -179,8 +225,8 @@ func (s *Store) CreateZaiCycle(quotaType string, cycleStart time.Time, nextReset
 	}
 
 	result, err := s.db.Exec(
-		`INSERT INTO zai_reset_cycles (quota_type, cycle_start, next_reset) VALUES (?, ?, ?)`,
-		quotaType, cycleStart.Format(time.RFC3339Nano), nextResetValue,
+		`INSERT INTO zai_reset_cycles (quota_type, cycle_start, next_reset, account_id) VALUES (?, ?, ?, ?)`,
+		quotaType, cycleStart.Format(time.RFC3339Nano), nextResetValue, accountID,
 	)
 	if err != nil {
 		return 0, fmt.Errorf("failed to create zai cycle: %w", err)
@@ -194,12 +240,13 @@ func (s *Store) CreateZaiCycle(quotaType string, cycleStart time.Time, nextReset
 	return id, nil
 }
 
-// CloseZaiCycle closes a Z.ai reset cycle with final stats
-func (s *Store) CloseZaiCycle(quotaType string, cycleEnd time.Time, peak, delta int64) error {
+// CloseZaiCycle closes a Z.ai reset cycle with final stats for the given account.
+func (s *Store) CloseZaiCycle(quotaType string, cycleEnd time.Time, peak, delta int64, accountID int64) error {
+	accountID = s.resolveZaiAccount(accountID)
 	_, err := s.db.Exec(
 		`UPDATE zai_reset_cycles SET cycle_end = ?, peak_value = ?, total_delta = ?
-		WHERE quota_type = ? AND cycle_end IS NULL`,
-		cycleEnd.Format(time.RFC3339Nano), peak, delta, quotaType,
+		WHERE quota_type = ? AND account_id = ? AND cycle_end IS NULL`,
+		cycleEnd.Format(time.RFC3339Nano), peak, delta, quotaType, accountID,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to close zai cycle: %w", err)
@@ -207,12 +254,14 @@ func (s *Store) CloseZaiCycle(quotaType string, cycleEnd time.Time, peak, delta 
 	return nil
 }
 
-// UpdateZaiCycle updates the peak and delta for an active Z.ai cycle
-func (s *Store) UpdateZaiCycle(quotaType string, peak, delta int64) error {
+// UpdateZaiCycle updates the peak and delta for an active Z.ai cycle of the
+// given account.
+func (s *Store) UpdateZaiCycle(quotaType string, peak, delta int64, accountID int64) error {
+	accountID = s.resolveZaiAccount(accountID)
 	_, err := s.db.Exec(
 		`UPDATE zai_reset_cycles SET peak_value = ?, total_delta = ?
-		WHERE quota_type = ? AND cycle_end IS NULL`,
-		peak, delta, quotaType,
+		WHERE quota_type = ? AND account_id = ? AND cycle_end IS NULL`,
+		peak, delta, quotaType, accountID,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to update zai cycle: %w", err)
@@ -220,16 +269,18 @@ func (s *Store) UpdateZaiCycle(quotaType string, peak, delta int64) error {
 	return nil
 }
 
-// QueryActiveZaiCycle returns the active cycle for a Z.ai quota type
-func (s *Store) QueryActiveZaiCycle(quotaType string) (*ZaiResetCycle, error) {
+// QueryActiveZaiCycle returns the active cycle for a Z.ai quota type of the
+// given account.
+func (s *Store) QueryActiveZaiCycle(quotaType string, accountID int64) (*ZaiResetCycle, error) {
+	accountID = s.resolveZaiAccount(accountID)
 	var cycle ZaiResetCycle
 	var cycleStart string
 	var cycleEnd, nextReset sql.NullString
 
 	err := s.db.QueryRow(
 		`SELECT id, quota_type, cycle_start, cycle_end, next_reset, peak_value, total_delta
-		FROM zai_reset_cycles WHERE quota_type = ? AND cycle_end IS NULL`,
-		quotaType,
+		FROM zai_reset_cycles WHERE quota_type = ? AND account_id = ? AND cycle_end IS NULL`,
+		quotaType, accountID,
 	).Scan(
 		&cycle.ID, &cycle.QuotaType, &cycleStart, &cycleEnd, &nextReset, &cycle.PeakValue, &cycle.TotalDelta,
 	)
@@ -328,11 +379,13 @@ func (s *Store) QueryZaiHourlyUsage(start, end time.Time) ([]*ZaiHourlyUsage, er
 	return usages, rows.Err()
 }
 
-// QueryZaiCycleHistory returns completed cycles for a Z.ai quota type with optional limit.
-func (s *Store) QueryZaiCycleHistory(quotaType string, limit ...int) ([]*ZaiResetCycle, error) {
+// QueryZaiCycleHistory returns completed cycles for a Z.ai quota type of the
+// given account, with an optional limit.
+func (s *Store) QueryZaiCycleHistory(quotaType string, accountID int64, limit ...int) ([]*ZaiResetCycle, error) {
+	accountID = s.resolveZaiAccount(accountID)
 	query := `SELECT id, quota_type, cycle_start, cycle_end, next_reset, peak_value, total_delta
-		FROM zai_reset_cycles WHERE quota_type = ? AND cycle_end IS NOT NULL ORDER BY cycle_start DESC`
-	args := []interface{}{quotaType}
+		FROM zai_reset_cycles WHERE quota_type = ? AND account_id = ? AND cycle_end IS NOT NULL ORDER BY cycle_start DESC`
+	args := []interface{}{quotaType, accountID}
 	if len(limit) > 0 && limit[0] > 0 {
 		query += ` LIMIT ?`
 		args = append(args, limit[0])
@@ -373,14 +426,15 @@ func (s *Store) QueryZaiCycleHistory(quotaType string, limit ...int) ([]*ZaiRese
 // QueryZaiCycleOverview returns Z.ai cycles for a given quota type
 // with cross-quota snapshot data at the peak moment of each cycle.
 // Includes the currently active cycle (if any) at the top.
-func (s *Store) QueryZaiCycleOverview(groupBy string, limit int) ([]CycleOverviewRow, error) {
+func (s *Store) QueryZaiCycleOverview(groupBy string, limit int, accountID int64) ([]CycleOverviewRow, error) {
+	accountID = s.resolveZaiAccount(accountID)
 	if limit <= 0 {
 		limit = 50
 	}
 
 	// Get active cycle first (if any)
 	var allCycles []*ZaiResetCycle
-	activeCycle, err := s.QueryActiveZaiCycle(groupBy)
+	activeCycle, err := s.QueryActiveZaiCycle(groupBy, accountID)
 	if err != nil {
 		return nil, fmt.Errorf("store.QueryZaiCycleOverview: active: %w", err)
 	}
@@ -390,7 +444,7 @@ func (s *Store) QueryZaiCycleOverview(groupBy string, limit int) ([]CycleOvervie
 	}
 
 	// Get completed cycles
-	completedCycles, err := s.QueryZaiCycleHistory(groupBy, limit)
+	completedCycles, err := s.QueryZaiCycleHistory(groupBy, accountID, limit)
 	if err != nil {
 		return nil, fmt.Errorf("store.QueryZaiCycleOverview: %w", err)
 	}
@@ -432,8 +486,9 @@ func (s *Store) QueryZaiCycleOverview(groupBy string, limit int) ([]CycleOvervie
 		err = s.db.QueryRow(
 			fmt.Sprintf(`SELECT captured_at, time_usage, time_current_value, tokens_usage, tokens_current_value
 			FROM zai_snapshots
-			WHERE captured_at >= ? AND captured_at < ?
+			WHERE account_id = ? AND captured_at >= ? AND captured_at < ?
 			ORDER BY %s DESC LIMIT 1`, peakCol),
+			accountID,
 			c.CycleStart.Format(time.RFC3339Nano),
 			endBoundary.Format(time.RFC3339Nano),
 		).Scan(&capturedAt, &timeUsage, &timeCurrent, &tokensUsage, &tokensCurrent)
@@ -465,12 +520,14 @@ func (s *Store) QueryZaiCycleOverview(groupBy string, limit int) ([]CycleOvervie
 	return overviewRows, nil
 }
 
-// QueryZaiCyclesSince returns all Z.ai cycles (completed and active) for a quota type since a given time.
-func (s *Store) QueryZaiCyclesSince(quotaType string, since time.Time) ([]*ZaiResetCycle, error) {
+// QueryZaiCyclesSince returns all Z.ai cycles (completed and active) for a
+// quota type of the given account since a given time.
+func (s *Store) QueryZaiCyclesSince(quotaType string, since time.Time, accountID int64) ([]*ZaiResetCycle, error) {
+	accountID = s.resolveZaiAccount(accountID)
 	rows, err := s.db.Query(
 		`SELECT id, quota_type, cycle_start, cycle_end, next_reset, peak_value, total_delta
-		FROM zai_reset_cycles WHERE quota_type = ? AND cycle_start >= ? ORDER BY cycle_start DESC`,
-		quotaType, since.UTC().Format(time.RFC3339Nano),
+		FROM zai_reset_cycles WHERE quota_type = ? AND account_id = ? AND cycle_start >= ? ORDER BY cycle_start DESC`,
+		quotaType, accountID, since.UTC().Format(time.RFC3339Nano),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query zai cycles since: %w", err)

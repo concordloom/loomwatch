@@ -13,6 +13,7 @@ If you deployed onWatch 2.11.40's beta metrics, the following changed in the 1.0
 | `onwatch_quota_time_until_reset_seconds` | `onwatch_quota_reset_timestamp_seconds` (absolute Unix seconds; compute remaining as `metric - time()`) |
 | `onwatch_auth_token_status` | `onwatch_agent_healthy` (honest name; same `1`/`0` semantics, measures poll freshness, **not** real OAuth validity) |
 | `account_id=""` | `account_id="default"` (sentinel for single-account providers) |
+| `account_id="default"` for `provider="zai"` | the real `provider_accounts.id`, one series per subscription (fork change: Z.ai is multi-account) |
 | `onwatch_credits_balance{provider,account_id}` | `onwatch_credits_balance{provider,account_id,unit}` (unit disambiguates `usd`, `credits`, `prompt_credits`) |
 
 ## Enabling the Endpoint

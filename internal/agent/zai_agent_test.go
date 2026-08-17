@@ -113,7 +113,7 @@ func TestZaiAgent_Run_PollsAndStoresSnapshot(t *testing.T) {
 	}
 
 	// Verify snapshot was stored
-	latest, err := str.QueryLatestZai()
+	latest, err := str.QueryLatestZai(0)
 	if err != nil {
 		t.Fatalf("QueryLatestZai error: %v", err)
 	}
@@ -246,7 +246,7 @@ func TestZaiAgent_Run_NotifierCalled(t *testing.T) {
 	// The notifier was called (we verify indirectly by checking the snapshot was stored
 	// which means the poll completed including the notifier check step).
 	// The notifier.Check() call doesn't error or panic, even with high usage values.
-	latest, _ := str.QueryLatestZai()
+	latest, _ := str.QueryLatestZai(0)
 	if latest == nil {
 		t.Fatal("Expected snapshot to be stored (poll completed including notifier check)")
 	}

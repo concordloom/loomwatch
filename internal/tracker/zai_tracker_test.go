@@ -38,14 +38,14 @@ func TestZaiTracker_FirstSnapshot_CreatesTwoCycles(t *testing.T) {
 	resetTime := time.Now().Add(24 * time.Hour)
 	snapshot := makeZaiSnapshot(time.Now(), 50000, 100, &resetTime)
 
-	err := tr.Process(snapshot)
+	err := tr.Process(snapshot, 0)
 	if err != nil {
 		t.Fatalf("Process failed: %v", err)
 	}
 
 	// Verify both cycles were created
 	for _, quotaType := range []string{"tokens", "time"} {
-		cycle, err := s.QueryActiveZaiCycle(quotaType)
+		cycle, err := s.QueryActiveZaiCycle(quotaType, 0)
 		if err != nil {
 			t.Fatalf("QueryActiveZaiCycle failed for %s: %v", quotaType, err)
 		}
@@ -66,16 +66,16 @@ func TestZaiTracker_TokensIncrement_UpdatesDelta(t *testing.T) {
 
 	// First snapshot
 	s1 := makeZaiSnapshot(baseTime, 50000, 100, &resetTime)
-	tr.Process(s1)
+	tr.Process(s1, 0)
 
 	// Second snapshot - tokens increased
 	s2 := makeZaiSnapshot(baseTime.Add(time.Minute), 80000, 150, &resetTime)
-	err := tr.Process(s2)
+	err := tr.Process(s2, 0)
 	if err != nil {
 		t.Fatalf("Process failed: %v", err)
 	}
 
-	cycle, _ := s.QueryActiveZaiCycle("tokens")
+	cycle, _ := s.QueryActiveZaiCycle("tokens", 0)
 	if cycle.TotalDelta != 30000 {
 		t.Errorf("TotalDelta = %d, want 30000", cycle.TotalDelta)
 	}
@@ -95,24 +95,24 @@ func TestZaiTracker_DetectsTokensReset(t *testing.T) {
 
 	// First snapshot
 	s1 := makeZaiSnapshot(baseTime, 50000, 100, &resetTime1)
-	tr.Process(s1)
+	tr.Process(s1, 0)
 
 	// Second snapshot - different nextResetTime = reset
 	resetTime2 := baseTime.Add(48 * time.Hour)
 	s2 := makeZaiSnapshot(baseTime.Add(time.Minute), 1000, 110, &resetTime2)
-	err := tr.Process(s2)
+	err := tr.Process(s2, 0)
 	if err != nil {
 		t.Fatalf("Process failed: %v", err)
 	}
 
 	// Check old cycle was closed
-	history, _ := s.QueryZaiCycleHistory("tokens")
+	history, _ := s.QueryZaiCycleHistory("tokens", 0)
 	if len(history) != 1 {
 		t.Errorf("Expected 1 closed cycle, got %d", len(history))
 	}
 
 	// Check new cycle was created
-	cycle, _ := s.QueryActiveZaiCycle("tokens")
+	cycle, _ := s.QueryActiveZaiCycle("tokens", 0)
 	if cycle == nil {
 		t.Fatal("Expected new active cycle")
 	}
@@ -129,23 +129,23 @@ func TestZaiTracker_DetectsTimeReset_ValueDrop(t *testing.T) {
 
 	// First snapshot with high time value
 	s1 := makeZaiSnapshot(baseTime, 50000, 800, &resetTime)
-	tr.Process(s1)
+	tr.Process(s1, 0)
 
 	// Second snapshot - time value drops >50% = reset
 	s2 := makeZaiSnapshot(baseTime.Add(time.Minute), 55000, 100, &resetTime)
-	err := tr.Process(s2)
+	err := tr.Process(s2, 0)
 	if err != nil {
 		t.Fatalf("Process failed: %v", err)
 	}
 
 	// Check old cycle was closed
-	history, _ := s.QueryZaiCycleHistory("time")
+	history, _ := s.QueryZaiCycleHistory("time", 0)
 	if len(history) != 1 {
 		t.Errorf("Expected 1 closed time cycle, got %d", len(history))
 	}
 
 	// Tokens cycle should still be active (no tokens reset)
-	tokensCycle, _ := s.QueryActiveZaiCycle("tokens")
+	tokensCycle, _ := s.QueryActiveZaiCycle("tokens", 0)
 	if tokensCycle == nil {
 		t.Error("Tokens cycle should still be active")
 	}
@@ -162,14 +162,14 @@ func TestZaiTracker_NegativeDelta_Ignored(t *testing.T) {
 
 	// First snapshot with high value
 	s1 := makeZaiSnapshot(baseTime, 80000, 500, &resetTime)
-	tr.Process(s1)
+	tr.Process(s1, 0)
 
 	// Second snapshot - slight drop (not enough for reset, within same cycle)
 	s2 := makeZaiSnapshot(baseTime.Add(time.Minute), 75000, 490, &resetTime)
-	tr.Process(s2)
+	tr.Process(s2, 0)
 
 	// Delta should be 0 (not negative)
-	cycle, _ := s.QueryActiveZaiCycle("tokens")
+	cycle, _ := s.QueryActiveZaiCycle("tokens", 0)
 	if cycle.TotalDelta != 0 {
 		t.Errorf("TotalDelta = %d, want 0", cycle.TotalDelta)
 	}
@@ -192,10 +192,10 @@ func TestZaiTracker_PeakTracking(t *testing.T) {
 
 	for i, v := range values {
 		snap := makeZaiSnapshot(baseTime.Add(time.Duration(i)*time.Minute), v, float64(i*10), &resetTime)
-		tr.Process(snap)
+		tr.Process(snap, 0)
 	}
 
-	cycle, _ := s.QueryActiveZaiCycle("tokens")
+	cycle, _ := s.QueryActiveZaiCycle("tokens", 0)
 	if cycle.PeakValue != 40000 {
 		t.Errorf("PeakValue = %d, want 40000", cycle.PeakValue)
 	}
@@ -216,12 +216,12 @@ func TestZaiTracker_SetOnReset_Called(t *testing.T) {
 	resetTime1 := baseTime.Add(24 * time.Hour)
 
 	s1 := makeZaiSnapshot(baseTime, 50000, 100, &resetTime1)
-	tr.Process(s1)
+	tr.Process(s1, 0)
 
 	// Trigger tokens reset
 	resetTime2 := baseTime.Add(48 * time.Hour)
 	s2 := makeZaiSnapshot(baseTime.Add(time.Minute), 1000, 110, &resetTime2)
-	tr.Process(s2)
+	tr.Process(s2, 0)
 
 	if resetQuota != "tokens" {
 		t.Errorf("onReset called with %q, want %q", resetQuota, "tokens")
@@ -235,7 +235,7 @@ func TestZaiTracker_UsageSummary_NoCycles(t *testing.T) {
 
 	tr := NewZaiTracker(s, nil)
 
-	summary, err := tr.UsageSummary("tokens")
+	summary, err := tr.UsageSummary("tokens", 0)
 	if err != nil {
 		t.Fatalf("UsageSummary failed: %v", err)
 	}
@@ -259,19 +259,19 @@ func TestZaiTracker_UsageSummary_WithCompletedCycle(t *testing.T) {
 
 	// Create a cycle
 	s1 := makeZaiSnapshot(baseTime, 50000, 100, &resetTime1)
-	tr.Process(s1)
+	tr.Process(s1, 0)
 
 	s2 := makeZaiSnapshot(baseTime.Add(time.Minute), 100000, 200, &resetTime1)
-	tr.Process(s2)
+	tr.Process(s2, 0)
 
 	// Trigger reset
 	resetTime2 := baseTime.Add(48 * time.Hour)
 	s3 := makeZaiSnapshot(baseTime.Add(2*time.Minute), 5000, 210, &resetTime2)
 	// Also insert the snapshot so QueryLatestZai works
-	s.InsertZaiSnapshot(s3)
-	tr.Process(s3)
+	s.InsertZaiSnapshot(s3, 0)
+	tr.Process(s3, 0)
 
-	summary, err := tr.UsageSummary("tokens")
+	summary, err := tr.UsageSummary("tokens", 0)
 	if err != nil {
 		t.Fatalf("UsageSummary failed: %v", err)
 	}

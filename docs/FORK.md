@@ -30,7 +30,8 @@ conflict. The list that matters is the one that touches upstream code:
 
 | File | What changed | If the merge conflicts |
 |---|---|---|
-| `internal/metrics/metrics.go` | `scrapeMiniMax` also emits the weekly window as `weekly_<model>`; `scrapeZai` gates on the quota being declared rather than consumed | Both changes are marked in comments. Keep upstream's structure and re-apply the two blocks. |
+| `internal/metrics/metrics.go` | `scrapeMiniMax` also emits the weekly window as `weekly_<model>`; `scrapeZai` gates on the quota being declared rather than consumed, and walks every Z.ai account instead of a single snapshot | All three changes are marked in comments. Keep upstream's structure and re-apply the blocks. |
+| `internal/store/store.go`, `internal/store/zai_store.go`, `internal/tracker/zai_tracker.go`, `internal/agent/zai_agent.go`, `internal/web/handlers.go`, `main.go` | Z.ai became multi-account: `account_id` on snapshots and cycles, per-account tracker state, an agent per account, `/api/zai/accounts`. Shaped deliberately like upstream's own MiniMax multi-account code | Re-apply against upstream's MiniMax equivalents — every piece has a direct counterpart there (`minimax_agent_manager.go`, `minimaxAccountCreate`, the `minimax_snapshots.account_id` migration). |
 | `internal/update/update.go` | `githubRepoSlug` and `releaseTagPrefix` constants, `normalizeTag` | Take upstream's version wholesale, then re-point the slug and re-add `normalizeTag`. Do not hand-merge: the retry/fallback logic around it changes often upstream. |
 | `docs/PROMETHEUS_METRICS.md` | A note under "Label semantics" about weekly quotas and anchored matchers | Prefer upstream's text and re-append the note. |
 | `VERSION` | This fork's own version line | Always keep ours. Upstream's number goes into `UPSTREAM_VERSION`. |
@@ -38,6 +39,8 @@ conflict. The list that matters is the one that touches upstream code:
 | `README.md` | Replaced; upstream's is preserved verbatim as `README.upstream.md` | Take upstream's into `README.upstream.md`, leave ours alone. |
 
 Tests added by the fork (`internal/metrics/quota_coverage_test.go`,
+`internal/metrics/zai_multi_account_test.go`,
+`internal/store/zai_multi_account_test.go`,
 `internal/update/fork_tag_test.go`) are new files and exist precisely so a
 botched re-apply is loud rather than silent. If they fail after a sync, the
 re-apply was wrong — do not adjust the tests to match.

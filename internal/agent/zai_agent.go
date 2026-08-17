@@ -22,6 +22,7 @@ type ZaiAgent struct {
 	sm           *SessionManager
 	notifier     *notify.NotificationEngine
 	pollingCheck func() bool
+	accountID    int64
 }
 
 // SetPollingCheck sets a function that is called before each poll.
@@ -48,6 +49,17 @@ func NewZaiAgent(client *api.ZaiClient, store *store.Store, tr *tracker.ZaiTrack
 		logger:   logger,
 		sm:       sm,
 	}
+}
+
+// NewZaiAgentWithAccount creates a Z.ai polling agent scoped to one account.
+//
+// Fork change: upstream polls a single Z.ai key, so every subscription beyond
+// the first was invisible. Quota on a Coding Plan is per account, so each key
+// needs its own agent writing snapshots under its own account id.
+func NewZaiAgentWithAccount(client *api.ZaiClient, store *store.Store, tr *tracker.ZaiTracker, interval time.Duration, logger *slog.Logger, sm *SessionManager, accountID int64) *ZaiAgent {
+	ag := NewZaiAgent(client, store, tr, interval, logger, sm)
+	ag.accountID = accountID
+	return ag
 }
 
 // Run starts the Z.ai agent's polling loop. It polls immediately,
@@ -100,14 +112,14 @@ func (a *ZaiAgent) poll(ctx context.Context) {
 	now := time.Now().UTC()
 	snapshot := resp.ToSnapshot(now)
 
-	if _, err := a.store.InsertZaiSnapshot(snapshot); err != nil {
+	if _, err := a.store.InsertZaiSnapshot(snapshot, a.accountID); err != nil {
 		a.logger.Error("Failed to insert Z.ai snapshot", "error", err)
 		return
 	}
 
 	// Process with tracker (log error but don't stop)
 	if a.tracker != nil {
-		if err := a.tracker.Process(snapshot); err != nil {
+		if err := a.tracker.Process(snapshot, a.accountID); err != nil {
 			a.logger.Error("Z.ai tracker processing failed", "error", err)
 		}
 	}
@@ -143,6 +155,7 @@ func (a *ZaiAgent) poll(ctx context.Context) {
 
 	// Log poll completion
 	a.logger.Info("Z.ai poll complete",
+		"account_id", a.accountID,
 		"time_usage", snapshot.TimeUsage,
 		"time_limit", snapshot.TimeLimit,
 		"tokens_usage", snapshot.TokensUsage,

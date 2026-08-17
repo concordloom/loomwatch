@@ -1,6 +1,6 @@
 {
-  "name": "onWatch",
-  "short_name": "onWatch",
+  "name": "loomWatch",
+  "short_name": "loomWatch",
   "description": "API usage tracker with quota alerts",
   "display": "standalone",
   "start_url": "/",

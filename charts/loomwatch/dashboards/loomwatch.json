@@ -22,7 +22,7 @@
         "label": "Provider",
         "type": "query",
         "datasource": { "type": "prometheus", "uid": "${datasource}" },
-        "query": "label_values(onwatch_quota_utilization_percent, provider)",
+        "query": "label_values(loomwatch_quota_utilization_percent, provider)",
         "refresh": 1,
         "includeAll": true,
         "multi": true,
@@ -33,7 +33,7 @@
         "label": "Quota window",
         "type": "query",
         "datasource": { "type": "prometheus", "uid": "${datasource}" },
-        "query": "label_values(onwatch_quota_utilization_percent{provider=~\"$provider\"}, quota_type)",
+        "query": "label_values(loomwatch_quota_utilization_percent{provider=~\"$provider\"}, quota_type)",
         "refresh": 1,
         "includeAll": true,
         "multi": true,
@@ -53,7 +53,7 @@
         {
           "refId": "A",
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "max by (provider, quota_type, account_id) (onwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"})",
+          "expr": "max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"})",
           "legendFormat": "{{provider}} / {{quota_type}} / acct {{account_id}}"
         }
       ],
@@ -90,7 +90,7 @@
         {
           "refId": "A",
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "max by (provider, quota_type, account_id) (onwatch_quota_reset_timestamp_seconds{provider=~\"$provider\",quota_type=~\"$quota_type\"} - time())",
+          "expr": "max by (provider, quota_type, account_id) (loomwatch_quota_reset_timestamp_seconds{provider=~\"$provider\",quota_type=~\"$quota_type\"} - time())",
           "legendFormat": "{{provider}} / {{quota_type}} / acct {{account_id}}",
           "instant": true
         }
@@ -115,7 +115,7 @@
         {
           "refId": "A",
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "max by (provider, quota_type, account_id) (onwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}) + max by (provider, quota_type, account_id) (deriv(onwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}[24h])) * max by (provider, quota_type, account_id) (onwatch_quota_reset_timestamp_seconds{provider=~\"$provider\",quota_type=~\"$quota_type\"} - time())",
+          "expr": "max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}) + max by (provider, quota_type, account_id) (deriv(loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}[24h])) * max by (provider, quota_type, account_id) (loomwatch_quota_reset_timestamp_seconds{provider=~\"$provider\",quota_type=~\"$quota_type\"} - time())",
           "legendFormat": "{{provider}} / {{quota_type}} / acct {{account_id}}",
           "instant": true
         }
@@ -147,7 +147,7 @@
         {
           "refId": "A",
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "min by (provider) (onwatch_agent_healthy{provider=~\"$provider\"})",
+          "expr": "min by (provider) (loomwatch_agent_healthy{provider=~\"$provider\"})",
           "legendFormat": "{{provider}}",
           "instant": true
         }
@@ -174,7 +174,7 @@
         {
           "refId": "A",
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "max by (provider, account_id) (onwatch_agent_last_cycle_age_seconds{provider=~\"$provider\"})",
+          "expr": "max by (provider, account_id) (loomwatch_agent_last_cycle_age_seconds{provider=~\"$provider\"})",
           "legendFormat": "{{provider}} / acct {{account_id}}"
         }
       ],

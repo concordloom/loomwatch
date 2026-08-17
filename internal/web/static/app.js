@@ -4170,6 +4170,12 @@ async function fetchCurrent() {
     return;
   }
 
+  // Вне режима всех подписок сводка описывала бы не то, что на экране: она
+  // считается только по обзорному ответу и иначе осталась бы висеть с числами
+  // предыдущего вида. Показания, не относящиеся к показанному, хуже отсутствия
+  // показаний, поэтому строка сворачивается до заголовка.
+  collapsePageSummary();
+
   try {
     if (requestProvider === 'api-integrations') {
       const [currentRes, healthRes] = await Promise.all([
@@ -4585,6 +4591,23 @@ function accountOverviewCardHTML(provider, account, idx) {
 // operator actually opens this panel with: what is closest to its limit, and
 // when does it reset. Built from the same payload the cards are built from, so
 // it cannot drift from them; hidden when there is nothing to summarise.
+// Свернуть строку сводки до заголовка: ведущее значение и счётчики убираются,
+// цветная метка состояния гасится.
+function collapsePageSummary() {
+  const root = document.getElementById('page-summary');
+  const titleEl = document.getElementById('page-summary-title');
+  const leadEl = document.getElementById('page-summary-lead');
+  const countsEl = document.getElementById('page-summary-counts');
+  if (!root || !titleEl || !leadEl || !countsEl) return;
+  root.dataset.state = 'empty';
+  leadEl.hidden = true;
+  countsEl.hidden = true;
+  countsEl.innerHTML = '';
+  titleEl.textContent = 'Dashboard';
+  const resetEl = document.getElementById('page-summary-reset');
+  if (resetEl) delete resetEl.dataset.resetAt;
+}
+
 function updatePageSummary(provider, accounts) {
   const root = document.getElementById('page-summary');
   const titleEl = document.getElementById('page-summary-title');

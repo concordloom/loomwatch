@@ -2,10 +2,16 @@
 <div class="app" data-poll-interval="{{.PollIntervalSec}}">
     <header class="app-header">
         <a href="#" class="header-brand" id="scroll-top" aria-label="Scroll to top">
-            <svg class="brand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M12 2v20M2 12h20M4.93 4.93l14.14 14.14M19.07 4.93L4.93 19.07"/>
+            <svg class="brand-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <g stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+                    <path d="M5.3 19.2v-4.8"/>
+                    <path d="M9.6 19.2v-8.6"/>
+                    <path d="M18.2 19.2v-2.9"/>
+                </g>
+                <path class="brand-thread-hot" d="M13.9 19.2V6.7" stroke-width="2.2" stroke-linecap="round"/>
+                <path d="M2.9 12.5h18.2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
             </svg>
-            <span class="brand-text">loomWatch</span>
+            <span class="brand-text">loom<b>Watch</b></span>
         </a>
         {{if gt (len .Providers) 1}}
         <div class="provider-tabs" id="provider-tabs" role="tablist" aria-label="Select provider">
@@ -99,8 +105,16 @@
     </header>
 
     <main id="main-content" class="main-content">
-        <div class="welcome-banner">
-            <h1 class="welcome-title">Dashboard</h1>
+        <div class="page-summary" id="page-summary" data-state="empty">
+            <h1 class="page-summary-title" id="page-summary-title">Dashboard</h1>
+            <div class="page-summary-lead" id="page-summary-lead" hidden>
+                <span class="pgs-value" id="page-summary-value">—</span>
+                <span class="pgs-meta">
+                    <span class="pgs-account" id="page-summary-account"></span>
+                    <span class="pgs-reset" id="page-summary-reset"></span>
+                </span>
+            </div>
+            <div class="page-summary-counts" id="page-summary-counts" hidden></div>
         </div>
 
         {{if eq .CurrentProvider "both"}}

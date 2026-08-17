@@ -311,12 +311,19 @@ button, input, select { font-family: inherit; }
   color: var(--accent-teal);
 }
 
+/* Словесная часть знака: «loom» обычным, «Watch» полужирным — так пара читается
+   как одно слово с ударением на второй половине, а не как две. */
 .brand-text {
   font-size: 20px;
-  font-weight: 700;
+  font-weight: 400;
   color: var(--text-primary);
   letter-spacing: -0.02em;
 }
+.brand-text b { font-weight: 700; }
+
+/* Акцентная нить знака. Отдельным правилом, потому что цвет у неё свой в обеих
+   темах, а остальная часть знака идёт currentColor. */
+.brand-icon .brand-thread-hot { stroke: var(--accent-peach); }
 
 /* Provider Tabs */
 .provider-tabs {
@@ -546,17 +553,93 @@ button, input, select { font-family: inherit; }
   width: 100%;
 }
 
-/* Welcome banner */
-.welcome-banner {
+/* Верхняя строка страницы. Раньше здесь стоял заголовок «Dashboard»; теперь
+   строка отвечает на два вопроса пульта — что ближе всего к пределу и когда
+   сбросится. При одиночном аккаунте сводки нет, и остаётся один заголовок. */
+.page-summary {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
   margin-bottom: 20px;
+  padding-left: 14px;
+  border-left: 3px solid var(--border-default);
 }
-.welcome-title {
+.page-summary[data-state="warning"] { border-left-color: var(--status-warning); }
+.page-summary[data-state="danger"] { border-left-color: var(--status-danger); }
+.page-summary[data-state="critical"] { border-left-color: var(--status-critical); }
+
+.page-summary-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin: 0;
+}
+
+.page-summary-lead {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+
+.pgs-value {
+  font-family: var(--font-mono);
   font-size: 26px;
-  font-weight: 700;
-  color: var(--text-primary);
+  font-weight: 500;
+  line-height: 1;
   letter-spacing: -0.02em;
-  margin-bottom: 0;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
 }
+.pgs-value[data-status="warning"] { color: var(--status-warning-text); }
+.pgs-value[data-status="danger"] { color: var(--status-danger); }
+.pgs-value[data-status="critical"] { color: var(--status-critical); }
+
+.pgs-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.pgs-account {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.pgs-reset {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.page-summary-counts {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+.pgs-count {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  font-size: 12px;
+  text-transform: capitalize;
+}
+.pgs-count b {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.pgs-count[data-status="healthy"] { background: var(--status-healthy-bg); color: var(--status-healthy-text); }
+.pgs-count[data-status="warning"] { background: var(--status-warning-bg); color: var(--status-warning-text); }
+.pgs-count[data-status="danger"] { background: var(--status-danger-bg); color: var(--status-danger-text); }
+.pgs-count[data-status="critical"] { background: var(--status-critical-bg); color: var(--status-critical-text); }
 
 /* ═══════════════════════════════════════════
    7. QUOTA CARDS (KPI STYLE)
@@ -1134,9 +1217,13 @@ button, input, select { font-family: inherit; }
 }
 
 .progress-fill {
+  /* display:block обязателен: полосу рисуют и как <div>, и как <span> внутри
+     карточек обзора, а строчный элемент высоту игнорирует — полоса оставалась
+     пустой при непустом проценте. */
+  display: block;
   height: 100%;
   border-radius: var(--radius-full);
-  transition: width 500ms ease-out, background var(--transition-base);
+  transition: width var(--duration-modal) var(--ease-out), background var(--transition-base);
 }
 .progress-fill[data-status="healthy"] { background: var(--status-healthy); }
 .progress-fill[data-status="warning"] { background: var(--status-warning); }
@@ -2150,37 +2237,136 @@ button, input, select { font-family: inherit; }
   background: var(--surface-page);
 }
 
+/* Две половины: слева назначение пульта, справа форма. На узком экране левая
+   половина уходит — она поясняет, а не требуется для входа. */
+.login-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+  width: 100%;
+  max-width: 880px;
+  min-height: 480px;
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+
+.login-aside {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  padding: 40px;
+  color: #FFFFFF;
+  background: linear-gradient(160deg, #0F766E 0%, #0D9488 55%, #115E59 100%);
+  overflow: hidden;
+}
+
+/* Графика живёт в нижнем правом углу и накрыта вуалью: в первой версии нити
+   проходили прямо сквозь текст и роняли его контраст. Декор не имеет права
+   мешать чтению. */
+.login-weave {
+  position: absolute;
+  right: -6%;
+  bottom: -12%;
+  width: 78%;
+  height: 62%;
+  color: #FFFFFF;
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.login-aside::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, #0F766E 34%, rgba(15, 118, 110, 0.86) 52%, rgba(15, 118, 110, 0) 78%);
+  pointer-events: none;
+}
+
+.login-aside-body {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.login-mark {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.login-mark .brand-icon {
+  width: 30px;
+  height: 30px;
+  color: #FFFFFF;
+}
+.login-mark .brand-thread-hot { stroke: #FDE68A; }
+
+.login-wordmark {
+  font-size: 22px;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+}
+.login-wordmark b { font-weight: 700; }
+
+.login-pitch {
+  font-size: 15px;
+  line-height: 1.55;
+  color: rgba(255, 255, 255, 0.92);
+  max-width: 34ch;
+}
+
+.login-points {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 4px 0 0;
+  padding: 0;
+}
+.login-points li {
+  position: relative;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.82);
+}
+.login-points li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 8px;
+  width: 8px;
+  height: 2px;
+  border-radius: var(--radius-full);
+  background: #FDE68A;
+}
+
 .login-card {
   background: var(--surface-card);
-  border-radius: var(--radius-xl);
-  padding: 48px;
-  width: 100%;
-  max-width: 400px;
-  border: 1px solid var(--border-default);
-  box-shadow: var(--shadow-md);
+  padding: 48px 44px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
   position: relative;
 }
 
 .login-header {
-  text-align: center;
-  margin-bottom: 32px;
-}
-.login-header .brand-icon {
-  width: 48px;
-  height: 48px;
-  margin: 0 auto 16px;
-  color: var(--accent-teal);
+  margin-bottom: 28px;
 }
 .login-header h1 {
-  font-size: 26px;
+  font-size: 24px;
   font-weight: 700;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
   color: var(--text-primary);
   letter-spacing: -0.02em;
 }
 .login-header p {
   color: var(--text-secondary);
-  font-size: 14px;
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .form-group { margin-bottom: 20px; }
@@ -2428,6 +2614,10 @@ button, input, select { font-family: inherit; }
   .quota-card { padding: 18px; }
   .range-selector { width: 100%; }
   .range-btn { flex: 1; padding: 8px; font-size: 12px; }
+  /* Левая половина входа поясняет продукт и на узком экране только съедает
+     высоту — форма должна быть первым, что видно. */
+  .login-shell { grid-template-columns: 1fr; min-height: 0; max-width: 420px; }
+  .login-aside { display: none; }
   .login-card { padding: 32px 24px; }
   .table-controls { flex-direction: column; align-items: stretch; }
   .section-header { flex-direction: column; align-items: flex-start; }
@@ -2440,7 +2630,8 @@ button, input, select { font-family: inherit; }
   .insights-stats { grid-template-columns: repeat(2, 1fr); }
   .insights-cards { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
   .api-integrations-insights-panels { grid-template-columns: 1fr; }
-  .welcome-title { font-size: 22px; }
+  .page-summary-title { font-size: 14px; }
+  .pgs-value { font-size: 22px; }
   .both-view { grid-template-columns: 1fr; gap: 16px; }
   .chart-container.both-charts { grid-template-columns: 1fr; }
   .provider-tabs { margin-left: 0; }
@@ -2475,7 +2666,8 @@ button, input, select { font-family: inherit; }
   .modal-kpi-row { grid-template-columns: repeat(2, 1fr); }
   .session-detail-grid { grid-template-columns: 1fr; }
   .last-updated { font-size: 11px; }
-  .welcome-title { font-size: 20px; }
+  .page-summary { gap: 12px; }
+  .page-summary-counts { margin-left: 0; }
   .codex-profile-menu { left: auto; right: 0; }
 }
 
@@ -2562,47 +2754,56 @@ button, input, select { font-family: inherit; }
   margin-left: 6px;
 }
 
+/* Разделы слева, содержимое справа. Горизонтальные «пилюли» ломались уже на
+   пяти разделах и растягивали форму на всю ширину экрана; колонка держит
+   строку формы читаемой и не меняет вид при добавлении раздела. */
 .settings-main {
   flex: 1;
-  max-width: 760px;
+  display: grid;
+  grid-template-columns: 208px minmax(0, 1fr);
+  align-items: start;
+  gap: 28px;
+  max-width: 1040px;
   width: 100%;
   margin: 0 auto;
-  padding: 24px;
+  padding: 28px 24px 0;
 }
 
-/* Tabs */
 .settings-tabs {
   display: flex;
-  gap: 4px;
-  padding: 4px;
-  background: var(--surface-inset);
-  border-radius: var(--radius-md);
-  margin-bottom: 24px;
+  flex-direction: column;
+  gap: 2px;
+  position: sticky;
+  top: 88px;
 }
 
 .settings-tab {
-  flex: 1;
-  padding: 10px 16px;
+  padding: 9px 12px;
   border: none;
+  border-left: 2px solid transparent;
   background: transparent;
   color: var(--text-secondary);
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 500;
   font-family: var(--font-primary);
-  border-radius: var(--radius-sm);
+  text-align: left;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
   cursor: pointer;
-  transition: background-color var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast), opacity var(--transition-fast);
+  transition: background-color var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
   white-space: nowrap;
 }
 .settings-tab:hover {
   color: var(--text-primary);
-  background: rgba(0, 0, 0, 0.03);
+  background: var(--surface-inset);
 }
 .settings-tab.active {
-  background: var(--surface-card);
-  color: var(--text-primary);
-  box-shadow: var(--shadow-xs);
+  background: var(--accent-teal-muted);
+  border-left-color: var(--accent-teal);
+  color: var(--accent-teal-text);
+  font-weight: 600;
 }
+
+.settings-content { min-width: 0; }
 
 [data-theme="dark"] .settings-tab:hover {
   background: rgba(255, 255, 255, 0.05);
@@ -3098,13 +3299,18 @@ select.settings-input {
 
 /* Save bar */
 .settings-save-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  grid-column: 1 / -1;
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 16px;
   margin-top: 24px;
-  padding-top: 20px;
+  padding: 14px 0;
   border-top: 1px solid var(--border-default);
+  background: var(--surface-page);
 }
 
 .settings-save-btn {
@@ -3418,8 +3624,26 @@ select.settings-input {
   .settings-main { padding: 16px; }
   .settings-fields { grid-template-columns: 1fr; }
   .settings-field-half { grid-column: span 1; }
-  .settings-tabs { flex-wrap: wrap; }
-  .settings-tab { flex: none; padding: 8px 14px; font-size: 12px; }
+  /* На узком экране колонка разделов встаёт над формой и снова становится
+     горизонтальной лентой — вертикальный список съел бы весь первый экран. */
+  .settings-main { grid-template-columns: 1fr; gap: 16px; }
+  .settings-tabs {
+    position: static;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 4px;
+    background: var(--surface-inset);
+    border-radius: var(--radius-md);
+  }
+  .settings-tab {
+    flex: none;
+    padding: 8px 14px;
+    font-size: 12px;
+    border-left: none;
+    border-radius: var(--radius-sm);
+  }
+  .settings-tab.active { border-left-color: transparent; }
   .settings-header { padding: 12px 16px; }
   .settings-title { font-size: 18px; }
   .settings-actions { flex-direction: column; align-items: flex-start; }
@@ -3430,6 +3654,7 @@ select.settings-input {
   .settings-section { padding: 16px; }
   .settings-tabs { gap: 2px; padding: 3px; }
   .settings-tab { padding: 7px 10px; font-size: 11px; }
+  .settings-main { padding: 16px 12px 0; }
   .threshold-input-group { flex-direction: column; align-items: stretch; }
   .settings-input-sm { width: 100%; }
   /* Notification center responsive */
@@ -3660,7 +3885,6 @@ body.accounts-overview-mode #quota-grid[data-provider="zai"] {
 .account-overview-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
 }
 
@@ -3668,6 +3892,8 @@ body.accounts-overview-mode #quota-grid[data-provider="zai"] {
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
+  margin-right: auto;
   font-size: 14px;
   font-weight: 600;
   color: var(--text-secondary);
@@ -3689,24 +3915,47 @@ body.accounts-overview-mode #quota-grid[data-provider="zai"] {
   text-transform: capitalize;
 }
 
-.account-overview-quotas {
+/* The lead window: one number the eye lands on, its window and its countdown.
+   Everything else on the card is deliberately quieter than this block. */
+.aoc-lead {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.aoc-lead-value {
+  font-family: var(--font-mono);
+  font-size: 34px;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+}
+.aoc-lead-value i {
+  font-style: normal;
+  font-size: 17px;
+  color: var(--text-muted);
+  margin-left: 2px;
+}
+.aoc-lead-value[data-status="warning"] { color: var(--status-warning-text); }
+.aoc-lead-value[data-status="danger"] { color: var(--status-danger); }
+.aoc-lead-value[data-status="critical"] { color: var(--status-critical); }
+
+.aoc-lead-meta {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  align-items: flex-end;
+  gap: 3px;
+  min-width: 0;
+  text-align: right;
 }
 
-.account-overview-quota .aoq-top {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-
-.aoq-label {
+.aoc-lead-label {
   font-size: 12px;
   font-weight: 500;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.03em;
   overflow: hidden;
@@ -3714,27 +3963,66 @@ body.accounts-overview-mode #quota-grid[data-provider="zai"] {
   white-space: nowrap;
 }
 
-.aoq-pct {
-  font-family: var(--font-primary);
-  font-size: 20px;
-  font-weight: 700;
-  color: var(--text-primary);
-  line-height: 1.1;
-  font-variant-numeric: tabular-nums;
+.aoc-lead-reset {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
 }
 
-.account-overview-quota .progress-bar {
-  height: 6px;
+.progress-bar.aoc-lead-bar {
+  display: block;
+  height: 8px;
+  margin-top: -6px;
   background: var(--surface-inset);
   border-radius: var(--radius-full);
   overflow: hidden;
 }
 
-.aoq-reset {
-  margin-top: 8px;
-  font-size: 12px;
-  color: var(--text-muted);
+/* Secondary windows: a four-column grid so labels, bars, percentages and
+   countdowns line up across rows — ragged columns are what made the old card
+   slow to read. */
+.aoc-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-light);
 }
+
+.aoc-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 52px auto auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.aoc-row-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.progress-bar.aoc-row-bar {
+  display: block;
+  height: 4px;
+  background: var(--surface-inset);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+.aoc-row-pct,
+.aoc-row-reset {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+.aoc-row-pct { color: var(--text-primary); min-width: 46px; }
+.aoc-row-reset { color: var(--text-muted); min-width: 52px; }
 
 .account-overview-cta {
   margin-top: auto;
@@ -4231,8 +4519,7 @@ body.accounts-overview-mode #quota-grid[data-provider="zai"] {
   to   { background-color: transparent; }
 }
 
-.usage-percent.lw-changed,
-.aoq-pct.lw-changed {
+.usage-percent.lw-changed {
   animation: lw-value-changed 600ms var(--ease-out);
   border-radius: var(--radius-sm);
 }
@@ -4270,8 +4557,7 @@ body.accounts-overview-mode #quota-grid[data-provider="zai"] {
     transform: none;
   }
   .status-badge[data-status="critical"] .status-icon,
-  .usage-percent.lw-changed,
-  .aoq-pct.lw-changed {
+  .usage-percent.lw-changed {
     animation: none;
   }
   /* Без opacity карточка осталась бы невидимой: анимацию сняли, а базовое

@@ -28,7 +28,7 @@
             --bg-card-strong: rgba(28, 28, 28, 0.98);
             --bg-hover: rgba(255, 255, 255, 0.05);
             --border: rgba(255, 255, 255, 0.06);
-            --settings-accent: rgba(96, 165, 250, 0.08);
+            --settings-accent: rgba(20, 184, 166, 0.1);
             --settings-gradient-start: rgba(16, 16, 16, 0.99);
             --settings-gradient-end: rgba(10, 10, 10, 0.99);
             --icon-surface: rgba(255, 255, 255, 0.03);
@@ -46,11 +46,11 @@
             --text-soft: rgba(255, 255, 255, 0.78);
             --text-muted: rgba(255, 255, 255, 0.5);
 
-            --healthy: #22c55e;
-            --warning: #f59e0b;
-            --critical: #ef4444;
+            --healthy: #34D399;
+            --warning: #FBBF24;
+            --critical: #EF4444;
             --track: rgba(255, 255, 255, 0.08);
-            --focus: rgba(96, 165, 250, 0.42);
+            --focus: rgba(20, 184, 166, 0.45);
         }
 
         :root[data-theme="light"] {
@@ -61,7 +61,7 @@
             --bg-card-strong: rgba(255, 255, 255, 0.98);
             --bg-hover: rgba(15, 23, 42, 0.06);
             --border: rgba(15, 23, 42, 0.12);
-            --settings-accent: rgba(37, 99, 235, 0.1);
+            --settings-accent: rgba(13, 148, 136, 0.1);
             --settings-gradient-start: rgba(255, 255, 255, 0.99);
             --settings-gradient-end: rgba(241, 245, 249, 0.97);
             --icon-surface: rgba(15, 23, 42, 0.05);
@@ -78,7 +78,10 @@
             --text-soft: rgba(15, 23, 42, 0.82);
             --text-muted: rgba(15, 23, 42, 0.62);
             --track: rgba(15, 23, 42, 0.12);
-            --focus: rgba(37, 99, 235, 0.45);
+            --focus: rgba(13, 148, 136, 0.45);
+            --healthy: #10B981;
+            --warning: #F59E0B;
+            --critical: #DC2626;
         }
 
         * {
@@ -194,11 +197,13 @@
 
         .header-value {
             font-size: 12px;
-            font-weight: 700;
+            font-weight: 400;
             letter-spacing: -0.02em;
             line-height: 1;
             white-space: nowrap;
         }
+
+        .header-value b { font-weight: 700; }
 
         .header-value.hidden {
             display: none;
@@ -1363,7 +1368,7 @@
         <header class="menubar-header">
             <div class="header-cluster">
                 <div class="brand-mark" aria-hidden="true" id="brand-mark"></div>
-                <div class="header-value" id="header-value">loomWatch</div>
+                <div class="header-value" id="header-value">loom<b>Watch</b></div>
                 <div class="header-meta">
                     <span id="header-count">0</span>
                     <span class="meta-divider"></span>
@@ -1420,7 +1425,7 @@
             const THEME_MODES = ["system", "light", "dark"];
 
             const icons = {
-                star: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2v20"/><path d="M2 12h20"/><path d="M4.93 4.93 19.07 19.07"/><path d="M19.07 4.93 4.93 19.07"/></svg>',
+                star: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5.3 19.2v-4.8"/><path d="M9.6 19.2v-8.6"/><path d="M18.2 19.2v-2.9"/><path d="M13.9 19.2V6.7" stroke="#F59E0B"/><path d="M2.9 12.5h18.2" stroke-width="1.5"/></svg>',
                 settings: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.6 1.6 0 0 0 .32 1.82l.05.05a2 2 0 0 1-2.82 2.83l-.06-.06a1.6 1.6 0 0 0-1.81-.33 1.6 1.6 0 0 0-.99 1.48V21a2 2 0 0 1-4 0v-.08a1.6 1.6 0 0 0-.99-1.48 1.6 1.6 0 0 0-1.81.33l-.06.06A2 2 0 0 1 4.4 17l.06-.05A1.6 1.6 0 0 0 4.79 15a1.6 1.6 0 0 0-1.48-.99H3.2a2 2 0 1 1 0-4h.08A1.6 1.6 0 0 0 4.76 9a1.6 1.6 0 0 0-.33-1.82l-.06-.05A2 2 0 1 1 7.2 4.3l.06.05a1.6 1.6 0 0 0 1.81.33 1.6 1.6 0 0 0 .99-1.48V3.1a2 2 0 0 1 4 0v.08a1.6 1.6 0 0 0 .99 1.48 1.6 1.6 0 0 0 1.81-.33l.06-.05a2 2 0 1 1 2.82 2.82l-.05.06A1.6 1.6 0 0 0 19.4 9c0 .64.37 1.22.95 1.49.17.08.35.11.54.11h.08a2 2 0 0 1 0 4h-.08a1.6 1.6 0 0 0-1.49.95Z"/></svg>',
                 close: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 6 18 18"/><path d="M18 6 6 18"/></svg>',
                 back: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18 9 12l6-6"/></svg>',
@@ -1982,7 +1987,7 @@
 
             function updateHeader() {
                 const providers = visibleProviders();
-                headerValue.textContent = "loomWatch";
+                headerValue.innerHTML = "loom<b>Watch</b>";
                 headerValue.classList.remove("hidden");
                 headerValue.setAttribute("aria-hidden", "false");
                 headerCount.textContent = `${providers.length} ${providers.length === 1 ? "provider" : "providers"}`;

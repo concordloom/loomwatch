@@ -26,14 +26,15 @@
     </header>
 
     <main class="settings-main">
-        <div class="settings-tabs" role="tablist" aria-label="Settings sections">
+        <nav class="settings-tabs" role="tablist" aria-label="Settings sections">
             <button class="settings-tab active" data-tab="email" role="tab" aria-selected="true" aria-controls="panel-email">Email (SMTP)</button>
             <button class="settings-tab" data-tab="notifications" role="tab" aria-selected="false" aria-controls="panel-notifications">Notifications</button>
             <button class="settings-tab" data-tab="providers" role="tab" aria-selected="false" aria-controls="panel-providers">Providers</button>
             <button class="settings-tab" data-tab="menubar" role="tab" aria-selected="false" aria-controls="panel-menubar" hidden>Menubar</button>
             <button class="settings-tab" data-tab="general" role="tab" aria-selected="false" aria-controls="panel-general">General</button>
-        </div>
+        </nav>
 
+        <div class="settings-content">
         <!-- Email (SMTP) Panel -->
         <div class="settings-panel active" id="panel-email" role="tabpanel">
             <div class="settings-section">
@@ -389,7 +390,10 @@
             </div>
         </div>
 
-        <!-- Global save bar -->
+        </div>
+
+        <!-- Global save bar. Липкая: разделы длинные, и кнопка, до которой надо
+             доскроллить, заставляет проверять, сохранилось ли вообще. -->
         <div class="settings-save-bar">
             <div id="settings-feedback" class="settings-feedback" hidden></div>
             <button class="settings-save-btn" id="settings-save-btn" type="button">

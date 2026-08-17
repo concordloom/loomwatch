@@ -2764,7 +2764,7 @@ function codexAutoStartBadge(quotaName) {
 // Codex cards to match the current toggle state, without a full re-render. Called
 // after saving provider settings so the badge updates immediately. Covers both
 // the per-account `.quota-card.codex-card` and the multi-account overview's
-// `.account-overview-quota` rows.
+// lead block and secondary rows.
 function syncCodexAutoStartBadges() {
   document.querySelectorAll('.quota-card.codex-card').forEach(card => {
     const title = card.querySelector('.quota-title');
@@ -2777,8 +2777,8 @@ function syncCodexAutoStartBadges() {
       existing.remove();
     }
   });
-  document.querySelectorAll('.account-overview-quota[data-quota]').forEach(row => {
-    const label = row.querySelector('.aoq-label');
+  document.querySelectorAll('.aoc-row[data-quota], .aoc-lead[data-quota]').forEach(row => {
+    const label = row.querySelector('.aoc-row-label, .aoc-lead-label');
     if (!label) return;
     const existing = label.querySelector('.auto-start-badge');
     const html = codexAutoStartBadge(row.dataset.quota);
@@ -3784,7 +3784,23 @@ function startCountdowns() {
         }
       }
     });
+    refreshOverviewCountdowns();
   }, 1000);
+}
+
+// Keep the "resets in ..." labels on the overview cards live between polls.
+// They are derived from the reset timestamp on the element, so they stay right
+// even when a poll is slow or fails; a card with no timestamp is left alone.
+function refreshOverviewCountdowns() {
+  document.querySelectorAll('.account-overview-card [data-reset-at], .pgs-reset[data-reset-at]').forEach(el => {
+    const secs = secondsUntilReset(el.dataset.resetAt);
+    const isLead = el.classList.contains('aoc-lead-reset') || el.classList.contains('pgs-reset');
+    if (!secs) {
+      el.textContent = isLead ? 'resetting…' : '—';
+      return;
+    }
+    el.textContent = isLead ? `resets in ${formatDuration(secs)}` : formatDuration(secs);
+  });
 }
 
 // ── Data Fetching ──
@@ -4468,40 +4484,169 @@ function accountOverviewQuotas(provider, account) {
   }));
 }
 
+// Rank of a status, worst first. Used to pick what the card leads with.
+const STATUS_RANK = { critical: 3, danger: 2, warning: 1, healthy: 0 };
+
+// Seconds until a reset timestamp, or null when it is missing or already past.
+function secondsUntilReset(resetAt) {
+  if (!resetAt) return null;
+  const ts = new Date(resetAt).getTime();
+  if (!Number.isFinite(ts)) return null;
+  const secs = Math.floor((ts - Date.now()) / 1000);
+  return secs > 0 ? secs : null;
+}
+
+// Status badge markup shared by the overview cards.
+function statusBadgeHTML(status) {
+  const cfg = statusConfig[status] || statusConfig.healthy;
+  return `<span class="status-badge" data-status="${status}">` +
+    `<svg class="status-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="${cfg.icon}"/></svg>` +
+    `${cfg.label}</span>`;
+}
+
 // Build the HTML for a single compact account summary card.
+//
+// Fork change: the card used to list every window as an equal row of 20px
+// numbers, so answering "which subscription is about to run out" meant reading
+// all of them. It now leads with the window closest to its limit — one large
+// number, its status and how long until it resets — and keeps the remaining
+// windows as compact secondary rows. Same data, one glance instead of six.
 function accountOverviewCardHTML(provider, account, idx) {
   const accountId = account.accountId || account.id || idx + 1;
   const accountName = account.accountName || account.name || `Account ${accountId}`;
-  const badge = provider === 'codex' && account.planType ? formatCodexPlan(account.planType) : '';
+  const planBadge = provider === 'codex' && account.planType ? formatCodexPlan(account.planType) : '';
   const rows = accountOverviewQuotas(provider, account);
-  const quotaHTML = rows.length === 0
-    ? '<p class="empty-state">No quota data yet.</p>'
-    : rows.map(r => {
-        const pct = Math.max(0, Math.min(100, r.percent)).toFixed(1);
-        const reset = r.resetAt ? formatResetTime(r.resetAt) : '';
-        // Surface the Auto-start indicator for Codex windows here too, so the
-        // multi-account overview (the default Codex tab) shows it.
-        const startBadge = provider === 'codex' ? codexAutoStartBadge(r.quotaName) : '';
-        return `<div class="account-overview-quota" data-quota="${escapeHTML(r.quotaName || '')}">
-          <div class="aoq-top">
-            <span class="aoq-label">${escapeHTML(r.label)}${startBadge}</span>
-            <span class="aoq-pct">${pct}%</span>
-          </div>
-          <div class="progress-bar" role="progressbar" aria-valuenow="${Math.round(r.percent)}" aria-valuemin="0" aria-valuemax="100">
-            <div class="progress-fill" style="width: ${pct}%" data-status="${r.status}"></div>
-          </div>
-          ${reset ? `<div class="aoq-reset" data-reset-at="${r.resetAt}">${reset}</div>` : ''}
-        </div>`;
-      }).join('');
 
-  return `<article class="account-overview-card" data-account-id="${accountId}" data-provider="${provider}" role="button" tabindex="0" aria-label="Open ${escapeHTML(accountName)} details">
+  if (rows.length === 0) {
+    return `<article class="account-overview-card" data-account-id="${accountId}" data-provider="${provider}" role="button" tabindex="0" aria-label="Open ${escapeHTML(accountName)} details">
+      <header class="account-overview-header">
+        <span class="account-overview-name">${escapeHTML(accountName)}</span>
+        ${planBadge ? `<span class="account-overview-badge">${escapeHTML(planBadge)}</span>` : ''}
+      </header>
+      <p class="empty-state">No quota data yet.</p>
+      <span class="account-overview-cta">View details &rarr;</span>
+    </article>`;
+  }
+
+  const clamp = (v) => Math.max(0, Math.min(100, typeof v === 'number' ? v : 0));
+  // The lead is the window closest to its limit. Ties keep source order, so a
+  // card does not reshuffle between two windows sitting at the same percent.
+  let lead = rows[0];
+  rows.forEach(r => { if (clamp(r.percent) > clamp(lead.percent)) lead = r; });
+  // Worst status, not the lead's: keeps the badge honest if a provider ever
+  // scores status by something other than the percentage.
+  const cardStatus = rows.reduce((worst, r) => (
+    (STATUS_RANK[r.status] || 0) > (STATUS_RANK[worst] || 0) ? r.status : worst
+  ), 'healthy');
+
+  const leadPct = clamp(lead.percent);
+  const leadSecs = secondsUntilReset(lead.resetAt);
+  const leadStartBadge = provider === 'codex' ? codexAutoStartBadge(lead.quotaName) : '';
+
+  const restHTML = rows.filter(r => r !== lead).map(r => {
+    const pct = clamp(r.percent);
+    const startBadge = provider === 'codex' ? codexAutoStartBadge(r.quotaName) : '';
+    const secs = secondsUntilReset(r.resetAt);
+    return `<div class="aoc-row" data-quota="${escapeHTML(r.quotaName || '')}">
+      <span class="aoc-row-label">${escapeHTML(r.label)}${startBadge}</span>
+      <span class="progress-bar aoc-row-bar" role="progressbar" aria-valuenow="${Math.round(pct)}" aria-valuemin="0" aria-valuemax="100" aria-label="${escapeHTML(r.label)}">
+        <span class="progress-fill" style="width: ${pct.toFixed(1)}%" data-status="${r.status}"></span>
+      </span>
+      <span class="aoc-row-pct">${pct.toFixed(1)}%</span>
+      <span class="aoc-row-reset"${r.resetAt ? ` data-reset-at="${r.resetAt}"` : ''}>${secs ? escapeHTML(formatDuration(secs)) : '&mdash;'}</span>
+    </div>`;
+  }).join('');
+
+  return `<article class="account-overview-card" data-account-id="${accountId}" data-provider="${provider}" data-status="${cardStatus}" role="button" tabindex="0" aria-label="Open ${escapeHTML(accountName)} details">
     <header class="account-overview-header">
       <span class="account-overview-name">${escapeHTML(accountName)}</span>
-      ${badge ? `<span class="account-overview-badge">${escapeHTML(badge)}</span>` : ''}
+      ${planBadge ? `<span class="account-overview-badge">${escapeHTML(planBadge)}</span>` : ''}
+      ${statusBadgeHTML(cardStatus)}
     </header>
-    <div class="account-overview-quotas">${quotaHTML}</div>
+
+    <div class="aoc-lead" data-quota="${escapeHTML(lead.quotaName || '')}">
+      <span class="aoc-lead-value" data-status="${lead.status}">${leadPct.toFixed(1)}<i>%</i></span>
+      <span class="aoc-lead-meta">
+        <span class="aoc-lead-label">${escapeHTML(lead.label)}${leadStartBadge}</span>
+        <span class="aoc-lead-reset"${lead.resetAt ? ` data-reset-at="${lead.resetAt}"` : ''}>${leadSecs ? `resets in ${escapeHTML(formatDuration(leadSecs))}` : 'no reset reported'}</span>
+      </span>
+    </div>
+    <span class="progress-bar aoc-lead-bar" role="progressbar" aria-valuenow="${Math.round(leadPct)}" aria-valuemin="0" aria-valuemax="100" aria-label="${escapeHTML(lead.label)}">
+      <span class="progress-fill" style="width: ${leadPct.toFixed(1)}%" data-status="${lead.status}"></span>
+    </span>
+
+    ${restHTML ? `<div class="aoc-rows">${restHTML}</div>` : ''}
     <span class="account-overview-cta">View details &rarr;</span>
   </article>`;
+}
+
+// Fork change: the page used to open with the word "Dashboard" — a heading
+// that costs a line and answers nothing. It now carries the two questions an
+// operator actually opens this panel with: what is closest to its limit, and
+// when does it reset. Built from the same payload the cards are built from, so
+// it cannot drift from them; hidden when there is nothing to summarise.
+function updatePageSummary(provider, accounts) {
+  const root = document.getElementById('page-summary');
+  const titleEl = document.getElementById('page-summary-title');
+  const leadEl = document.getElementById('page-summary-lead');
+  const countsEl = document.getElementById('page-summary-counts');
+  if (!root || !titleEl || !leadEl || !countsEl) return;
+
+  const entries = [];
+  (accounts || []).forEach((account, idx) => {
+    const name = account.accountName || account.name || `Account ${idx + 1}`;
+    accountOverviewQuotas(provider, account).forEach(r => {
+      entries.push({
+        account: name,
+        label: r.label,
+        percent: Math.max(0, Math.min(100, typeof r.percent === 'number' ? r.percent : 0)),
+        status: r.status || 'healthy',
+        resetAt: r.resetAt || null,
+      });
+    });
+  });
+
+  if (entries.length === 0) {
+    root.dataset.state = 'empty';
+    leadEl.hidden = true;
+    countsEl.hidden = true;
+    titleEl.textContent = 'Dashboard';
+    return;
+  }
+
+  const worst = entries.reduce((a, b) => (b.percent > a.percent ? b : a));
+  const counts = entries.reduce((acc, e) => {
+    const key = ['critical', 'danger', 'warning'].includes(e.status) ? e.status : 'healthy';
+    acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, {});
+
+  const accountCount = (accounts || []).length;
+  titleEl.textContent = `${accountCount} ${accountCount === 1 ? 'subscription' : 'subscriptions'}`;
+
+  root.dataset.state = worst.status;
+  document.getElementById('page-summary-value').textContent = `${worst.percent.toFixed(1)}%`;
+  document.getElementById('page-summary-value').dataset.status = worst.status;
+  document.getElementById('page-summary-account').textContent = `${worst.account} · ${worst.label}`;
+  const secs = secondsUntilReset(worst.resetAt);
+  const resetEl = document.getElementById('page-summary-reset');
+  resetEl.textContent = secs ? `resets in ${formatDuration(secs)}` : 'no reset reported';
+  if (worst.resetAt) resetEl.dataset.resetAt = worst.resetAt; else delete resetEl.dataset.resetAt;
+  leadEl.hidden = false;
+
+  // Counts are ordered worst-first and only non-empty buckets are drawn: a row
+  // of zeroes reads as noise on a panel meant to be scanned.
+  const order = [
+    ['critical', 'critical'],
+    ['danger', 'danger'],
+    ['warning', 'warning'],
+    ['healthy', 'healthy'],
+  ];
+  countsEl.innerHTML = order
+    .filter(([key]) => counts[key])
+    .map(([key, label]) => `<span class="pgs-count" data-status="${key}"><b>${counts[key]}</b>${label}</span>`)
+    .join('');
+  countsEl.hidden = false;
 }
 
 // Build one compact, clickable summary card per account in the provider grid.
@@ -4549,6 +4694,7 @@ async function fetchAccountsOverview(provider, requestSeq) {
       if (!isAccountsOverviewMode(provider)) return;
       State.accountsOverview = { provider, accounts };
       renderAccountsOverview(provider, accounts);
+      updatePageSummary(provider, accounts);
       setLastUpdated();
       const statusDot = document.getElementById('status-dot');
       if (statusDot) statusDot.classList.remove('stale');

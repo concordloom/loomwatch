@@ -43,7 +43,7 @@ loomwatch collects LLM subscription quotas and exposes them to Prometheus.
 3. Quota series appear once each provider has been polled at least once, which
    takes up to {{ .Values.pollInterval }} seconds:
 
-  onwatch_quota_utilization_percent{provider="...",quota_type="...",account_id="..."}
+  loomwatch_quota_utilization_percent{provider="...",quota_type="...",account_id="..."}
 
   A series is present when the provider DECLARES the quota, not when it has been
   consumed. An absent series means the plan has no such quota; zero utilisation

@@ -4203,16 +4203,15 @@ body.accounts-overview-mode #quota-grid[data-provider="zai"] {
   transition: transform var(--duration-press) var(--ease-out);
 }
 
-/* Критическое состояние — единственное, что пульсирует. Пульсация дорога по
+/* Критическое состояние — единственное среди квот, что пульсирует. Пульсация дорога по
    вниманию: если ею отмечать всё, она перестаёт значить что-либо. Дышит только
    индикатор, не вся карточка: мигающая плашка на пульте утомляет за минуту. */
 @keyframes lw-critical-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 var(--status-critical); opacity: 1; }
-  50%      { box-shadow: 0 0 0 4px transparent; opacity: 0.65; }
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.45; }
 }
 
-.status-badge[data-status="critical"] .status-dot,
-.status-badge[data-status="danger"] .status-dot {
+.status-badge[data-status="critical"] .status-icon {
   animation: lw-critical-pulse 2s var(--ease-in-out) infinite;
 }
 
@@ -4247,7 +4246,12 @@ body.accounts-overview-mode #quota-grid[data-provider="zai"] {
 }
 
 .account-overview-card {
-  animation: lw-enter var(--duration-dropdown) var(--ease-out) backwards;
+  /* opacity здесь обязателен: правило выше по файлу ставит 0 и рассчитывает,
+     что конечное состояние удержит forwards. both держит оба конца, но базовую
+     непрозрачность всё равно надо вернуть — иначе карточка исчезает после
+     анимации. Поймано адверсариальной проверкой на живом стенде. */
+  opacity: 1;
+  animation: lw-enter var(--duration-dropdown) var(--ease-out) both;
 }
 
 .account-overview-card:nth-child(1) { animation-delay: 0ms; }
@@ -4265,11 +4269,15 @@ body.accounts-overview-mode #quota-grid[data-provider="zai"] {
   .range-btn:active {
     transform: none;
   }
-  .status-badge[data-status="critical"] .status-dot,
-  .status-badge[data-status="danger"] .status-dot,
+  .status-badge[data-status="critical"] .status-icon,
   .usage-percent.lw-changed,
-  .aoq-pct.lw-changed,
+  .aoq-pct.lw-changed {
+    animation: none;
+  }
+  /* Без opacity карточка осталась бы невидимой: анимацию сняли, а базовое
+     значение 0 из правила выше никто не перекрывает. */
   .account-overview-card {
     animation: none;
+    opacity: 1;
   }
 }

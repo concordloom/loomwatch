@@ -268,6 +268,11 @@ var onwatchEnvKeys = []string{
 	"GEMINI_REFRESH_TOKEN",
 	"GEMINI_ACCESS_TOKEN",
 	"ONWATCH_",
+	// Fork change: без этого префикса файл .env, оформленный под новым именем
+	// бренда, не опознавался как наш и молча не читался — сервис поднимался на
+	// умолчаниях, включая пароль changeme. Откат имён работал для окружения, но
+	// не для файла.
+	"LOOMWATCH_",
 }
 
 // isOnwatchEnvFile checks if a file contains onwatch-specific configuration.

@@ -311,10 +311,10 @@ kubectl delete pvc my-release-loomwatch-data
 ### What the metrics mean
 
 ```
-onwatch_quota_utilization_percent{provider,quota_type,account_id}
-onwatch_quota_reset_timestamp_seconds{provider,quota_type,account_id}
-onwatch_agent_healthy{provider,account_id}
-onwatch_agent_last_cycle_age_seconds{provider,account_id}
+loomwatch_quota_utilization_percent{provider,quota_type,account_id}
+loomwatch_quota_reset_timestamp_seconds{provider,quota_type,account_id}
+loomwatch_agent_healthy{provider,account_id}
+loomwatch_agent_last_cycle_age_seconds{provider,account_id}
 ```
 
 Two properties are worth stating because alerts depend on them:

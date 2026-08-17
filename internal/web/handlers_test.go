@@ -8367,7 +8367,7 @@ func TestHandler_BuildZaiInsights_WithRichData(t *testing.T) {
 	h := NewHandler(s, nil, nil, nil, cfg)
 
 	hidden := map[string]bool{}
-	resp := h.buildZaiInsights(hidden)
+	resp := h.buildZaiInsights(hidden, 0)
 
 	if len(resp.Stats) != 4 {
 		t.Errorf("expected 4 stat cards, got %d", len(resp.Stats))
@@ -8410,7 +8410,7 @@ func TestHandler_BuildZaiInsights_EmptyStore(t *testing.T) {
 	h := NewHandler(s, nil, nil, nil, cfg)
 
 	hidden := map[string]bool{}
-	resp := h.buildZaiInsights(hidden)
+	resp := h.buildZaiInsights(hidden, 0)
 
 	// Should show "Getting Started"
 	if len(resp.Insights) == 0 {
@@ -9512,7 +9512,7 @@ func TestHandler_BuildZaiSummaryMap_StoreFallback(t *testing.T) {
 	// No zaiTracker set - forces store fallback
 	h := NewHandler(s, nil, nil, nil, cfg)
 
-	result := h.buildZaiSummaryMap()
+	result := h.buildZaiSummaryMap(0)
 
 	if result["tokensLimit"] == nil {
 		t.Error("expected tokensLimit in result")
@@ -9551,7 +9551,7 @@ func TestHandler_BuildZaiCurrent_WithStoreData(t *testing.T) {
 	cfg := createTestConfigWithZai()
 	h := NewHandler(s, nil, nil, nil, cfg)
 
-	result := h.buildZaiCurrent()
+	result := h.buildZaiCurrent(0)
 
 	if result["toolCalls"] == nil {
 		t.Error("expected toolCalls in result")

@@ -86,6 +86,8 @@ function providerParam() {
     param += codexAccountParam();
   } else if (provider === 'minimax') {
     param += minimaxAccountParam();
+  } else if (provider === 'zai') {
+    param += zaiAccountParam();
   }
   return param;
 }
@@ -95,7 +97,8 @@ function providerParam() {
 // (sessions/cycles/overview/insights) do not apply in this mode.
 function isAccountsOverviewMode(provider = getCurrentProvider()) {
   return (provider === 'codex' && State.codexAccount === 'all') ||
-         (provider === 'minimax' && State.minimaxAccount === 'all');
+         (provider === 'minimax' && State.minimaxAccount === 'all') ||
+         (provider === 'zai' && State.zaiAccount === 'all');
 }
 
 function shouldShowSessionsTable(provider = getCurrentProvider()) {
@@ -587,6 +590,188 @@ function updateMiniMaxAccountTabsVisibility() {
   const provider = getCurrentProvider();
   const show = provider === 'minimax' && State.minimaxAccounts && State.minimaxAccounts.length > 1;
   dropdown.style.display = show ? '' : 'none';
+}
+
+// ── Z.ai Account Selection (multi-account) ──
+//
+// Fork change: Z.ai used to be single-account, so the tab could only ever show
+// one subscription — a second one burned unnoticed. Mirrors the MiniMax
+// helpers below so both providers behave identically.
+
+function loadZaiAccount() {
+  try {
+    const stored = localStorage.getItem('onwatch-zai-account');
+    if (stored === 'all') {
+      State.zaiAccount = 'all';
+    } else if (stored) {
+      const parsed = parseInt(stored, 10);
+      State.zaiAccount = isNaN(parsed) ? null : parsed;
+    }
+  } catch (e) {
+    State.zaiAccount = null;
+  }
+}
+
+function saveZaiAccount(account) {
+  State.zaiAccount = account;
+  try {
+    localStorage.setItem('onwatch-zai-account', account);
+  } catch (e) {
+    // silent
+  }
+}
+
+async function loadZaiAccounts() {
+  try {
+    const res = await authFetch(`${API_BASE}/api/zai/accounts`);
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.accounts && data.accounts.length > 0) {
+      const activeAccounts = data.accounts.filter(a => !a.deletedAt);
+      State.zaiAccounts = activeAccounts;
+      applyDefaultZaiSelection();
+      populateZaiAccountTabs();
+      updateZaiAccountTabsVisibility();
+    }
+  } catch (e) {
+    // silent
+  }
+}
+
+function applyDefaultZaiSelection() {
+  let stored = null;
+  try { stored = localStorage.getItem('onwatch-zai-account'); } catch (e) { stored = null; }
+  if (stored === 'all') { State.zaiAccount = 'all'; return; }
+  const storedId = stored != null ? parseInt(stored, 10) : NaN;
+  if (!isNaN(storedId) && State.zaiAccounts.find(a => a.id === storedId)) {
+    State.zaiAccount = storedId;
+    return;
+  }
+  if (State.zaiAccounts.length > 1) {
+    State.zaiAccount = 'all';
+  } else if (State.zaiAccounts.length === 1) {
+    State.zaiAccount = State.zaiAccounts[0].id;
+  }
+}
+
+function populateZaiAccountTabs() {
+  const dropdown = document.getElementById('zai-profile-dropdown');
+  const menu = document.getElementById('zai-profile-menu');
+  if (!dropdown || !menu) return;
+
+  if (!State.zaiAccounts || State.zaiAccounts.length <= 1) {
+    dropdown.style.display = 'none';
+    return;
+  }
+
+  menu.innerHTML = '';
+
+  const allItem = document.createElement('li');
+  allItem.className = 'codex-profile-item' + (State.zaiAccount === 'all' ? ' active' : '');
+  allItem.dataset.accountId = 'all';
+  allItem.textContent = 'All accounts';
+  allItem.setAttribute('role', 'option');
+  allItem.setAttribute('aria-selected', State.zaiAccount === 'all' ? 'true' : 'false');
+  allItem.addEventListener('click', () => {
+    switchZaiAccount('all');
+    closeZaiAccountDropdown();
+  });
+  menu.appendChild(allItem);
+
+  for (const account of State.zaiAccounts) {
+    const li = document.createElement('li');
+    li.className = 'codex-profile-item' + (account.id === State.zaiAccount ? ' active' : '');
+    li.dataset.accountId = account.id;
+    li.textContent = account.name;
+    li.setAttribute('role', 'option');
+    li.setAttribute('aria-selected', account.id === State.zaiAccount ? 'true' : 'false');
+    li.addEventListener('click', () => {
+      switchZaiAccount(account.id);
+      closeZaiAccountDropdown();
+    });
+    menu.appendChild(li);
+  }
+
+  if (State.zaiAccount !== 'all' && !State.zaiAccounts.find(a => a.id === State.zaiAccount)) {
+    State.zaiAccount = State.zaiAccounts[0].id;
+    saveZaiAccount(State.zaiAccount);
+  }
+
+  updateZaiAccountTabsActive();
+}
+
+function switchZaiAccount(accountId) {
+  if (State.zaiAccount === accountId) return;
+  State.zaiAccount = accountId;
+  saveZaiAccount(accountId);
+  updateZaiAccountTabsActive();
+  refreshAll();
+}
+
+function updateZaiAccountTabsActive() {
+  const label = document.getElementById('zai-profile-label');
+  const menu = document.getElementById('zai-profile-menu');
+  if (!menu) return;
+
+  if (label) {
+    if (State.zaiAccount === 'all') {
+      label.textContent = 'All accounts';
+    } else {
+      const active = State.zaiAccounts && State.zaiAccounts.find(a => a.id === State.zaiAccount);
+      if (active) label.textContent = active.name;
+    }
+  }
+
+  menu.querySelectorAll('.codex-profile-item').forEach(item => {
+    const isActive = item.dataset.accountId === 'all'
+      ? State.zaiAccount === 'all'
+      : parseInt(item.dataset.accountId, 10) === State.zaiAccount;
+    item.classList.toggle('active', isActive);
+    item.setAttribute('aria-selected', isActive ? 'true' : 'false');
+  });
+}
+
+function closeZaiAccountDropdown() {
+  const trigger = document.getElementById('zai-profile-trigger');
+  const menu = document.getElementById('zai-profile-menu');
+  if (trigger) trigger.setAttribute('aria-expanded', 'false');
+  if (menu) menu.classList.remove('open');
+}
+
+function updateZaiAccountTabsVisibility() {
+  const dropdown = document.getElementById('zai-profile-dropdown');
+  if (!dropdown) return;
+
+  const provider = getCurrentProvider();
+  const show = provider === 'zai' && State.zaiAccounts && State.zaiAccounts.length > 1;
+  dropdown.style.display = show ? '' : 'none';
+}
+
+function initZaiAccountTabs() {
+  const trigger = document.getElementById('zai-profile-trigger');
+  const menu = document.getElementById('zai-profile-menu');
+  if (!trigger || !menu) return;
+
+  trigger.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const isOpen = menu.classList.toggle('open');
+    trigger.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#zai-profile-dropdown')) {
+      closeZaiAccountDropdown();
+    }
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeZaiAccountDropdown();
+  });
+}
+
+function zaiAccountParam() {
+  if (!State.zaiAccount || State.zaiAccount === 'all') return '';
+  return `&account=${encodeURIComponent(State.zaiAccount)}`;
 }
 
 function initMiniMaxAccountTabs() {
@@ -4219,6 +4404,15 @@ function minimaxWindowLabel(q) {
 // Normalize an account's quotas into compact {label, percent, status, resetAt}
 // rows, keeping only the windows the account actually reports.
 function accountOverviewQuotas(provider, account) {
+  if (provider === 'zai') {
+    return (account.quotas || []).map(q => ({
+      label: q.label || q.name,
+      quotaName: q.name || null,
+      percent: typeof q.usagePercent === 'number' ? q.usagePercent : 0,
+      status: q.status || 'healthy',
+      resetAt: q.resetAt || null,
+    }));
+  }
   if (provider === 'minimax') {
     return (account.quotas || []).map(q => ({
       label: minimaxWindowLabel(q),
@@ -4288,6 +4482,7 @@ function renderAccountsOverview(provider, accounts) {
 
   const drill = (accountId) => {
     if (provider === 'minimax') switchMiniMaxAccount(accountId);
+    else if (provider === 'zai') switchZaiAccount(accountId);
     else switchCodexProfile(accountId);
   };
   container.querySelectorAll('.account-overview-card').forEach(card => {
@@ -4303,7 +4498,9 @@ function renderAccountsOverview(provider, accounts) {
 async function fetchAccountsOverview(provider, requestSeq) {
   const endpoint = provider === 'minimax'
     ? `${API_BASE}/api/minimax/accounts/usage`
-    : `${API_BASE}/api/codex/accounts/usage`;
+    : provider === 'zai'
+      ? `${API_BASE}/api/zai/accounts/usage`
+      : `${API_BASE}/api/codex/accounts/usage`;
   try {
     const res = await authFetch(endpoint);
     if (!res.ok) throw new Error('Failed to fetch account usage');
@@ -11927,6 +12124,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     updateMiniMaxAccountTabsVisibility();
   }
   initMiniMaxAccountTabs();
+
+  loadZaiAccount();
+  if (getCurrentProvider() === 'zai') {
+    await loadZaiAccounts();
+  } else {
+    updateZaiAccountTabsVisibility();
+  }
+  initZaiAccountTabs();
   loadAPIIntegrationsPreferences();
 
   initTheme();

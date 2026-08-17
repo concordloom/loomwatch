@@ -4301,6 +4301,18 @@ async function fetchCurrent() {
 
       } else if (provider === 'zai') {
         updateCard('tokensLimit', data.tokensLimit);
+        // Fork change: короткое окно рисуется только если подписка его
+        // объявила — у части подписок окно одно, и пустая карточка была бы
+        // хуже отсутствующей.
+        const shortCard = document.getElementById('card-tokensShortLimit');
+        if (data.tokensShortLimit) {
+          if (shortCard) shortCard.style.display = '';
+          const titleEl = document.getElementById('title-tokensShortLimit');
+          if (titleEl && data.tokensShortLimit.name) titleEl.textContent = data.tokensShortLimit.name;
+          updateCard('tokensShortLimit', data.tokensShortLimit);
+        } else if (shortCard) {
+          shortCard.style.display = 'none';
+        }
         updateCard('timeLimit', data.timeLimit);
         updateCard('toolCalls', data.toolCalls);
       } else {

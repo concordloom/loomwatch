@@ -68,3 +68,71 @@ func TestZaiTokensLimitStillRead(t *testing.T) {
 		t.Fatalf("time usage %v, want 4000", snap.TimeUsage)
 	}
 }
+
+// Fork change: два окна расхода приходят под одним типом, и раньше они
+// перезаписывали друг друга — до панели доезжало то, что стояло в ответе
+// последним. Полезная нагрузка ниже снята с живого ключа 17.08: пятичасовое
+// окно на 7%, недельное на 91%.
+func TestZaiKeepsBothSpendWindows(t *testing.T) {
+	payload := []byte(`{
+	  "code": 200,
+	  "data": {
+	    "level": "max",
+	    "limits": [
+	      {"type":"TOKENS_LIMIT","unit":3,"number":5,"percentage":7,"nextResetTime":1787004000000},
+	      {"type":"TOKENS_LIMIT","unit":6,"number":1,"percentage":91,"nextResetTime":1787364164997},
+	      {"type":"TIME_LIMIT","unit":5,"number":1,"usage":4000,"currentValue":0}
+	    ]
+	  },
+	  "success": true
+	}`)
+
+	resp, err := ParseZaiResponse(payload)
+	if err != nil {
+		t.Fatalf("ParseZaiResponse: %v", err)
+	}
+	snap := resp.ToSnapshot(time.Now().UTC())
+
+	if snap.TokensPercentage != 91 {
+		t.Fatalf("длинное окно %d%%, ожидалось 91%%", snap.TokensPercentage)
+	}
+	if !snap.TokensShortHasWindow {
+		t.Fatal("короткое окно потеряно — именно оно упирается первым при интенсивной работе")
+	}
+	if snap.TokensShortPercentage != 7 {
+		t.Fatalf("короткое окно %d%%, ожидалось 7%%", snap.TokensShortPercentage)
+	}
+	if got := ZaiWindowLabel(snap.TokensShortUnit, snap.TokensShortNumber); got != "5h" {
+		t.Fatalf("подпись короткого окна %q, ожидалось \"5h\"", got)
+	}
+	if got := ZaiWindowLabel(snap.TokensUnit, snap.TokensNumber); got != "weekly" {
+		t.Fatalf("подпись длинного окна %q, ожидалось \"weekly\"", got)
+	}
+}
+
+// Порядок элементов в ответе провайдера не должен влиять на то, какое окно
+// попадёт в основные поля: раньше выбор был позиционным.
+func TestZaiWindowChoiceIgnoresPayloadOrder(t *testing.T) {
+	reversed := []byte(`{
+	  "code": 200,
+	  "data": {
+	    "level": "max",
+	    "limits": [
+	      {"type":"TOKENS_LIMIT","unit":6,"number":1,"percentage":91},
+	      {"type":"TOKENS_LIMIT","unit":3,"number":5,"percentage":7}
+	    ]
+	  },
+	  "success": true
+	}`)
+
+	resp, err := ParseZaiResponse(reversed)
+	if err != nil {
+		t.Fatalf("ParseZaiResponse: %v", err)
+	}
+	snap := resp.ToSnapshot(time.Now().UTC())
+
+	if snap.TokensPercentage != 91 || snap.TokensShortPercentage != 7 {
+		t.Fatalf("перестановка окон в ответе поменяла результат: длинное=%d%% короткое=%d%%",
+			snap.TokensPercentage, snap.TokensShortPercentage)
+	}
+}

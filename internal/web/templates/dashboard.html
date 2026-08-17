@@ -193,6 +193,38 @@
                 </footer>
             </article>
 
+            <!-- Короткое окно расхода Coding Plan. Скрыто, пока подписка его не
+                 объявила: у части подписок окно одно. -->
+            <article class="quota-card" data-quota="tokensShortLimit" id="card-tokensShortLimit" role="button" tabindex="0" aria-label="View short window details" style="display: none;">
+                <header class="card-header">
+                    <h2 class="quota-title">
+                        <svg class="quota-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                        </svg>
+                        <span id="title-tokensShortLimit">Tokens Limit (short)</span>
+                    </h2>
+                    <span class="countdown" id="countdown-tokensShortLimit">--:--</span>
+                </header>
+                <div class="progress-stats">
+                    <span class="usage-percent" id="percent-tokensShortLimit">0%</span>
+                    <span class="usage-fraction" id="fraction-tokensShortLimit">0 / 0</span>
+                </div>
+                <div class="progress-wrapper">
+                    <div class="progress-bar" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                        <div class="progress-fill" id="progress-tokensShortLimit" style="width: 0%"></div>
+                    </div>
+                </div>
+                <footer class="card-footer">
+                    <span class="status-badge" id="status-tokensShortLimit" data-status="healthy">
+                        <svg class="status-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M20 6L9 17l-5-5"/>
+                        </svg>
+                        Healthy
+                    </span>
+                    <span class="reset-time" id="reset-tokensShortLimit">Resets: --</span>
+                </footer>
+            </article>
+
             <article class="quota-card" data-quota="timeLimit" role="button" tabindex="0" aria-label="View Time Limit details">
                 <header class="card-header">
                     <h2 class="quota-title">

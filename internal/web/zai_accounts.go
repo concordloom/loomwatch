@@ -271,11 +271,14 @@ func (h *Handler) ZaiAccountsUsage(w http.ResponseWriter, r *http.Request) {
 // list shape the overview cards read.
 func zaiOverviewQuotas(current map[string]interface{}) []map[string]interface{} {
 	rows := make([]map[string]interface{}, 0, 2)
+	// Короткое окно идёт первым: при интенсивной работе упирается именно оно,
+	// поэтому в карточке подписки оператор должен видеть его сразу.
 	for _, q := range []struct {
 		key   string
 		name  string
 		label string
 	}{
+		{"tokensShortLimit", "tokens_short", ""},
 		{"tokensLimit", "tokens", "Tokens Limit"},
 		{"timeLimit", "time", "Time Limit"},
 	} {
@@ -283,9 +286,19 @@ func zaiOverviewQuotas(current map[string]interface{}) []map[string]interface{} 
 		if !ok {
 			continue
 		}
+		label := q.label
+		if label == "" {
+			// Имя короткого окна приходит вместе с данными: длина окна —
+			// свойство подписки, а не константа панели.
+			if w, ok := raw["window"].(string); ok && w != "" {
+				label = "Tokens Limit (" + w + ")"
+			} else {
+				label = "Tokens Limit (short)"
+			}
+		}
 		row := map[string]interface{}{
 			"name":         q.name,
-			"label":        q.label,
+			"label":        label,
 			"usagePercent": raw["percent"],
 			"status":       raw["status"],
 		}

@@ -2420,6 +2420,12 @@ func (h *Handler) buildZaiCurrent(accountID int64) map[string]interface{} {
 			response["tokensLimit"] = tokensResp
 			response["timeLimit"] = timeResp
 			response["toolCalls"] = buildZaiToolCallsResponse(latest)
+			// Fork change: короткое окно расхода. Coding Plan режет двумя
+			// окнами сразу, и при интенсивной работе первым упирается именно
+			// оно, а раньше до панели доезжало только длинное.
+			if latest.TokensShortHasWindow {
+				response["tokensShortLimit"] = buildZaiShortTokensQuotaResponse(latest)
+			}
 		}
 	}
 
@@ -2485,6 +2491,48 @@ func buildZaiTokensQuotaResponse(snapshot *api.ZaiSnapshot) map[string]interface
 	if snapshot.TokensNextResetTime != nil {
 		timeUntilReset := time.Until(*snapshot.TokensNextResetTime)
 		result["renewsAt"] = snapshot.TokensNextResetTime.Format(time.RFC3339)
+		result["timeUntilReset"] = formatDuration(timeUntilReset)
+		result["timeUntilResetSeconds"] = int64(timeUntilReset.Seconds())
+	} else {
+		result["renewsAt"] = time.Now().UTC().Format(time.RFC3339)
+		result["timeUntilReset"] = "N/A"
+		result["timeUntilResetSeconds"] = 0
+	}
+
+	return result
+}
+
+// buildZaiShortTokensQuotaResponse описывает короткое окно расхода.
+//
+// Fork change: длина окна берётся из его дескриптора, а не угадывается, и
+// попадает в имя — оператор должен видеть, что это за окно («5h»), а не просто
+// второй процент рядом с первым.
+func buildZaiShortTokensQuotaResponse(snapshot *api.ZaiSnapshot) map[string]interface{} {
+	label := api.ZaiWindowLabel(snapshot.TokensShortUnit, snapshot.TokensShortNumber)
+	percent := float64(snapshot.TokensShortPercentage)
+
+	status := "healthy"
+	if percent >= 95 {
+		status = "critical"
+	} else if percent >= 80 {
+		status = "danger"
+	} else if percent >= 50 {
+		status = "warning"
+	}
+
+	result := map[string]interface{}{
+		"name":        fmt.Sprintf("Tokens Limit (%s)", label),
+		"description": fmt.Sprintf("Token consumption budget of the %s window", label),
+		"window":      label,
+		"usage":       snapshot.TokensShortCurrentValue,
+		"limit":       snapshot.TokensShortUsage,
+		"percent":     percent,
+		"status":      status,
+	}
+
+	if snapshot.TokensShortNextResetTime != nil {
+		timeUntilReset := time.Until(*snapshot.TokensShortNextResetTime)
+		result["renewsAt"] = snapshot.TokensShortNextResetTime.Format(time.RFC3339)
 		result["timeUntilReset"] = formatDuration(timeUntilReset)
 		result["timeUntilResetSeconds"] = int64(timeUntilReset.Seconds())
 	} else {

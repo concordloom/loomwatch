@@ -294,7 +294,7 @@
       <section class="menubar-panel menubar-view menubar-view-${escapeHTML(view)}">
         <header class="menubar-header status-${status}">
           <div>
-            <div class="menubar-title">onWatch</div>
+            <div class="menubar-title">loomWatch</div>
             <div class="menubar-subtitle">${escapeHTML(aggregateLabel(snapshot))}</div>
           </div>
           <div class="menubar-status-badge">
@@ -321,7 +321,7 @@
       <section class="menubar-panel menubar-error">
         <div>
           <div>Menubar data is temporarily unavailable.</div>
-          <div class="menubar-subtitle">${escapeHTML(error && error.message ? error.message : 'Unable to reach the local onWatch data source.')}</div>
+          <div class="menubar-subtitle">${escapeHTML(error && error.message ? error.message : 'Unable to reach the local loomWatch data source.')}</div>
           <button type="button" id="menubar-retry">Retry</button>
         </div>
       </section>

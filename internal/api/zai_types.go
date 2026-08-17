@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 	"time"
 )
 
@@ -71,6 +72,63 @@ type ZaiSnapshot struct {
 	TokensRemaining     float64
 	TokensPercentage    int
 	TokensNextResetTime *time.Time
+	// Второе окно расхода.
+	//
+	// Fork change: Coding Plan режет расход двумя окнами сразу — коротким
+	// (пять часов) и длинным (неделя), — а снимок хранил одно, потому что
+	// оба приходят под одним типом и перезаписывали друг друга. Видно было
+	// то, что стояло в чужом JSON последним: 17.08 недельное окно шло на
+	// 91%, а пятичасовое на 7%, и при интенсивной работе первым упёрлось бы
+	// именно невидимое. Длинное окно осталось в полях выше, чтобы история и
+	// ряды метрик не поменяли смысла; короткое живёт здесь.
+	TokensShortLimit         int
+	TokensShortUnit          int
+	TokensShortNumber        int
+	TokensShortUsage         float64
+	TokensShortCurrentValue  float64
+	TokensShortRemaining     float64
+	TokensShortPercentage    int
+	TokensShortNextResetTime *time.Time
+	TokensShortHasWindow     bool
+}
+
+// zaiUnitHours переводит код единицы окна в часы.
+//
+// Значения подтверждены живыми ответами 17.08: unit=3 с number=5 сбрасывался
+// через пять часов, unit=6 с number=1 — через неделю, unit=5 с number=1 — через
+// месяц. Неизвестный код даёт ноль: такое окно считается самым коротким и не
+// вытеснит подтверждённое длинное из основных полей.
+func zaiUnitHours(unit int) float64 {
+	switch unit {
+	case 3:
+		return 1
+	case 6:
+		return 24 * 7
+	case 5:
+		return 24 * 30
+	default:
+		return 0
+	}
+}
+
+// zaiWindowLabel — человекочитаемое имя окна по его дескриптору.
+func ZaiWindowLabel(unit, number int) string {
+	switch unit {
+	case 3:
+		return fmt.Sprintf("%dh", number)
+	case 6:
+		if number == 1 {
+			return "weekly"
+		}
+		return fmt.Sprintf("%dw", number)
+	case 5:
+		if number == 1 {
+			return "monthly"
+		}
+		return fmt.Sprintf("%dmo", number)
+	default:
+		return fmt.Sprintf("u%d×%d", unit, number)
+	}
 }
 
 // ToSnapshot converts ZaiQuotaResponse to ZaiSnapshot
@@ -78,6 +136,12 @@ func (r *ZaiQuotaResponse) ToSnapshot(capturedAt time.Time) *ZaiSnapshot {
 	snapshot := &ZaiSnapshot{
 		CapturedAt: capturedAt,
 	}
+
+	// Окна расхода собираются отдельно и раскладываются по длительности, а не
+	// по порядку в ответе. Раньше здесь стоял switch, и два окна одного типа
+	// перезаписывали друг друга — какое доедет до панели, решал порядок
+	// элементов в чужом JSON.
+	var spendWindows []ZaiLimit
 
 	for _, limit := range r.Limits {
 		switch limit.Type {
@@ -104,17 +168,40 @@ func (r *ZaiQuotaResponse) ToSnapshot(capturedAt time.Time) *ZaiSnapshot {
 		// /metrics entirely: measured 2026-08-17 on a live max subscription
 		// that exported no series at all while two others did.
 		case "TOKENS_LIMIT", "CREDIT_LIMIT":
-			snapshot.TokensLimit = limit.Unit * limit.Number
-			snapshot.TokensUnit = limit.Unit
-			snapshot.TokensNumber = limit.Number
-			snapshot.TokensUsage = limit.Usage
-			snapshot.TokensCurrentValue = limit.CurrentValue
-			snapshot.TokensRemaining = limit.Remaining
-			snapshot.TokensPercentage = limit.Percentage
-			if limit.NextResetMs != nil {
-				t := time.UnixMilli(*limit.NextResetMs)
-				snapshot.TokensNextResetTime = &t
-			}
+			spendWindows = append(spendWindows, limit)
+		}
+	}
+
+	// Самое длинное окно занимает основные поля: там оно и было до появления
+	// второго, поэтому смысл истории и рядов метрик не меняется. Следующее по
+	// длине идёт в короткое.
+	sort.SliceStable(spendWindows, func(i, j int) bool {
+		return zaiUnitHours(spendWindows[i].Unit)*float64(spendWindows[i].Number) <
+			zaiUnitHours(spendWindows[j].Unit)*float64(spendWindows[j].Number)
+	})
+
+	if n := len(spendWindows); n > 0 {
+		primary := spendWindows[n-1]
+		snapshot.TokensLimit = primary.Unit * primary.Number
+		snapshot.TokensUnit = primary.Unit
+		snapshot.TokensNumber = primary.Number
+		snapshot.TokensUsage = primary.Usage
+		snapshot.TokensCurrentValue = primary.CurrentValue
+		snapshot.TokensRemaining = primary.Remaining
+		snapshot.TokensPercentage = primary.Percentage
+		snapshot.TokensNextResetTime = primary.GetResetTime()
+
+		if n > 1 {
+			short := spendWindows[n-2]
+			snapshot.TokensShortLimit = short.Unit * short.Number
+			snapshot.TokensShortUnit = short.Unit
+			snapshot.TokensShortNumber = short.Number
+			snapshot.TokensShortUsage = short.Usage
+			snapshot.TokensShortCurrentValue = short.CurrentValue
+			snapshot.TokensShortRemaining = short.Remaining
+			snapshot.TokensShortPercentage = short.Percentage
+			snapshot.TokensShortNextResetTime = short.GetResetTime()
+			snapshot.TokensShortHasWindow = true
 		}
 	}
 

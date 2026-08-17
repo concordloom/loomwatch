@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/onllm-dev/onwatch/v2/internal/api"
 	"github.com/onllm-dev/onwatch/v2/internal/store"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -459,6 +460,28 @@ func (m *Metrics) scrapeZai(s *store.Store, staleThreshold time.Duration) {
 		if zaiQuotaDeclared(snap.TimeLimit, snap.TimeUsage, snap.TimeCurrentValue, snap.TimeRemaining, snap.TimePercentage) {
 			labels := prometheus.Labels{"provider": method, "quota_type": "time", "account_id": accountID}
 			m.quotaUtilization.With(labels).Set(float64(snap.TimePercentage))
+		}
+
+		// Fork change: короткое окно расхода отдельным рядом.
+		//
+		// Coding Plan режет двумя окнами сразу, и короткое (пять часов)
+		// упирается первым при интенсивной работе. Раньше оно не доезжало до
+		// снимка вовсе, поэтому в метриках его не было — правила сторожили
+		// только длинное. Тип ряда несёт длину окна (tokens_5h), так что новый
+		// ряд подхватывается существующими правилами: они отбирают по
+		// провайдеру и группируют по quota_type, не перечисляя типы поимённо.
+		if snap.TokensShortHasWindow &&
+			zaiQuotaDeclared(snap.TokensShortLimit, snap.TokensShortUsage,
+				snap.TokensShortCurrentValue, snap.TokensShortRemaining, snap.TokensShortPercentage) {
+			labels := prometheus.Labels{
+				"provider":   method,
+				"quota_type": "tokens_" + api.ZaiWindowLabel(snap.TokensShortUnit, snap.TokensShortNumber),
+				"account_id": accountID,
+			}
+			m.quotaUtilization.With(labels).Set(float64(snap.TokensShortPercentage))
+			if snap.TokensShortNextResetTime != nil && !snap.TokensShortNextResetTime.IsZero() {
+				m.quotaResetTimestamp.With(labels).Set(float64(snap.TokensShortNextResetTime.Unix()))
+			}
 		}
 	}
 }

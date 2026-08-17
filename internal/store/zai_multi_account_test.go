@@ -150,3 +150,56 @@ func TestZaiAccountResolutionFallsBackToDefault(t *testing.T) {
 		t.Fatalf("default account read %d%%, want 55%%", latest.TokensPercentage)
 	}
 }
+
+// Fork change: короткое окно расхода должно переживать запись и чтение. Тест
+// заодно сторожит соответствие списков колонок в INSERT и SELECT — рассогласование
+// там компилятор не ловит, оно выстреливает только на живой базе.
+func TestZaiShortWindowSurvivesRoundTrip(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	defer s.Close()
+
+	acc := newZaiAccount(t, s, "sub")
+	now := time.Now().UTC().Truncate(time.Second)
+	shortReset := now.Add(2 * time.Hour)
+	longReset := now.Add(5 * 24 * time.Hour)
+
+	in := &api.ZaiSnapshot{
+		CapturedAt:               now,
+		TokensPercentage:         91,
+		TokensNextResetTime:      &longReset,
+		TokensShortHasWindow:     true,
+		TokensShortPercentage:    7,
+		TokensShortUnit:          3,
+		TokensShortNumber:        5,
+		TokensShortNextResetTime: &shortReset,
+	}
+	if _, err := s.InsertZaiSnapshot(in, acc); err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+
+	got, err := s.QueryLatestZai(acc)
+	if err != nil || got == nil {
+		t.Fatalf("QueryLatestZai: %v", err)
+	}
+	if !got.TokensShortHasWindow || got.TokensShortPercentage != 7 {
+		t.Fatalf("короткое окно не прочиталось: has=%v pct=%d",
+			got.TokensShortHasWindow, got.TokensShortPercentage)
+	}
+	if got.TokensShortNextResetTime == nil || !got.TokensShortNextResetTime.Equal(shortReset) {
+		t.Fatalf("время сброса короткого окна потеряно: %v", got.TokensShortNextResetTime)
+	}
+	if got.TokensPercentage != 91 {
+		t.Fatalf("длинное окно %d%%, ожидалось 91%%", got.TokensPercentage)
+	}
+
+	rows, err := s.QueryZaiRange(now.Add(-time.Hour), now.Add(time.Hour), acc)
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("QueryZaiRange: %v rows=%d", err, len(rows))
+	}
+	if rows[0].TokensShortPercentage != 7 {
+		t.Fatalf("в выборке диапазона короткое окно %d%%, ожидалось 7%%", rows[0].TokensShortPercentage)
+	}
+}

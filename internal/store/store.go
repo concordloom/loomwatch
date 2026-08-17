@@ -1160,6 +1160,31 @@ func (s *Store) migrateSchema() error {
 		}
 	}
 
+	// Fork change: колонки второго окна расхода Z.ai.
+	//
+	// Coding Plan режет двумя окнами сразу — коротким (пять часов) и длинным
+	// (неделя). Снимок хранил одно, и короткое было невидимо, хотя при
+	// интенсивной работе упирается первым. Старые строки остаются с нулями и
+	// признаком отсутствия окна: дорисовать их задним числом неоткуда.
+	for _, col := range []string{
+		"tokens_short_limit INTEGER NOT NULL DEFAULT 0",
+		"tokens_short_unit INTEGER NOT NULL DEFAULT 0",
+		"tokens_short_number INTEGER NOT NULL DEFAULT 0",
+		"tokens_short_usage REAL NOT NULL DEFAULT 0",
+		"tokens_short_current_value REAL NOT NULL DEFAULT 0",
+		"tokens_short_remaining REAL NOT NULL DEFAULT 0",
+		"tokens_short_percentage INTEGER NOT NULL DEFAULT 0",
+		"tokens_short_next_reset TEXT",
+		"tokens_short_has_window INTEGER NOT NULL DEFAULT 0",
+	} {
+		if _, err := s.db.Exec(`ALTER TABLE zai_snapshots ADD COLUMN ` + col); err != nil {
+			if !strings.Contains(err.Error(), "duplicate column name") &&
+				!strings.Contains(err.Error(), "no such table") {
+				return fmt.Errorf("failed to add %s to zai_snapshots: %w", col, err)
+			}
+		}
+	}
+
 	// Add Z.ai multi-account indexes.
 	for _, stmt := range []string{
 		`CREATE INDEX IF NOT EXISTS idx_zai_snapshots_account ON zai_snapshots(account_id, captured_at)`,

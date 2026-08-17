@@ -694,24 +694,24 @@ func TestZaiTracker_processTokensQuota_TimeBasedReset(t *testing.T) {
 
 	// Snapshot 1
 	s1 := makeZaiSnapshot(baseTime, 50000, 100, &nextReset)
-	if err := tr.Process(s1); err != nil {
+	if err := tr.Process(s1, 0); err != nil {
 		t.Fatalf("Process s1: %v", err)
 	}
 
 	// Snapshot 2 – same cycle, increase to set hasLastValues
 	s2 := makeZaiSnapshot(baseTime.Add(30*time.Minute), 80000, 150, &nextReset)
-	if err := tr.Process(s2); err != nil {
+	if err := tr.Process(s2, 0); err != nil {
 		t.Fatalf("Process s2: %v", err)
 	}
 
 	// Snapshot 3 – capturedAt is past nextReset+2min → time-based reset
 	capturedAt3 := nextReset.Add(3 * time.Minute)
 	s3 := makeZaiSnapshot(capturedAt3, 5000, 160, &nextReset)
-	if err := tr.Process(s3); err != nil {
+	if err := tr.Process(s3, 0); err != nil {
 		t.Fatalf("Process s3 (time-based reset): %v", err)
 	}
 
-	history, err := s.QueryZaiCycleHistory("tokens")
+	history, err := s.QueryZaiCycleHistory("tokens", 0)
 	if err != nil {
 		t.Fatalf("QueryZaiCycleHistory: %v", err)
 	}
@@ -735,18 +735,18 @@ func TestZaiTracker_processTokensQuota_APIBasedReset_NewResetAppeared(t *testing
 
 	// First snapshot with nil nextReset
 	s1 := makeZaiSnapshot(baseTime, 50000, 100, nil)
-	if err := tr.Process(s1); err != nil {
+	if err := tr.Process(s1, 0); err != nil {
 		t.Fatalf("Process s1: %v", err)
 	}
 
 	// Second snapshot with non-nil nextReset → api-based "appeared" reset
 	newReset := baseTime.Add(24 * time.Hour)
 	s2 := makeZaiSnapshot(baseTime.Add(time.Minute), 1000, 110, &newReset)
-	if err := tr.Process(s2); err != nil {
+	if err := tr.Process(s2, 0); err != nil {
 		t.Fatalf("Process s2 (new reset appeared): %v", err)
 	}
 
-	history, err := s.QueryZaiCycleHistory("tokens")
+	history, err := s.QueryZaiCycleHistory("tokens", 0)
 	if err != nil {
 		t.Fatalf("QueryZaiCycleHistory: %v", err)
 	}
@@ -767,7 +767,7 @@ func TestZaiTracker_Process_ClosedStore_ReturnsError(t *testing.T) {
 
 	tr := NewZaiTracker(s, nil)
 	snap := makeZaiSnapshot(time.Now(), 1000, 100, nil)
-	if err := tr.Process(snap); err == nil {
+	if err := tr.Process(snap, 0); err == nil {
 		t.Error("expected error when store is closed, got nil")
 	}
 }
@@ -792,17 +792,17 @@ func TestZaiTracker_processTimeQuota_ZeroLastValue(t *testing.T) {
 
 	// Snapshot 1 – timeValue = 0 (initial zero value)
 	s1 := makeZaiSnapshot(baseTime, 1000, 0, &resetTime)
-	if err := tr.Process(s1); err != nil {
+	if err := tr.Process(s1, 0); err != nil {
 		t.Fatalf("Process s1: %v", err)
 	}
 
 	// Snapshot 2 – timeValue goes up from 0; since lastTimeValue=0 no reset
 	s2 := makeZaiSnapshot(baseTime.Add(time.Minute), 2000, 100, &resetTime)
-	if err := tr.Process(s2); err != nil {
+	if err := tr.Process(s2, 0); err != nil {
 		t.Fatalf("Process s2: %v", err)
 	}
 
-	history, err := s.QueryZaiCycleHistory("time")
+	history, err := s.QueryZaiCycleHistory("time", 0)
 	if err != nil {
 		t.Fatalf("QueryZaiCycleHistory: %v", err)
 	}
@@ -830,13 +830,13 @@ func TestZaiTracker_processTimeQuota_ResetCallback(t *testing.T) {
 
 	// Snapshot 1 – high time value
 	s1 := makeZaiSnapshot(baseTime, 50000, 900, &resetTime)
-	if err := tr.Process(s1); err != nil {
+	if err := tr.Process(s1, 0); err != nil {
 		t.Fatalf("Process s1: %v", err)
 	}
 
 	// Snapshot 2 – time value drops >50% → reset detected
 	s2 := makeZaiSnapshot(baseTime.Add(time.Minute), 55000, 100, &resetTime)
-	if err := tr.Process(s2); err != nil {
+	if err := tr.Process(s2, 0); err != nil {
 		t.Fatalf("Process s2: %v", err)
 	}
 
@@ -859,10 +859,10 @@ func TestZaiTracker_processTimeQuota_ExistingCycleAfterRestart_UpdatesPeak(t *te
 	// Create a "time" cycle in DB directly (simulating an existing cycle from
 	// a previous run).
 	base := time.Date(2026, 3, 4, 8, 0, 0, 0, time.UTC)
-	if _, err := s.CreateZaiCycle("time", base, nil); err != nil {
+	if _, err := s.CreateZaiCycle("time", base, nil, 0); err != nil {
 		t.Fatalf("CreateZaiCycle: %v", err)
 	}
-	if err := s.UpdateZaiCycle("time", 200, 50); err != nil {
+	if err := s.UpdateZaiCycle("time", 200, 50, 0); err != nil {
 		t.Fatalf("UpdateZaiCycle: %v", err)
 	}
 
@@ -872,11 +872,11 @@ func TestZaiTracker_processTimeQuota_ExistingCycleAfterRestart_UpdatesPeak(t *te
 	snap := makeZaiSnapshot(base.Add(10*time.Minute), 5000, 400, &resetTime)
 
 	// Process only the time quota part directly
-	if err := tr.processTimeQuota(snap); err != nil {
+	if err := tr.processTimeQuota(snap, 0); err != nil {
 		t.Fatalf("processTimeQuota: %v", err)
 	}
 
-	cycle, err := s.QueryActiveZaiCycle("time")
+	cycle, err := s.QueryActiveZaiCycle("time", 0)
 	if err != nil {
 		t.Fatalf("QueryActiveZaiCycle: %v", err)
 	}
@@ -906,20 +906,20 @@ func TestZaiTracker_UsageSummary_ActiveCycleWithRate(t *testing.T) {
 
 	cycleStart := time.Now().UTC().Add(-2 * time.Hour)
 	nextReset := time.Now().UTC().Add(22 * time.Hour)
-	if _, err := s.CreateZaiCycle("tokens", cycleStart, &nextReset); err != nil {
+	if _, err := s.CreateZaiCycle("tokens", cycleStart, &nextReset, 0); err != nil {
 		t.Fatalf("CreateZaiCycle: %v", err)
 	}
-	if err := s.UpdateZaiCycle("tokens", 100000, 50000); err != nil {
+	if err := s.UpdateZaiCycle("tokens", 100000, 50000, 0); err != nil {
 		t.Fatalf("UpdateZaiCycle: %v", err)
 	}
 
 	snap := makeZaiSnapshot(time.Now().UTC(), 80000, 500, &nextReset)
-	if _, err := s.InsertZaiSnapshot(snap); err != nil {
+	if _, err := s.InsertZaiSnapshot(snap, 0); err != nil {
 		t.Fatalf("InsertZaiSnapshot: %v", err)
 	}
 
 	tr := NewZaiTracker(s, nil)
-	summary, err := tr.UsageSummary("tokens")
+	summary, err := tr.UsageSummary("tokens", 0)
 	if err != nil {
 		t.Fatalf("UsageSummary: %v", err)
 	}
@@ -949,20 +949,20 @@ func TestZaiTracker_UsageSummary_TimeQuotaActive(t *testing.T) {
 
 	cycleStart := time.Now().UTC().Add(-1 * time.Hour)
 	// time quota has no NextReset (nil)
-	if _, err := s.CreateZaiCycle("time", cycleStart, nil); err != nil {
+	if _, err := s.CreateZaiCycle("time", cycleStart, nil, 0); err != nil {
 		t.Fatalf("CreateZaiCycle: %v", err)
 	}
-	if err := s.UpdateZaiCycle("time", 800, 200); err != nil {
+	if err := s.UpdateZaiCycle("time", 800, 200, 0); err != nil {
 		t.Fatalf("UpdateZaiCycle: %v", err)
 	}
 
 	snap := makeZaiSnapshot(time.Now().UTC(), 5000, 600, nil)
-	if _, err := s.InsertZaiSnapshot(snap); err != nil {
+	if _, err := s.InsertZaiSnapshot(snap, 0); err != nil {
 		t.Fatalf("InsertZaiSnapshot: %v", err)
 	}
 
 	tr := NewZaiTracker(s, nil)
-	summary, err := tr.UsageSummary("time")
+	summary, err := tr.UsageSummary("time", 0)
 	if err != nil {
 		t.Fatalf("UsageSummary(time): %v", err)
 	}
@@ -992,17 +992,17 @@ func TestZaiTracker_UsageSummary_WithCompletedCycles(t *testing.T) {
 
 	// Cycle 1: 50000 → 100000 (delta = 50000)
 	s1 := makeZaiSnapshot(baseTime, 50000, 100, &resetTime1)
-	tr.Process(s1)
+	tr.Process(s1, 0)
 	s2 := makeZaiSnapshot(baseTime.Add(time.Minute), 100000, 200, &resetTime1)
-	tr.Process(s2)
+	tr.Process(s2, 0)
 
 	// Trigger reset → cycle 1 closed
 	resetTime2 := baseTime.Add(48 * time.Hour)
 	s3 := makeZaiSnapshot(baseTime.Add(2*time.Minute), 10000, 210, &resetTime2)
-	s.InsertZaiSnapshot(s3)
-	tr.Process(s3)
+	s.InsertZaiSnapshot(s3, 0)
+	tr.Process(s3, 0)
 
-	summary, err := tr.UsageSummary("tokens")
+	summary, err := tr.UsageSummary("tokens", 0)
 	if err != nil {
 		t.Fatalf("UsageSummary: %v", err)
 	}
@@ -1029,22 +1029,22 @@ func TestZaiTracker_UsageSummary_TokensRenewsAtFallback(t *testing.T) {
 
 	cycleStart := time.Now().UTC().Add(-30 * time.Minute)
 	// Create cycle with nil NextReset
-	if _, err := s.CreateZaiCycle("tokens", cycleStart, nil); err != nil {
+	if _, err := s.CreateZaiCycle("tokens", cycleStart, nil, 0); err != nil {
 		t.Fatalf("CreateZaiCycle: %v", err)
 	}
-	if err := s.UpdateZaiCycle("tokens", 50000, 10000); err != nil {
+	if err := s.UpdateZaiCycle("tokens", 50000, 10000, 0); err != nil {
 		t.Fatalf("UpdateZaiCycle: %v", err)
 	}
 
 	// The snapshot has TokensNextResetTime set
 	nextReset := time.Now().UTC().Add(24 * time.Hour)
 	snap := makeZaiSnapshot(time.Now().UTC(), 40000, 200, &nextReset)
-	if _, err := s.InsertZaiSnapshot(snap); err != nil {
+	if _, err := s.InsertZaiSnapshot(snap, 0); err != nil {
 		t.Fatalf("InsertZaiSnapshot: %v", err)
 	}
 
 	tr := NewZaiTracker(s, nil)
-	summary, err := tr.UsageSummary("tokens")
+	summary, err := tr.UsageSummary("tokens", 0)
 	if err != nil {
 		t.Fatalf("UsageSummary: %v", err)
 	}
@@ -1505,7 +1505,7 @@ func TestZaiTracker_processTimeQuota_ClosedStore_ReturnsError(t *testing.T) {
 	tr := NewZaiTracker(s, nil)
 	snap := makeZaiSnapshot(time.Now(), 1000, 100, nil)
 
-	if err := tr.processTimeQuota(snap); err == nil {
+	if err := tr.processTimeQuota(snap, 0); err == nil {
 		t.Error("expected error from processTimeQuota with closed store, got nil")
 	}
 }
@@ -1523,7 +1523,7 @@ func TestZaiTracker_processTokensQuota_ClosedStore_ReturnsError(t *testing.T) {
 	tr := NewZaiTracker(s, nil)
 	snap := makeZaiSnapshot(time.Now(), 1000, 100, nil)
 
-	if err := tr.processTokensQuota(snap); err == nil {
+	if err := tr.processTokensQuota(snap, 0); err == nil {
 		t.Error("expected error from processTokensQuota with closed store, got nil")
 	}
 }
@@ -1544,10 +1544,10 @@ func TestZaiTracker_processTimeQuota_ExistingCycle_PeakNotUpdated(t *testing.T) 
 	defer s.Close()
 
 	base := time.Date(2026, 3, 4, 8, 0, 0, 0, time.UTC)
-	if _, err := s.CreateZaiCycle("time", base, nil); err != nil {
+	if _, err := s.CreateZaiCycle("time", base, nil, 0); err != nil {
 		t.Fatalf("CreateZaiCycle: %v", err)
 	}
-	if err := s.UpdateZaiCycle("time", 900, 300); err != nil {
+	if err := s.UpdateZaiCycle("time", 900, 300, 0); err != nil {
 		t.Fatalf("UpdateZaiCycle: %v", err)
 	}
 
@@ -1557,11 +1557,11 @@ func TestZaiTracker_processTimeQuota_ExistingCycle_PeakNotUpdated(t *testing.T) 
 	// currentValue (100) < cycle.PeakValue (900) → no update
 	snap := makeZaiSnapshot(base.Add(5*time.Minute), 5000, 100, &resetTime)
 
-	if err := tr.processTimeQuota(snap); err != nil {
+	if err := tr.processTimeQuota(snap, 0); err != nil {
 		t.Fatalf("processTimeQuota: %v", err)
 	}
 
-	cycle, err := s.QueryActiveZaiCycle("time")
+	cycle, err := s.QueryActiveZaiCycle("time", 0)
 	if err != nil {
 		t.Fatalf("QueryActiveZaiCycle: %v", err)
 	}
@@ -1590,10 +1590,10 @@ func TestZaiTracker_processTokensQuota_ExistingCycleAfterRestart_PeakUpdated(t *
 
 	base := time.Date(2026, 3, 4, 8, 0, 0, 0, time.UTC)
 	nextReset := base.Add(24 * time.Hour)
-	if _, err := s.CreateZaiCycle("tokens", base, &nextReset); err != nil {
+	if _, err := s.CreateZaiCycle("tokens", base, &nextReset, 0); err != nil {
 		t.Fatalf("CreateZaiCycle: %v", err)
 	}
-	if err := s.UpdateZaiCycle("tokens", 1000, 500); err != nil {
+	if err := s.UpdateZaiCycle("tokens", 1000, 500, 0); err != nil {
 		t.Fatalf("UpdateZaiCycle: %v", err)
 	}
 
@@ -1602,11 +1602,11 @@ func TestZaiTracker_processTokensQuota_ExistingCycleAfterRestart_PeakUpdated(t *
 	// currentValue (5000) > cycle.PeakValue (1000) → peak should update
 	snap := makeZaiSnapshot(base.Add(10*time.Minute), 5000, 100, &nextReset)
 
-	if err := tr.processTokensQuota(snap); err != nil {
+	if err := tr.processTokensQuota(snap, 0); err != nil {
 		t.Fatalf("processTokensQuota: %v", err)
 	}
 
-	cycle, err := s.QueryActiveZaiCycle("tokens")
+	cycle, err := s.QueryActiveZaiCycle("tokens", 0)
 	if err != nil {
 		t.Fatalf("QueryActiveZaiCycle: %v", err)
 	}
@@ -1630,10 +1630,10 @@ func TestZaiTracker_processTokensQuota_ExistingCycleAfterRestart_PeakNotUpdated(
 
 	base := time.Date(2026, 3, 4, 9, 0, 0, 0, time.UTC)
 	nextReset := base.Add(24 * time.Hour)
-	if _, err := s.CreateZaiCycle("tokens", base, &nextReset); err != nil {
+	if _, err := s.CreateZaiCycle("tokens", base, &nextReset, 0); err != nil {
 		t.Fatalf("CreateZaiCycle: %v", err)
 	}
-	if err := s.UpdateZaiCycle("tokens", 90000, 40000); err != nil {
+	if err := s.UpdateZaiCycle("tokens", 90000, 40000, 0); err != nil {
 		t.Fatalf("UpdateZaiCycle: %v", err)
 	}
 
@@ -1641,11 +1641,11 @@ func TestZaiTracker_processTokensQuota_ExistingCycleAfterRestart_PeakNotUpdated(
 	// currentValue (500) < cycle.PeakValue (90000) → no update
 	snap := makeZaiSnapshot(base.Add(5*time.Minute), 500, 200, &nextReset)
 
-	if err := tr.processTokensQuota(snap); err != nil {
+	if err := tr.processTokensQuota(snap, 0); err != nil {
 		t.Fatalf("processTokensQuota: %v", err)
 	}
 
-	cycle, err := s.QueryActiveZaiCycle("tokens")
+	cycle, err := s.QueryActiveZaiCycle("tokens", 0)
 	if err != nil {
 		t.Fatalf("QueryActiveZaiCycle: %v", err)
 	}

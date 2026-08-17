@@ -97,6 +97,7 @@ func NewServer(port int, handler *Handler, logger *slog.Logger, username, passwo
 	mux.HandleFunc(p("/api/minimax/insights"), func(w http.ResponseWriter, r *http.Request) {
 		handler.insightsMiniMax(w, r, parseInsightsRange(r.URL.Query().Get("range")))
 	})
+	mux.HandleFunc(p("/api/zai/accounts"), handler.ZaiAccounts)
 	mux.HandleFunc(p("/api/minimax/accounts"), handler.MiniMaxAccounts)
 	mux.HandleFunc(p("/api/minimax/accounts/usage"), handler.MiniMaxAccountsUsage)
 	mux.HandleFunc(p("/api/api-integrations/current"), handler.APIIntegrationsCurrent)

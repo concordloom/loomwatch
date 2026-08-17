@@ -14,10 +14,14 @@ type ZaiTracker struct {
 	store  *store.Store
 	logger *slog.Logger
 
-	// Cache last seen values for delta calculation
-	lastTokensValue float64
-	lastTimeValue   float64
-	hasLastValues   bool
+	// Cache last seen values for delta calculation.
+	//
+	// Fork change: keyed by provider_accounts.id. A single tracker now serves
+	// every Z.ai subscription, and one shared pair of scalars would have mixed
+	// their counters together — each account moves on its own quota.
+	lastTokensValue map[int64]float64
+	lastTimeValue   map[int64]float64
+	hasLastValues   map[int64]bool
 
 	onReset func(quotaName string) // called when a quota reset is detected
 }
@@ -50,45 +54,48 @@ func NewZaiTracker(store *store.Store, logger *slog.Logger) *ZaiTracker {
 		logger = slog.Default()
 	}
 	return &ZaiTracker{
-		store:  store,
-		logger: logger,
+		store:           store,
+		logger:          logger,
+		lastTokensValue: make(map[int64]float64),
+		lastTimeValue:   make(map[int64]float64),
+		hasLastValues:   make(map[int64]bool),
 	}
 }
 
 // Process compares current snapshot with previous, detects resets, updates cycles.
-func (t *ZaiTracker) Process(snapshot *api.ZaiSnapshot) error {
-	if err := t.processTokensQuota(snapshot); err != nil {
+func (t *ZaiTracker) Process(snapshot *api.ZaiSnapshot, accountID int64) error {
+	if err := t.processTokensQuota(snapshot, accountID); err != nil {
 		return fmt.Errorf("zai tracker: tokens: %w", err)
 	}
-	if err := t.processTimeQuota(snapshot); err != nil {
+	if err := t.processTimeQuota(snapshot, accountID); err != nil {
 		return fmt.Errorf("zai tracker: time: %w", err)
 	}
 
-	t.hasLastValues = true
+	t.hasLastValues[accountID] = true
 	return nil
 }
 
 // processTokensQuota tracks the tokens quota cycle.
 // Reset detection: TokensNextResetTime changes.
-func (t *ZaiTracker) processTokensQuota(snapshot *api.ZaiSnapshot) error {
+func (t *ZaiTracker) processTokensQuota(snapshot *api.ZaiSnapshot, accountID int64) error {
 	quotaType := "tokens"
 	currentValue := snapshot.TokensCurrentValue
 
-	cycle, err := t.store.QueryActiveZaiCycle(quotaType)
+	cycle, err := t.store.QueryActiveZaiCycle(quotaType, accountID)
 	if err != nil {
 		return fmt.Errorf("failed to query active cycle: %w", err)
 	}
 
 	if cycle == nil {
 		// First snapshot - create new cycle
-		_, err := t.store.CreateZaiCycle(quotaType, snapshot.CapturedAt, snapshot.TokensNextResetTime)
+		_, err := t.store.CreateZaiCycle(quotaType, snapshot.CapturedAt, snapshot.TokensNextResetTime, accountID)
 		if err != nil {
 			return fmt.Errorf("failed to create cycle: %w", err)
 		}
-		if err := t.store.UpdateZaiCycle(quotaType, int64(currentValue), 0); err != nil {
+		if err := t.store.UpdateZaiCycle(quotaType, int64(currentValue), 0, accountID); err != nil {
 			return fmt.Errorf("failed to set initial peak: %w", err)
 		}
-		t.lastTokensValue = currentValue
+		t.lastTokensValue[accountID] = currentValue
 		t.logger.Info("Created new Z.ai tokens cycle",
 			"nextReset", snapshot.TokensNextResetTime,
 			"initialPeak", currentValue,
@@ -130,8 +137,8 @@ func (t *ZaiTracker) processTokensQuota(snapshot *api.ZaiSnapshot) error {
 		}
 
 		// Update delta from last snapshot before closing
-		if t.hasLastValues {
-			delta := currentValue - t.lastTokensValue
+		if t.hasLastValues[accountID] {
+			delta := currentValue - t.lastTokensValue[accountID]
 			if delta > 0 {
 				cycle.TotalDelta += int64(delta)
 			}
@@ -141,19 +148,19 @@ func (t *ZaiTracker) processTokensQuota(snapshot *api.ZaiSnapshot) error {
 		}
 
 		// Close old cycle at the actual reset time
-		if err := t.store.CloseZaiCycle(quotaType, cycleEndTime, cycle.PeakValue, cycle.TotalDelta); err != nil {
+		if err := t.store.CloseZaiCycle(quotaType, cycleEndTime, cycle.PeakValue, cycle.TotalDelta, accountID); err != nil {
 			return fmt.Errorf("failed to close cycle: %w", err)
 		}
 
 		// Create new cycle starting from capturedAt (when we actually detected it)
-		if _, err := t.store.CreateZaiCycle(quotaType, snapshot.CapturedAt, snapshot.TokensNextResetTime); err != nil {
+		if _, err := t.store.CreateZaiCycle(quotaType, snapshot.CapturedAt, snapshot.TokensNextResetTime, accountID); err != nil {
 			return fmt.Errorf("failed to create new cycle: %w", err)
 		}
-		if err := t.store.UpdateZaiCycle(quotaType, int64(currentValue), 0); err != nil {
+		if err := t.store.UpdateZaiCycle(quotaType, int64(currentValue), 0, accountID); err != nil {
 			return fmt.Errorf("failed to set initial peak: %w", err)
 		}
 
-		t.lastTokensValue = currentValue
+		t.lastTokensValue[accountID] = currentValue
 		t.logger.Info("Detected Z.ai tokens reset",
 			"reason", resetReason,
 			"oldNextReset", cycle.NextReset,
@@ -168,52 +175,52 @@ func (t *ZaiTracker) processTokensQuota(snapshot *api.ZaiSnapshot) error {
 	}
 
 	// Same cycle - update stats
-	if t.hasLastValues {
-		delta := currentValue - t.lastTokensValue
+	if t.hasLastValues[accountID] {
+		delta := currentValue - t.lastTokensValue[accountID]
 		if delta > 0 {
 			cycle.TotalDelta += int64(delta)
 		}
 		if int64(currentValue) > cycle.PeakValue {
 			cycle.PeakValue = int64(currentValue)
 		}
-		if err := t.store.UpdateZaiCycle(quotaType, cycle.PeakValue, cycle.TotalDelta); err != nil {
+		if err := t.store.UpdateZaiCycle(quotaType, cycle.PeakValue, cycle.TotalDelta, accountID); err != nil {
 			return fmt.Errorf("failed to update cycle: %w", err)
 		}
 	} else {
 		// First snapshot after restart - update peak if higher
 		if int64(currentValue) > cycle.PeakValue {
 			cycle.PeakValue = int64(currentValue)
-			if err := t.store.UpdateZaiCycle(quotaType, cycle.PeakValue, cycle.TotalDelta); err != nil {
+			if err := t.store.UpdateZaiCycle(quotaType, cycle.PeakValue, cycle.TotalDelta, accountID); err != nil {
 				return fmt.Errorf("failed to update cycle: %w", err)
 			}
 		}
 	}
 
-	t.lastTokensValue = currentValue
+	t.lastTokensValue[accountID] = currentValue
 	return nil
 }
 
 // processTimeQuota tracks the time quota cycle.
 // Reset detection: value drops significantly (TIME_LIMIT has no nextResetTime).
-func (t *ZaiTracker) processTimeQuota(snapshot *api.ZaiSnapshot) error {
+func (t *ZaiTracker) processTimeQuota(snapshot *api.ZaiSnapshot, accountID int64) error {
 	quotaType := "time"
 	currentValue := snapshot.TimeCurrentValue
 
-	cycle, err := t.store.QueryActiveZaiCycle(quotaType)
+	cycle, err := t.store.QueryActiveZaiCycle(quotaType, accountID)
 	if err != nil {
 		return fmt.Errorf("failed to query active cycle: %w", err)
 	}
 
 	if cycle == nil {
 		// First snapshot - create new cycle (no nextReset for TIME_LIMIT)
-		_, err := t.store.CreateZaiCycle(quotaType, snapshot.CapturedAt, nil)
+		_, err := t.store.CreateZaiCycle(quotaType, snapshot.CapturedAt, nil, accountID)
 		if err != nil {
 			return fmt.Errorf("failed to create cycle: %w", err)
 		}
-		if err := t.store.UpdateZaiCycle(quotaType, int64(currentValue), 0); err != nil {
+		if err := t.store.UpdateZaiCycle(quotaType, int64(currentValue), 0, accountID); err != nil {
 			return fmt.Errorf("failed to set initial peak: %w", err)
 		}
-		t.lastTimeValue = currentValue
+		t.lastTimeValue[accountID] = currentValue
 		t.logger.Info("Created new Z.ai time cycle",
 			"initialPeak", currentValue,
 		)
@@ -222,27 +229,27 @@ func (t *ZaiTracker) processTimeQuota(snapshot *api.ZaiSnapshot) error {
 
 	// Check for reset: detect significant drop in value
 	resetDetected := false
-	if t.hasLastValues && t.lastTimeValue > 0 && currentValue < t.lastTimeValue*0.5 {
+	if t.hasLastValues[accountID] && t.lastTimeValue[accountID] > 0 && currentValue < t.lastTimeValue[accountID]*0.5 {
 		resetDetected = true
 	}
 
 	if resetDetected {
 		// Close old cycle with final stats
-		if err := t.store.CloseZaiCycle(quotaType, snapshot.CapturedAt, cycle.PeakValue, cycle.TotalDelta); err != nil {
+		if err := t.store.CloseZaiCycle(quotaType, snapshot.CapturedAt, cycle.PeakValue, cycle.TotalDelta, accountID); err != nil {
 			return fmt.Errorf("failed to close cycle: %w", err)
 		}
 
 		// Create new cycle
-		if _, err := t.store.CreateZaiCycle(quotaType, snapshot.CapturedAt, nil); err != nil {
+		if _, err := t.store.CreateZaiCycle(quotaType, snapshot.CapturedAt, nil, accountID); err != nil {
 			return fmt.Errorf("failed to create new cycle: %w", err)
 		}
-		if err := t.store.UpdateZaiCycle(quotaType, int64(currentValue), 0); err != nil {
+		if err := t.store.UpdateZaiCycle(quotaType, int64(currentValue), 0, accountID); err != nil {
 			return fmt.Errorf("failed to set initial peak: %w", err)
 		}
 
-		t.lastTimeValue = currentValue
+		t.lastTimeValue[accountID] = currentValue
 		t.logger.Info("Detected Z.ai time reset",
-			"lastValue", t.lastTimeValue,
+			"lastValue", t.lastTimeValue[accountID],
 			"newValue", currentValue,
 			"totalDelta", cycle.TotalDelta,
 		)
@@ -253,38 +260,38 @@ func (t *ZaiTracker) processTimeQuota(snapshot *api.ZaiSnapshot) error {
 	}
 
 	// Same cycle - update stats
-	if t.hasLastValues {
-		delta := currentValue - t.lastTimeValue
+	if t.hasLastValues[accountID] {
+		delta := currentValue - t.lastTimeValue[accountID]
 		if delta > 0 {
 			cycle.TotalDelta += int64(delta)
 		}
 		if int64(currentValue) > cycle.PeakValue {
 			cycle.PeakValue = int64(currentValue)
 		}
-		if err := t.store.UpdateZaiCycle(quotaType, cycle.PeakValue, cycle.TotalDelta); err != nil {
+		if err := t.store.UpdateZaiCycle(quotaType, cycle.PeakValue, cycle.TotalDelta, accountID); err != nil {
 			return fmt.Errorf("failed to update cycle: %w", err)
 		}
 	} else {
 		if int64(currentValue) > cycle.PeakValue {
 			cycle.PeakValue = int64(currentValue)
-			if err := t.store.UpdateZaiCycle(quotaType, cycle.PeakValue, cycle.TotalDelta); err != nil {
+			if err := t.store.UpdateZaiCycle(quotaType, cycle.PeakValue, cycle.TotalDelta, accountID); err != nil {
 				return fmt.Errorf("failed to update cycle: %w", err)
 			}
 		}
 	}
 
-	t.lastTimeValue = currentValue
+	t.lastTimeValue[accountID] = currentValue
 	return nil
 }
 
 // UsageSummary returns computed stats for a Z.ai quota type.
-func (t *ZaiTracker) UsageSummary(quotaType string) (*ZaiSummary, error) {
-	activeCycle, err := t.store.QueryActiveZaiCycle(quotaType)
+func (t *ZaiTracker) UsageSummary(quotaType string, accountID int64) (*ZaiSummary, error) {
+	activeCycle, err := t.store.QueryActiveZaiCycle(quotaType, accountID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query active cycle: %w", err)
 	}
 
-	history, err := t.store.QueryZaiCycleHistory(quotaType)
+	history, err := t.store.QueryZaiCycleHistory(quotaType, accountID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query cycle history: %w", err)
 	}
@@ -318,7 +325,7 @@ func (t *ZaiTracker) UsageSummary(quotaType string) (*ZaiSummary, error) {
 		}
 
 		// Get latest snapshot for current usage
-		latest, err := t.store.QueryLatestZai()
+		latest, err := t.store.QueryLatestZai(accountID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to query latest: %w", err)
 		}

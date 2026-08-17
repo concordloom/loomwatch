@@ -52,7 +52,13 @@ func InMemoryStoreWithSnapshots(t *testing.T, synCount, zaiCount, anthCount int,
 		}
 	}
 
-	// Insert Z.ai snapshots
+	// Insert Z.ai snapshots.
+	// Fork change: snapshots are scoped to a provider account, so fixtures
+	// write under the default one created by the migration.
+	zaiAccountID, err := s.DefaultZaiAccountID()
+	if err != nil {
+		t.Fatalf("InMemoryStoreWithSnapshots: default zai account: %v", err)
+	}
 	for i := range zaiCount {
 		capturedAt := now.Add(-time.Duration(zaiCount-i) * time.Minute)
 		resetTime := now.Add(7 * 24 * time.Hour)
@@ -64,7 +70,7 @@ func InMemoryStoreWithSnapshots(t *testing.T, synCount, zaiCount, anthCount int,
 			TimeUsage:           1000,
 			TimeCurrentValue:    10 + float64(i)*3,
 		}
-		if _, err := s.InsertZaiSnapshot(snap); err != nil {
+		if _, err := s.InsertZaiSnapshot(snap, zaiAccountID); err != nil {
 			t.Fatalf("InMemoryStoreWithSnapshots: insert zai: %v", err)
 		}
 	}

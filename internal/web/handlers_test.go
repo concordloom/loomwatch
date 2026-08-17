@@ -1202,7 +1202,7 @@ func TestHandler_Current_ZaiReturnsTokensAndTimeLimits(t *testing.T) {
 		TimePercentage:      2,
 		TokensNextResetTime: &resetTime,
 	}
-	s.InsertZaiSnapshot(zaiSnapshot)
+	s.InsertZaiSnapshot(zaiSnapshot, 0)
 
 	cfg := createTestConfigWithZai()
 	h := NewHandler(s, nil, nil, nil, cfg)
@@ -1264,7 +1264,7 @@ func TestHandler_History_WithZaiProvider(t *testing.T) {
 		TimePercentage:      1,
 		TokensNextResetTime: &resetTime,
 	}
-	s.InsertZaiSnapshot(zaiSnapshot)
+	s.InsertZaiSnapshot(zaiSnapshot, 0)
 
 	cfg := createTestConfigWithZai()
 	h := NewHandler(s, nil, nil, nil, cfg)
@@ -1312,7 +1312,7 @@ func TestHandler_Summary_WithZaiProvider(t *testing.T) {
 		TimePercentage:      1,
 		TokensNextResetTime: &resetTime,
 	}
-	s.InsertZaiSnapshot(zaiSnapshot)
+	s.InsertZaiSnapshot(zaiSnapshot, 0)
 
 	cfg := createTestConfigWithZai()
 	h := NewHandler(s, nil, nil, nil, cfg)
@@ -1345,7 +1345,7 @@ func TestHandler_Cycles_WithZaiProvider(t *testing.T) {
 
 	now := time.Now().UTC()
 	nextReset := now.Add(24 * time.Hour)
-	s.CreateZaiCycle("tokens", now, &nextReset)
+	s.CreateZaiCycle("tokens", now, &nextReset, 0)
 
 	cfg := createTestConfigWithZai()
 	h := NewHandler(s, nil, nil, nil, cfg)
@@ -1379,8 +1379,8 @@ func TestHandler_Cycles_ZaiTokensAndTimeTypes(t *testing.T) {
 
 	now := time.Now().UTC()
 	nextReset := now.Add(24 * time.Hour)
-	s.CreateZaiCycle("tokens", now, &nextReset)
-	s.CreateZaiCycle("time", now, nil)
+	s.CreateZaiCycle("tokens", now, &nextReset, 0)
+	s.CreateZaiCycle("time", now, nil, 0)
 
 	cfg := createTestConfigWithZai()
 	h := NewHandler(s, nil, nil, nil, cfg)
@@ -1436,7 +1436,7 @@ func TestHandler_Insights_WithZaiProvider(t *testing.T) {
 		TimePercentage:      1,
 		TokensNextResetTime: &resetTime,
 	}
-	s.InsertZaiSnapshot(zaiSnapshot)
+	s.InsertZaiSnapshot(zaiSnapshot, 0)
 
 	cfg := createTestConfigWithZai()
 	h := NewHandler(s, nil, nil, nil, cfg)
@@ -1482,7 +1482,7 @@ func TestHandler_ProviderSwitching_SyntheticToZai(t *testing.T) {
 		TimePercentage:      1,
 		TokensNextResetTime: &resetTime,
 	}
-	s.InsertZaiSnapshot(zaiSnapshot)
+	s.InsertZaiSnapshot(zaiSnapshot, 0)
 
 	snapshot := &api.Snapshot{
 		CapturedAt: time.Now().UTC(),
@@ -1544,7 +1544,7 @@ func TestHandler_ProviderSwitching_ZaiToSynthetic(t *testing.T) {
 		TimePercentage:      1,
 		TokensNextResetTime: &resetTime,
 	}
-	s.InsertZaiSnapshot(zaiSnapshot)
+	s.InsertZaiSnapshot(zaiSnapshot, 0)
 
 	snapshot := &api.Snapshot{
 		CapturedAt: time.Now().UTC(),
@@ -1803,7 +1803,7 @@ func TestHandler_Current_ZaiWithMockData(t *testing.T) {
 		TimePercentage:      50,
 		TokensNextResetTime: &resetTime,
 	}
-	s.InsertZaiSnapshot(zaiSnapshot)
+	s.InsertZaiSnapshot(zaiSnapshot, 0)
 
 	cfg := createTestConfigWithZai()
 	h := NewHandler(s, nil, nil, nil, cfg)
@@ -1896,7 +1896,7 @@ func TestHandler_History_ZaiMultipleSnapshots(t *testing.T) {
 			TimePercentage:      i * 5,
 			TokensNextResetTime: &resetTime,
 		}
-		s.InsertZaiSnapshot(zaiSnapshot)
+		s.InsertZaiSnapshot(zaiSnapshot, 0)
 	}
 
 	req := httptest.NewRequest(http.MethodGet, "/api/history?provider=zai&range=6h", nil)
@@ -1969,7 +1969,7 @@ func TestHandler_Cycles_ZaiActiveAndCompleted(t *testing.T) {
 	nextReset := now.Add(24 * time.Hour)
 
 	// Create an active cycle
-	s.CreateZaiCycle("tokens", now, &nextReset)
+	s.CreateZaiCycle("tokens", now, &nextReset, 0)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/cycles?provider=zai&type=tokens", nil)
 	rr := httptest.NewRecorder()
@@ -4664,7 +4664,7 @@ func TestHandler_LoggingHistory_ZaiReturnsSnapshots(t *testing.T) {
 			TokensUsage:      float64(20 + (i * 30)),
 			TokensPercentage: pct,
 		}
-		if _, err := s.InsertZaiSnapshot(snap); err != nil {
+		if _, err := s.InsertZaiSnapshot(snap, 0); err != nil {
 			t.Fatalf("InsertZaiSnapshot[%d]: %v", i, err)
 		}
 	}
@@ -7944,7 +7944,7 @@ func TestHandler_Insights_Zai_WithData(t *testing.T) {
 			TimeLimit:        500,
 			TimePercentage:   i * 10,
 		}
-		s.InsertZaiSnapshot(snapshot)
+		s.InsertZaiSnapshot(snapshot, 0)
 	}
 
 	cfg := createTestConfigWithZai()
@@ -8360,7 +8360,7 @@ func TestHandler_BuildZaiInsights_WithRichData(t *testing.T) {
 			TimePercentage:      i * 5,
 			TimeUsageDetails:    `[{"modelCode":"search-prime","usage":50},{"modelCode":"code-prime","usage":30}]`,
 		}
-		s.InsertZaiSnapshot(snapshot)
+		s.InsertZaiSnapshot(snapshot, 0)
 	}
 
 	cfg := createTestConfigWithZai()
@@ -9454,7 +9454,7 @@ func TestHandler_CyclesZai_WithData(t *testing.T) {
 	now := time.Now().UTC()
 	nextReset := now.Add(24 * time.Hour)
 
-	s.CreateZaiCycle("tokens", now.Add(-1*time.Hour), &nextReset)
+	s.CreateZaiCycle("tokens", now.Add(-1*time.Hour), &nextReset, 0)
 
 	cfg := createTestConfigWithZai()
 	h := NewHandler(s, nil, nil, nil, cfg)
@@ -9506,7 +9506,7 @@ func TestHandler_BuildZaiSummaryMap_StoreFallback(t *testing.T) {
 		TimeCurrentValue:   1200,
 		TimePercentage:     33,
 	}
-	s.InsertZaiSnapshot(snapshot)
+	s.InsertZaiSnapshot(snapshot, 0)
 
 	cfg := createTestConfigWithZai()
 	// No zaiTracker set - forces store fallback
@@ -9546,7 +9546,7 @@ func TestHandler_BuildZaiCurrent_WithStoreData(t *testing.T) {
 		TimePercentage:     33,
 		TimeUsageDetails:   `[{"type":"code_completion","usage":500},{"type":"chat","usage":300}]`,
 	}
-	s.InsertZaiSnapshot(snapshot)
+	s.InsertZaiSnapshot(snapshot, 0)
 
 	cfg := createTestConfigWithZai()
 	h := NewHandler(s, nil, nil, nil, cfg)
@@ -10458,7 +10458,7 @@ func TestHandler_HistoryZai_WithData(t *testing.T) {
 			TimeCurrentValue:   float64(i * 300),
 			TimePercentage:     i * 8,
 		}
-		s.InsertZaiSnapshot(snapshot)
+		s.InsertZaiSnapshot(snapshot, 0)
 	}
 
 	cfg := createTestConfigWithZai()

@@ -416,30 +416,50 @@ func (m *Metrics) scrapeCopilot(s *store.Store, staleThreshold time.Duration) {
 	}
 }
 
+// scrapeZai exports quota series for every Z.ai account.
+//
+// Fork change: this walked a single snapshot under the placeholder account id,
+// so only one subscription was ever visible. A Coding Plan counts quota per
+// account, so the rest burned unobserved — the failure this whole path exists
+// to prevent. Now shaped like scrapeMiniMax: iterate provider_accounts and
+// label every series with its real account id.
 func (m *Metrics) scrapeZai(s *store.Store, staleThreshold time.Duration) {
 	method := "zai"
 
-	snap, err := s.QueryLatestZai()
+	accounts, err := s.QueryProviderAccounts(method)
 	if err != nil {
 		m.scrapeErrorsTotal.WithLabelValues(method, "query_failed").Inc()
 		return
 	}
-	if snap == nil {
-		return
-	}
 
-	m.recordLastCycleAge(method, defaultAccountID, snap.CapturedAt, staleThreshold)
-
-	if zaiQuotaDeclared(snap.TokensLimit, snap.TokensUsage, snap.TokensCurrentValue, snap.TokensRemaining, snap.TokensPercentage) {
-		labels := prometheus.Labels{"provider": method, "quota_type": "tokens", "account_id": defaultAccountID}
-		m.quotaUtilization.With(labels).Set(float64(snap.TokensPercentage))
-		if snap.TokensNextResetTime != nil && !snap.TokensNextResetTime.IsZero() {
-			m.quotaResetTimestamp.With(labels).Set(float64(snap.TokensNextResetTime.Unix()))
+	for _, acct := range accounts {
+		accountID := strconv.FormatInt(acct.ID, 10)
+		if acct.Name != "" {
+			m.accountInfo.WithLabelValues(method, accountID, acct.Name).Set(1)
 		}
-	}
-	if zaiQuotaDeclared(snap.TimeLimit, snap.TimeUsage, snap.TimeCurrentValue, snap.TimeRemaining, snap.TimePercentage) {
-		labels := prometheus.Labels{"provider": method, "quota_type": "time", "account_id": defaultAccountID}
-		m.quotaUtilization.With(labels).Set(float64(snap.TimePercentage))
+
+		snap, err := s.QueryLatestZai(acct.ID)
+		if err != nil {
+			m.scrapeErrorsTotal.WithLabelValues(method, "query_failed").Inc()
+			continue
+		}
+		if snap == nil {
+			continue
+		}
+
+		m.recordLastCycleAge(method, accountID, snap.CapturedAt, staleThreshold)
+
+		if zaiQuotaDeclared(snap.TokensLimit, snap.TokensUsage, snap.TokensCurrentValue, snap.TokensRemaining, snap.TokensPercentage) {
+			labels := prometheus.Labels{"provider": method, "quota_type": "tokens", "account_id": accountID}
+			m.quotaUtilization.With(labels).Set(float64(snap.TokensPercentage))
+			if snap.TokensNextResetTime != nil && !snap.TokensNextResetTime.IsZero() {
+				m.quotaResetTimestamp.With(labels).Set(float64(snap.TokensNextResetTime.Unix()))
+			}
+		}
+		if zaiQuotaDeclared(snap.TimeLimit, snap.TimeUsage, snap.TimeCurrentValue, snap.TimeRemaining, snap.TimePercentage) {
+			labels := prometheus.Labels{"provider": method, "quota_type": "time", "account_id": accountID}
+			m.quotaUtilization.With(labels).Set(float64(snap.TimePercentage))
+		}
 	}
 }
 

@@ -563,7 +563,7 @@ func TestHandler_Summary_ZaiWithSnapshotAndNoTracker(t *testing.T) {
 		TimePercentage:      20,
 		TokensNextResetTime: &resetTime,
 	}
-	s.InsertZaiSnapshot(zaiSnapshot)
+	s.InsertZaiSnapshot(zaiSnapshot, 0)
 
 	cfg := createTestConfigWithZai()
 	h := NewHandler(s, nil, nil, nil, cfg)
@@ -1256,7 +1256,7 @@ func TestHandler_Current_Zai_NilResetTime(t *testing.T) {
 		TimePercentage:      20,
 		TokensNextResetTime: nil, // Explicitly nil
 	}
-	s.InsertZaiSnapshot(zaiSnapshot)
+	s.InsertZaiSnapshot(zaiSnapshot, 0)
 
 	cfg := createTestConfigWithZai()
 	h := NewHandler(s, nil, nil, nil, cfg)
@@ -1421,7 +1421,7 @@ func TestHandler_History_Zai_WithSnapshotHavingNoResetTime(t *testing.T) {
 		TimePercentage:      10,
 		TokensNextResetTime: nil,
 	}
-	s.InsertZaiSnapshot(zaiSnapshot)
+	s.InsertZaiSnapshot(zaiSnapshot, 0)
 
 	cfg := createTestConfigWithZai()
 	h := NewHandler(s, nil, nil, nil, cfg)
@@ -1626,7 +1626,7 @@ func TestHandler_History_Both_WithData(t *testing.T) {
 		TimePercentage:      10,
 		TokensNextResetTime: &resetTime,
 	}
-	s.InsertZaiSnapshot(zaiSnapshot)
+	s.InsertZaiSnapshot(zaiSnapshot, 0)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/history?provider=both&range=6h", nil)
 	rr := httptest.NewRecorder()
@@ -2853,7 +2853,7 @@ func TestHandler_Cycles_Zai_WithActiveCycle(t *testing.T) {
 
 	now := time.Now().UTC()
 	nextReset := now.Add(24 * time.Hour)
-	s.CreateZaiCycle("tokens", now, &nextReset)
+	s.CreateZaiCycle("tokens", now, &nextReset, 0)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/cycles?provider=zai&type=tokens", nil)
 	rr := httptest.NewRecorder()
@@ -2900,7 +2900,7 @@ func TestHandler_LoggingHistory_Zai_WithData(t *testing.T) {
 			TimePercentage:      i * 10,
 			TokensNextResetTime: &resetTime,
 		}
-		s.InsertZaiSnapshot(zaiSnapshot)
+		s.InsertZaiSnapshot(zaiSnapshot, 0)
 	}
 
 	req := httptest.NewRequest(http.MethodGet, "/api/logging-history?provider=zai&range=1", nil)
@@ -3073,7 +3073,7 @@ func TestHandler_Summary_Zai_WithTracker(t *testing.T) {
 		TimePercentage:      20,
 		TokensNextResetTime: &resetTime,
 	}
-	s.InsertZaiSnapshot(zaiSnapshot)
+	s.InsertZaiSnapshot(zaiSnapshot, 0)
 
 	cfg := createTestConfigWithZai()
 	h := NewHandler(s, nil, nil, nil, cfg)
@@ -3753,7 +3753,7 @@ func TestHandler_LoggingHistory_Zai_WithSnapshots(t *testing.T) {
 			TimePercentage:      i * 5,
 			TokensNextResetTime: &resetTime,
 		}
-		s.InsertZaiSnapshot(snap)
+		s.InsertZaiSnapshot(snap, 0)
 	}
 
 	cfg := createTestConfigWithZai()
@@ -4043,7 +4043,7 @@ func TestHandler_History_Both_WithAllProviders(t *testing.T) {
 			TokensCurrentValue:  float64(i) * 1000000,
 			TokensNextResetTime: &resetTime,
 		}
-		s.InsertZaiSnapshot(zSnap)
+		s.InsertZaiSnapshot(zSnap, 0)
 	}
 
 	cfg := createTestConfigWithBoth()
@@ -4429,7 +4429,7 @@ func TestHandler_Current_Zai_WithSnapshot(t *testing.T) {
 		TimePercentage:      20,
 		TokensNextResetTime: &resetTime,
 	}
-	s.InsertZaiSnapshot(snap)
+	s.InsertZaiSnapshot(snap, 0)
 
 	cfg := createTestConfigWithZai()
 	h := NewHandler(s, nil, nil, nil, cfg)
@@ -5054,7 +5054,7 @@ func TestHandler_History_Both_WithMultipleProviders(t *testing.T) {
 		TokensUsage:         100000000,
 		TokensCurrentValue:  30000000,
 		TokensNextResetTime: &resetTime,
-	})
+	}, 0)
 
 	resetsAt := time.Now().Add(2 * time.Hour)
 	s.InsertAnthropicSnapshot(&api.AnthropicSnapshot{
@@ -5108,7 +5108,7 @@ func TestHandler_Current_Zai_WithTrackerAndData(t *testing.T) {
 			TimePercentage:      i + 1,
 			TokensNextResetTime: &resetTime,
 		}
-		s.InsertZaiSnapshot(snap)
+		s.InsertZaiSnapshot(snap, 0)
 	}
 
 	zaiTr := tracker.NewZaiTracker(s, nil)
@@ -5241,7 +5241,7 @@ func TestHandler_Summary_Zai_WithSnapshot(t *testing.T) {
 		TimePercentage:      20,
 		TokensNextResetTime: &resetTime,
 	}
-	s.InsertZaiSnapshot(snap)
+	s.InsertZaiSnapshot(snap, 0)
 
 	cfg := createTestConfigWithZai()
 	h := NewHandler(s, nil, nil, nil, cfg)
@@ -5692,7 +5692,7 @@ func TestHandler_Summary_Zai_WithTracker2(t *testing.T) {
 			TimePercentage:      i,
 			TokensNextResetTime: &resetTime,
 		}
-		s.InsertZaiSnapshot(snap)
+		s.InsertZaiSnapshot(snap, 0)
 	}
 
 	cfg := createTestConfigWithZai()
@@ -6043,7 +6043,7 @@ func TestHandler_LoggingHistory_Zai_WithRange(t *testing.T) {
 			TokensCurrentValue:  float64(i) * 1000000,
 			TokensNextResetTime: &resetTime,
 		}
-		s.InsertZaiSnapshot(snap)
+		s.InsertZaiSnapshot(snap, 0)
 	}
 
 	cfg := createTestConfigWithZai()
@@ -6644,7 +6644,7 @@ func TestHandler_Cycles_Zai_WithActiveAndHistoryCov(t *testing.T) {
 		TimePercentage:      20,
 		TokensNextResetTime: &resetTime,
 	}
-	s.InsertZaiSnapshot(zaiSnapshot)
+	s.InsertZaiSnapshot(zaiSnapshot, 0)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/cycles?provider=zai&type=tokens", nil)
 	rr := httptest.NewRecorder()
@@ -6676,7 +6676,7 @@ func TestHandler_Cycles_Zai_TimeTypeCov(t *testing.T) {
 		TimePercentage:      20,
 		TokensNextResetTime: &resetTime,
 	}
-	s.InsertZaiSnapshot(zaiSnapshot)
+	s.InsertZaiSnapshot(zaiSnapshot, 0)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/cycles?provider=zai&type=time", nil)
 	rr := httptest.NewRecorder()
@@ -8422,7 +8422,7 @@ func TestHandler_LoggingHistory_ZaiWithData(t *testing.T) {
 		TimeUsage:          600,
 		TimeCurrentValue:   600,
 		TimePercentage:     8,
-	})
+	}, 0)
 
 	h := NewHandler(s, nil, nil, nil, createTestConfigWithZai())
 
@@ -9705,7 +9705,7 @@ func TestHandler_Cycles_Both_AllProvidersWithData(t *testing.T) {
 	s.CreateCycle("subscription", now.Add(-24*time.Hour), renewsAt)
 
 	// Zai cycle
-	s.CreateZaiCycle("tokens", now.Add(-24*time.Hour), &renewsAt)
+	s.CreateZaiCycle("tokens", now.Add(-24*time.Hour), &renewsAt, 0)
 
 	// Anthropic cycle
 	resetsAt := now.Add(3 * time.Hour)
@@ -9843,7 +9843,7 @@ func TestHandler_History_Both_WithAllProvidersCov(t *testing.T) {
 		TimeUsage:          100,
 		TimeCurrentValue:   100,
 		TimePercentage:     1,
-	})
+	}, 0)
 
 	// Anthropic snapshot
 	s.InsertAnthropicSnapshot(&api.AnthropicSnapshot{
@@ -9986,7 +9986,7 @@ func TestHandler_History_Zai_WithDataCov(t *testing.T) {
 			TimeUsage:          float64(100 + i*50),
 			TimeCurrentValue:   float64(100 + i*50),
 			TimePercentage:     i + 1,
-		})
+		}, 0)
 	}
 
 	h := NewHandler(s, nil, nil, nil, createTestConfigWithZai())
@@ -10023,7 +10023,7 @@ func TestHandler_Cycles_Zai_WithDataCov(t *testing.T) {
 	now := time.Now().UTC()
 	renewsAt := now.Add(24 * time.Hour)
 
-	s.CreateZaiCycle("tokens", now.Add(-24*time.Hour), &renewsAt)
+	s.CreateZaiCycle("tokens", now.Add(-24*time.Hour), &renewsAt, 0)
 
 	h := NewHandler(s, nil, nil, nil, createTestConfigWithZai())
 
@@ -10071,7 +10071,7 @@ func TestHandler_Current_Both_WithAllProviderData(t *testing.T) {
 		TimeUsage:          100,
 		TimeCurrentValue:   100,
 		TimePercentage:     1,
-	})
+	}, 0)
 
 	s.InsertAnthropicSnapshot(&api.AnthropicSnapshot{
 		CapturedAt: now,
@@ -10702,7 +10702,7 @@ func TestHandler_Insights_Zai_WithTrendData(t *testing.T) {
 			TimeRemaining:       float64(3600 - 100*(i+1)),
 			TimePercentage:      (i + 1) * 3,
 			TokensNextResetTime: &resetTime,
-		})
+		}, 0)
 	}
 
 	h := NewHandler(s, nil, nil, nil, createTestConfigWithZai())
@@ -10825,7 +10825,7 @@ func TestHandler_Sessions_BothWithData(t *testing.T) {
 		TimeUsage:          100,
 		TimeCurrentValue:   100,
 		TimePercentage:     1,
-	})
+	}, 0)
 
 	h := NewHandler(s, nil, nil, nil, createTestConfigWithBoth())
 
@@ -11008,7 +11008,7 @@ func TestHandler_CyclesZai_WithActiveCycle(t *testing.T) {
 
 	now := time.Now().UTC()
 	nextReset := now.Add(24 * time.Hour)
-	s.CreateZaiCycle("tokens", now.Add(-1*time.Hour), &nextReset)
+	s.CreateZaiCycle("tokens", now.Add(-1*time.Hour), &nextReset, 0)
 
 	cfg := createTestConfigWithZai()
 	h := NewHandler(s, nil, nil, nil, cfg)
@@ -11093,7 +11093,7 @@ func TestHandler_BuildSummaryResponse_BothWithData(t *testing.T) {
 		TokensCurrentValue:  50000000,
 		TokensNextResetTime: &resetTime,
 	}
-	s.InsertZaiSnapshot(zaiSnap)
+	s.InsertZaiSnapshot(zaiSnap, 0)
 
 	cfg := createTestConfigWithBoth()
 	h := NewHandler(s, nil, nil, nil, cfg)
@@ -12123,8 +12123,8 @@ func TestSanitizeProviderSettings_NonEnumFieldsUntouched(t *testing.T) {
 		},
 		"anthropic": map[string]interface{}{
 			"api_poll_cycle_interval": float64(20),
-			"staleness_minutes":      float64(10),
-			"source":                 "api",
+			"staleness_minutes":       float64(10),
+			"source":                  "api",
 		},
 	}
 
@@ -12200,8 +12200,8 @@ func TestCountWorkTime(t *testing.T) {
 		{"empty range", mon, mon, "5-day", 0.0},
 		{"partial first day", mon, monPartial, "5-day", 0.25},
 		{"2 full + partial day", mon, wedNoon, "5-day", 2.5},
-		{"5-day to Sat noon", mon, satNoon, "5-day", 5.0},    // Sat doesn't count
-		{"6-day to Sat noon", mon, satNoon, "6-day", 5.5},    // Sat counts, partial
+		{"5-day to Sat noon", mon, satNoon, "5-day", 5.0}, // Sat doesn't count
+		{"6-day to Sat noon", mon, satNoon, "6-day", 5.5}, // Sat counts, partial
 		{"calendar to Sat noon", mon, satNoon, "calendar", 5.5},
 	}
 

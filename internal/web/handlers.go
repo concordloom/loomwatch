@@ -79,6 +79,14 @@ type MiniMaxAccountReloader interface {
 	Reload()
 }
 
+// ZaiAccountReloader is called to hot-reload Z.ai agents after account CRUD.
+//
+// Fork change: Z.ai became multi-account, so adding a subscription has to start
+// polling it without a restart — same contract as the MiniMax reloader above.
+type ZaiAccountReloader interface {
+	Reload()
+}
+
 // Handler handles HTTP requests for the web dashboard
 type Handler struct {
 	store              *store.Store
@@ -101,6 +109,7 @@ type Handler struct {
 	notifier           Notifier
 	agentManager       ProviderAgentController
 	minimaxAgentMgr    MiniMaxAccountReloader
+	zaiAgentMgr        ZaiAccountReloader
 	logger             *slog.Logger
 	dashboardTmpl      *template.Template
 	loginTmpl          *template.Template
@@ -827,6 +836,11 @@ func (h *Handler) SetRateLimiter(l *LoginRateLimiter) {
 // SetMiniMaxAgentManager sets the MiniMax agent manager for hot-reload on account changes.
 func (h *Handler) SetMiniMaxAgentManager(m MiniMaxAccountReloader) {
 	h.minimaxAgentMgr = m
+}
+
+// SetZaiAgentManager sets the Z.ai agent manager for hot-reload on account changes.
+func (h *Handler) SetZaiAgentManager(m ZaiAccountReloader) {
+	h.zaiAgentMgr = m
 }
 
 func (h *Handler) triggerMenubarRefresh() {
@@ -2376,7 +2390,7 @@ func (h *Handler) buildZaiCurrent() map[string]interface{} {
 	}
 
 	if h.store != nil {
-		latest, err := h.store.QueryLatestZai()
+		latest, err := h.store.QueryLatestZai(h.defaultZaiAccountID())
 		if err != nil {
 			h.logger.Error("failed to query latest Z.ai snapshot", "error", err)
 			return response
@@ -2389,11 +2403,11 @@ func (h *Handler) buildZaiCurrent() map[string]interface{} {
 
 			// Enrich with tracker data (rate, projection)
 			if h.zaiTracker != nil {
-				if tokensSummary, err := h.zaiTracker.UsageSummary("tokens"); err == nil && tokensSummary != nil {
+				if tokensSummary, err := h.zaiTracker.UsageSummary("tokens", h.defaultZaiAccountID()); err == nil && tokensSummary != nil {
 					tokensResp["currentRate"] = tokensSummary.CurrentRate
 					tokensResp["projectedUsage"] = tokensSummary.ProjectedUsage
 				}
-				if timeSummary, err := h.zaiTracker.UsageSummary("time"); err == nil && timeSummary != nil {
+				if timeSummary, err := h.zaiTracker.UsageSummary("time", h.defaultZaiAccountID()); err == nil && timeSummary != nil {
 					timeResp["currentRate"] = timeSummary.CurrentRate
 					timeResp["projectedUsage"] = timeSummary.ProjectedUsage
 				}
@@ -2733,7 +2747,7 @@ func (h *Handler) historyBoth(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if h.config.HasProvider("zai") && providerTelemetryEnabled(visibility, "zai") && h.store != nil {
-		snapshots, err := h.store.QueryZaiRange(start, now)
+		snapshots, err := h.store.QueryZaiRange(start, now, h.parseZaiAccountID(r))
 		if err == nil {
 			step := downsampleStep(len(snapshots), maxChartPoints)
 			last := len(snapshots) - 1
@@ -2953,10 +2967,10 @@ func (h *Handler) historyBoth(w http.ResponseWriter, r *http.Request) {
 					continue
 				}
 				entry := map[string]interface{}{
-					"capturedAt": s.CapturedAt.Format(time.RFC3339),
+					"capturedAt":        s.CapturedAt.Format(time.RFC3339),
 					"available_balance": s.AvailableBalance,
-					"voucher_balance": s.VoucherBalance,
-					"cash_balance": s.CashBalance,
+					"voucher_balance":   s.VoucherBalance,
+					"cash_balance":      s.CashBalance,
 				}
 				msData = append(msData, entry)
 			}
@@ -3198,7 +3212,7 @@ func (h *Handler) historyZai(w http.ResponseWriter, r *http.Request) {
 	start := now.Add(-duration)
 	end := now
 
-	snapshots, err := h.store.QueryZaiRange(start, end)
+	snapshots, err := h.store.QueryZaiRange(start, end, h.parseZaiAccountID(r))
 	if err != nil {
 		h.logger.Error("failed to query Z.ai history", "error", err)
 		respondError(w, http.StatusInternalServerError, "failed to query history")
@@ -3756,10 +3770,10 @@ func (h *Handler) cyclesBoth(w http.ResponseWriter, r *http.Request) {
 			zaiType = "tokens"
 		}
 		var zaiCycles []map[string]interface{}
-		if active, err := h.store.QueryActiveZaiCycle(zaiType); err == nil && active != nil {
+		if active, err := h.store.QueryActiveZaiCycle(zaiType, h.parseZaiAccountID(r)); err == nil && active != nil {
 			zaiCycles = append(zaiCycles, zaiCycleToMap(active))
 		}
-		if history, err := h.store.QueryZaiCycleHistory(zaiType, 50); err == nil {
+		if history, err := h.store.QueryZaiCycleHistory(zaiType, h.parseZaiAccountID(r), 50); err == nil {
 			for _, c := range history {
 				zaiCycles = append(zaiCycles, zaiCycleToMap(c))
 			}
@@ -3883,11 +3897,11 @@ func (h *Handler) cyclesBoth(w http.ResponseWriter, r *http.Request) {
 	if h.config.HasProvider("deepseek") {
 		quotaType := "balance"
 		var dsCycles []map[string]interface{}
-		
-		// Use CNY as default if not specified elsewhere. DeepSeek could use USD, 
+
+		// Use CNY as default if not specified elsewhere. DeepSeek could use USD,
 		// but tracking one primary currency for UI is sufficient for summary.
 		currency := "CNY"
-		
+
 		if active, err := h.store.QueryActiveDeepSeekCycle(quotaType, currency); err == nil && active != nil {
 			dsCycles = append(dsCycles, deepseekCycleToMap(active))
 		}
@@ -3987,7 +4001,7 @@ func (h *Handler) cyclesZai(w http.ResponseWriter, r *http.Request) {
 	// Get both active and completed cycles
 	response := []map[string]interface{}{}
 
-	active, err := h.store.QueryActiveZaiCycle(quotaType)
+	active, err := h.store.QueryActiveZaiCycle(quotaType, h.parseZaiAccountID(r))
 	if err != nil {
 		h.logger.Error("failed to query active Z.ai cycle", "error", err)
 		respondError(w, http.StatusInternalServerError, "failed to query cycles")
@@ -3998,7 +4012,7 @@ func (h *Handler) cyclesZai(w http.ResponseWriter, r *http.Request) {
 		response = append(response, zaiCycleToMap(active))
 	}
 
-	history, err := h.store.QueryZaiCycleHistory(quotaType, 200)
+	history, err := h.store.QueryZaiCycleHistory(quotaType, h.parseZaiAccountID(r), 200)
 	if err != nil {
 		h.logger.Error("failed to query Z.ai cycle history", "error", err)
 		respondError(w, http.StatusInternalServerError, "failed to query cycles")
@@ -4306,10 +4320,10 @@ func (h *Handler) buildZaiSummaryMap() map[string]interface{} {
 
 	// Try tracker-based summary first (has cycle data)
 	if h.zaiTracker != nil {
-		if tokensSummary, err := h.zaiTracker.UsageSummary("tokens"); err == nil && tokensSummary != nil {
+		if tokensSummary, err := h.zaiTracker.UsageSummary("tokens", h.defaultZaiAccountID()); err == nil && tokensSummary != nil {
 			response["tokensLimit"] = buildZaiTrackerSummaryResponse(tokensSummary)
 		}
-		if timeSummary, err := h.zaiTracker.UsageSummary("time"); err == nil && timeSummary != nil {
+		if timeSummary, err := h.zaiTracker.UsageSummary("time", h.defaultZaiAccountID()); err == nil && timeSummary != nil {
 			response["timeLimit"] = buildZaiTrackerSummaryResponse(timeSummary)
 		}
 		return response
@@ -4317,7 +4331,7 @@ func (h *Handler) buildZaiSummaryMap() map[string]interface{} {
 
 	// Fallback to snapshot-only summary
 	if h.store != nil {
-		latest, err := h.store.QueryLatestZai()
+		latest, err := h.store.QueryLatestZai(h.defaultZaiAccountID())
 		if err != nil {
 			h.logger.Error("failed to query latest Z.ai snapshot", "error", err)
 			return response
@@ -5235,7 +5249,7 @@ func (h *Handler) buildZaiInsights(hidden map[string]bool) insightsResponse {
 		return resp
 	}
 
-	latest, err := h.store.QueryLatestZai()
+	latest, err := h.store.QueryLatestZai(h.defaultZaiAccountID())
 	if err != nil {
 		h.logger.Error("failed to query Z.ai data for insights", "error", err)
 		return resp
@@ -5276,8 +5290,8 @@ func (h *Handler) buildZaiInsights(hidden map[string]bool) insightsResponse {
 	// Historical snapshots for rate/trend computation
 	d24h := now.Add(-24 * time.Hour)
 	d7d := now.Add(-7 * 24 * time.Hour)
-	snapshots24h, _ := h.store.QueryZaiRange(d24h, now)
-	snapshots7d, _ := h.store.QueryZaiRange(d7d, now)
+	snapshots24h, _ := h.store.QueryZaiRange(d24h, now, h.defaultZaiAccountID())
+	snapshots7d, _ := h.store.QueryZaiRange(d7d, now, h.defaultZaiAccountID())
 
 	// Plan capacity: "usage" field IS the daily budget (resets daily)
 	dailyTokenBudget := tokensBudget // e.g., 200,000,000 tokens/day
@@ -7486,7 +7500,7 @@ func (h *Handler) cycleOverviewZai(w http.ResponseWriter, r *http.Request) {
 	}
 
 	limit := parseCycleOverviewLimit(r)
-	rows, err := h.store.QueryZaiCycleOverview(groupBy, limit)
+	rows, err := h.store.QueryZaiCycleOverview(groupBy, limit, h.parseZaiAccountID(r))
 	if err != nil {
 		h.logger.Error("failed to query Z.ai cycle overview", "error", err)
 		respondError(w, http.StatusInternalServerError, "failed to query cycle overview")
@@ -7575,7 +7589,7 @@ func (h *Handler) cycleOverviewBoth(w http.ResponseWriter, r *http.Request) {
 		if groupBy == "" {
 			groupBy = "tokens"
 		}
-		if rows, err := h.store.QueryZaiCycleOverview(groupBy, limit); err == nil {
+		if rows, err := h.store.QueryZaiCycleOverview(groupBy, limit, h.parseZaiAccountID(r)); err == nil {
 			response["zai"] = map[string]interface{}{
 				"groupBy":    groupBy,
 				"provider":   "zai",
@@ -7687,7 +7701,7 @@ func (h *Handler) cycleOverviewBoth(w http.ResponseWriter, r *http.Request) {
 			"cycles":     orCycles,
 		}
 	}
-	
+
 	if h.config.HasProvider("moonshot") {
 		quotaType := "balance"
 		var msCycles []map[string]interface{}
@@ -9079,6 +9093,39 @@ const (
 	minimaxSharedQuotaDisplayName = "Coding"
 	minimaxInsightSampleLimit     = 20000
 )
+
+// parseZaiAccountID extracts the Z.ai account ID from query params, falling
+// back to the default account.
+//
+// Fork change: Z.ai became multi-account, so every view has to say which
+// subscription it is showing. Existing links carry no account parameter and
+// keep resolving to the default one, which is the account the single-key
+// install was already watching.
+func (h *Handler) parseZaiAccountID(r *http.Request) int64 {
+	if r != nil {
+		if accountStr := r.URL.Query().Get("account"); accountStr != "" {
+			if id, err := strconv.ParseInt(accountStr, 10, 64); err == nil && id > 0 {
+				return id
+			}
+		}
+	}
+	return h.defaultZaiAccountID()
+}
+
+// defaultZaiAccountID returns the provider_accounts.id for the default Z.ai account.
+func (h *Handler) defaultZaiAccountID() int64 {
+	if h.store == nil {
+		return 0
+	}
+	if id, err := h.store.DefaultZaiAccountID(); err == nil && id > 0 {
+		return id
+	}
+	accounts, err := h.store.QueryActiveProviderAccounts("zai")
+	if err != nil || len(accounts) == 0 {
+		return 0
+	}
+	return accounts[0].ID
+}
 
 // parseMiniMaxAccountID extracts the MiniMax account ID from query params.
 // Falls back to the default MiniMax account (looked up from provider_accounts) if not specified.
@@ -11221,7 +11268,7 @@ func (h *Handler) loggingHistoryZai(w http.ResponseWriter, r *http.Request) {
 	}
 
 	start, end, limit := h.loggingHistoryRangeAndLimit(r)
-	snapshots, err := h.store.QueryZaiRange(start, end, limit)
+	snapshots, err := h.store.QueryZaiRange(start, end, h.parseZaiAccountID(r), limit)
 	if err != nil {
 		h.logger.Error("failed to query Z.ai snapshots", "error", err)
 		respondError(w, http.StatusInternalServerError, "failed to query logging history")

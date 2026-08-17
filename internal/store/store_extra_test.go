@@ -420,7 +420,7 @@ func TestStore_MigrateSessionsToUsageBased_WithZaiData(t *testing.T) {
 			TokensRemaining:    float64(1000 - i*100),
 			TokensPercentage:   i * 10,
 		}
-		_, err := s.InsertZaiSnapshot(snapshot)
+		_, err := s.InsertZaiSnapshot(snapshot, 0)
 		if err != nil {
 			t.Fatalf("InsertZaiSnapshot failed: %v", err)
 		}

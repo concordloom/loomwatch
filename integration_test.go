@@ -806,7 +806,7 @@ func TestIntegration_Zai_SnapshotStoredCorrectly(t *testing.T) {
 		TokensPercentage:    25,
 		TokensNextResetTime: &resetTime,
 	}
-	id, err := db.InsertZaiSnapshot(snap)
+	id, err := db.InsertZaiSnapshot(snap, 0)
 	if err != nil {
 		t.Fatalf("InsertZaiSnapshot: %v", err)
 	}
@@ -814,7 +814,7 @@ func TestIntegration_Zai_SnapshotStoredCorrectly(t *testing.T) {
 		t.Fatal("Expected positive ID")
 	}
 
-	latest, err := db.QueryLatestZai()
+	latest, err := db.QueryLatestZai(0)
 	if err != nil {
 		t.Fatalf("QueryLatestZai: %v", err)
 	}
@@ -897,12 +897,12 @@ func TestIntegration_Zai_UsageExceedsLimit(t *testing.T) {
 		TokensRemaining:    0,
 		TokensPercentage:   100,
 	}
-	_, err := db.InsertZaiSnapshot(snap)
+	_, err := db.InsertZaiSnapshot(snap, 0)
 	if err != nil {
 		t.Fatalf("InsertZaiSnapshot: %v", err)
 	}
 
-	latest, err := db.QueryLatestZai()
+	latest, err := db.QueryLatestZai(0)
 	if err != nil {
 		t.Fatalf("QueryLatestZai: %v", err)
 	}
@@ -928,9 +928,9 @@ func TestIntegration_Zai_NoResetTimeOnTimeLimit(t *testing.T) {
 		TimePercentage:      1,
 		TokensNextResetTime: nil, // no reset info for TIME_LIMIT
 	}
-	db.InsertZaiSnapshot(snap)
+	db.InsertZaiSnapshot(snap, 0)
 
-	latest, err := db.QueryLatestZai()
+	latest, err := db.QueryLatestZai(0)
 	if err != nil {
 		t.Fatalf("QueryLatestZai: %v", err)
 	}
@@ -958,7 +958,7 @@ func TestIntegration_Zai_ResetDetection(t *testing.T) {
 		TimeUsage:           1000,
 		TimeCurrentValue:    900,
 	}
-	db.InsertZaiSnapshot(snap1)
+	db.InsertZaiSnapshot(snap1, 0)
 	zaiTr.Process(snap1)
 
 	// Second snapshot: reset occurred (new reset time, low usage)
@@ -972,11 +972,11 @@ func TestIntegration_Zai_ResetDetection(t *testing.T) {
 		TimeUsage:           1000,
 		TimeCurrentValue:    5,
 	}
-	db.InsertZaiSnapshot(snap2)
+	db.InsertZaiSnapshot(snap2, 0)
 	zaiTr.Process(snap2)
 
 	// Verify completed cycle exists
-	cycles, err := db.QueryZaiCycleHistory("tokens")
+	cycles, err := db.QueryZaiCycleHistory("tokens", 0)
 	if err != nil {
 		t.Fatalf("QueryZaiCycleHistory: %v", err)
 	}
@@ -1017,7 +1017,7 @@ func TestIntegration_Zai_HandlerReturnsDBData(t *testing.T) {
 		TokensPercentage:    50,
 		TokensNextResetTime: &resetTime,
 	}
-	s.InsertZaiSnapshot(snap)
+	s.InsertZaiSnapshot(snap, 0)
 
 	req := httptest.NewRequest("GET", "/api/current?provider=zai", nil)
 	w := httptest.NewRecorder()
@@ -1399,7 +1399,7 @@ func TestIntegration_CrossProvider_IndependentResets(t *testing.T) {
 		TimeUsage:           1000,
 		TimeCurrentValue:    500,
 	}
-	db.InsertZaiSnapshot(zaiSnap1)
+	db.InsertZaiSnapshot(zaiSnap1, 0)
 	zaiTr.Process(zaiSnap1)
 
 	// Reset Synthetic (renewsAt changes)
@@ -1419,7 +1419,7 @@ func TestIntegration_CrossProvider_IndependentResets(t *testing.T) {
 	}
 
 	// Verify Z.ai cycle is still open (no reset)
-	zaiActive, _ := db.QueryActiveZaiCycle("tokens")
+	zaiActive, _ := db.QueryActiveZaiCycle("tokens", 0)
 	if zaiActive == nil {
 		t.Fatal("Expected active Z.ai tokens cycle (should not have been affected)")
 	}
@@ -1450,7 +1450,7 @@ func TestIntegration_CrossProvider_BothAggregation(t *testing.T) {
 		TimeUsage:           1000,
 		TimeCurrentValue:    100,
 	}
-	s.InsertZaiSnapshot(zaiSnap)
+	s.InsertZaiSnapshot(zaiSnap, 0)
 
 	req := httptest.NewRequest("GET", "/api/current?provider=both", nil)
 	w := httptest.NewRecorder()
@@ -1591,7 +1591,7 @@ func TestIntegration_CrossProvider_ParallelPolling(t *testing.T) {
 		TimeUsage:           1000,
 		TimeCurrentValue:    100,
 	}
-	_, err = db.InsertZaiSnapshot(zaiSnap)
+	_, err = db.InsertZaiSnapshot(zaiSnap, 0)
 	if err != nil {
 		t.Fatalf("InsertZaiSnapshot: %v", err)
 	}
@@ -1613,7 +1613,7 @@ func TestIntegration_CrossProvider_ParallelPolling(t *testing.T) {
 	if synLatest == nil {
 		t.Fatal("Missing Synthetic snapshot")
 	}
-	zaiLatest, _ := db.QueryLatestZai()
+	zaiLatest, _ := db.QueryLatestZai(0)
 	if zaiLatest == nil {
 		t.Fatal("Missing Z.ai snapshot")
 	}
@@ -1714,7 +1714,7 @@ func TestIntegration_API_CurrentZai(t *testing.T) {
 		TimeCurrentValue:    850,
 		TimePercentage:      85,
 	}
-	s.InsertZaiSnapshot(snap)
+	s.InsertZaiSnapshot(snap, 0)
 
 	req := httptest.NewRequest("GET", "/api/current?provider=zai", nil)
 	w := httptest.NewRecorder()

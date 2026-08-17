@@ -37,7 +37,7 @@ func TestZaiStore_InsertAndQuerySnapshot(t *testing.T) {
 		TokensNextResetTime: &nextReset,
 	}
 
-	id, err := s.InsertZaiSnapshot(snapshot)
+	id, err := s.InsertZaiSnapshot(snapshot, 0)
 	if err != nil {
 		t.Fatalf("InsertZaiSnapshot failed: %v", err)
 	}
@@ -46,7 +46,7 @@ func TestZaiStore_InsertAndQuerySnapshot(t *testing.T) {
 	}
 
 	// Query latest
-	latest, err := s.QueryLatestZai()
+	latest, err := s.QueryLatestZai(0)
 	if err != nil {
 		t.Fatalf("QueryLatestZai failed: %v", err)
 	}
@@ -75,7 +75,7 @@ func TestZaiStore_QueryLatestZai_EmptyDB(t *testing.T) {
 	}
 	defer s.Close()
 
-	latest, err := s.QueryLatestZai()
+	latest, err := s.QueryLatestZai(0)
 	if err != nil {
 		t.Fatalf("QueryLatestZai failed: %v", err)
 	}
@@ -109,7 +109,7 @@ func TestZaiStore_QueryZaiRange(t *testing.T) {
 			TokensNumber:     200000000,
 			TokensUsage:      float64(i * 1000),
 		}
-		_, err := s.InsertZaiSnapshot(snapshot)
+		_, err := s.InsertZaiSnapshot(snapshot, 0)
 		if err != nil {
 			t.Fatalf("InsertZaiSnapshot %d failed: %v", i, err)
 		}
@@ -117,7 +117,7 @@ func TestZaiStore_QueryZaiRange(t *testing.T) {
 
 	start := base.Add(30 * time.Minute)
 	end := base.Add(3*time.Hour + 30*time.Minute)
-	snapshots, err := s.QueryZaiRange(start, end)
+	snapshots, err := s.QueryZaiRange(start, end, 0)
 	if err != nil {
 		t.Fatalf("QueryZaiRange failed: %v", err)
 	}
@@ -148,14 +148,14 @@ func TestZaiStore_QueryZaiRange_Empty(t *testing.T) {
 		TokensNumber:     200000000,
 		TokensUsage:      1000000,
 	}
-	_, err = s.InsertZaiSnapshot(snapshot)
+	_, err = s.InsertZaiSnapshot(snapshot, 0)
 	if err != nil {
 		t.Fatalf("InsertZaiSnapshot failed: %v", err)
 	}
 
 	start := time.Now().Add(-2 * time.Hour)
 	end := time.Now().Add(-1 * time.Hour)
-	snapshots, err := s.QueryZaiRange(start, end)
+	snapshots, err := s.QueryZaiRange(start, end, 0)
 	if err != nil {
 		t.Fatalf("QueryZaiRange failed: %v", err)
 	}
@@ -189,12 +189,12 @@ func TestZaiStore_QueryZaiRange_WithLimitReturnsLatestChronological(t *testing.T
 			TokensUsage:      float64(i),
 			TokensPercentage: i,
 		}
-		if _, err := s.InsertZaiSnapshot(snapshot); err != nil {
+		if _, err := s.InsertZaiSnapshot(snapshot, 0); err != nil {
 			t.Fatalf("InsertZaiSnapshot[%d] failed: %v", i, err)
 		}
 	}
 
-	snapshots, err := s.QueryZaiRange(base.Add(-time.Minute), base.Add(10*time.Minute), 2)
+	snapshots, err := s.QueryZaiRange(base.Add(-time.Minute), base.Add(10*time.Minute), 0, 2)
 	if err != nil {
 		t.Fatalf("QueryZaiRange with limit failed: %v", err)
 	}
@@ -228,7 +228,7 @@ func TestZaiStore_CreateAndCloseCycle(t *testing.T) {
 
 	for _, tt := range tests {
 		start := time.Now().UTC()
-		cycleID, err := s.CreateZaiCycle(tt.quotaType, start, tt.nextReset)
+		cycleID, err := s.CreateZaiCycle(tt.quotaType, start, tt.nextReset, 0)
 		if err != nil {
 			t.Fatalf("CreateZaiCycle failed for %s: %v", tt.quotaType, err)
 		}
@@ -238,7 +238,7 @@ func TestZaiStore_CreateAndCloseCycle(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		cycle, err := s.QueryActiveZaiCycle(tt.quotaType)
+		cycle, err := s.QueryActiveZaiCycle(tt.quotaType, 0)
 		if err != nil {
 			t.Fatalf("QueryActiveZaiCycle failed for %s: %v", tt.quotaType, err)
 		}
@@ -251,12 +251,12 @@ func TestZaiStore_CreateAndCloseCycle(t *testing.T) {
 		}
 	}
 
-	err = s.CloseZaiCycle("tokens", time.Now().UTC(), 500, 450)
+	err = s.CloseZaiCycle("tokens", time.Now().UTC(), 500, 450, 0)
 	if err != nil {
 		t.Fatalf("CloseZaiCycle failed: %v", err)
 	}
 
-	cycle, err := s.QueryActiveZaiCycle("tokens")
+	cycle, err := s.QueryActiveZaiCycle("tokens", 0)
 	if err != nil {
 		t.Fatalf("QueryActiveZaiCycle failed: %v", err)
 	}
@@ -264,7 +264,7 @@ func TestZaiStore_CreateAndCloseCycle(t *testing.T) {
 		t.Error("Expected no active tokens cycle after close")
 	}
 
-	history, err := s.QueryZaiCycleHistory("tokens")
+	history, err := s.QueryZaiCycleHistory("tokens", 0)
 	if err != nil {
 		t.Fatalf("QueryZaiCycleHistory failed: %v", err)
 	}
@@ -290,7 +290,7 @@ func TestZaiStore_CreateCycleWithNextReset(t *testing.T) {
 	start := time.Now().UTC()
 	nextReset := start.Add(24 * time.Hour)
 
-	cycleID, err := s.CreateZaiCycle("tokens", start, &nextReset)
+	cycleID, err := s.CreateZaiCycle("tokens", start, &nextReset, 0)
 	if err != nil {
 		t.Fatalf("CreateZaiCycle failed: %v", err)
 	}
@@ -298,7 +298,7 @@ func TestZaiStore_CreateCycleWithNextReset(t *testing.T) {
 		t.Error("Expected non-zero cycle ID")
 	}
 
-	cycle, err := s.QueryActiveZaiCycle("tokens")
+	cycle, err := s.QueryActiveZaiCycle("tokens", 0)
 	if err != nil {
 		t.Fatalf("QueryActiveZaiCycle failed: %v", err)
 	}
@@ -321,7 +321,7 @@ func TestZaiStore_UpdateCycle(t *testing.T) {
 	defer s.Close()
 
 	start := time.Now().UTC()
-	_, err = s.CreateZaiCycle("tokens", start, nil)
+	_, err = s.CreateZaiCycle("tokens", start, nil, 0)
 	if err != nil {
 		t.Fatalf("CreateZaiCycle failed: %v", err)
 	}
@@ -336,13 +336,13 @@ func TestZaiStore_UpdateCycle(t *testing.T) {
 	}
 
 	for _, u := range updates {
-		err = s.UpdateZaiCycle("tokens", u.peak, u.delta)
+		err = s.UpdateZaiCycle("tokens", u.peak, u.delta, 0)
 		if err != nil {
 			t.Fatalf("UpdateZaiCycle failed: %v", err)
 		}
 	}
 
-	cycle, err := s.QueryActiveZaiCycle("tokens")
+	cycle, err := s.QueryActiveZaiCycle("tokens", 0)
 	if err != nil {
 		t.Fatalf("QueryActiveZaiCycle failed: %v", err)
 	}
@@ -501,7 +501,7 @@ func TestZaiStore_SnapshotWithoutReset(t *testing.T) {
 		TokensNextResetTime: nil,
 	}
 
-	id, err := s.InsertZaiSnapshot(snapshot)
+	id, err := s.InsertZaiSnapshot(snapshot, 0)
 	if err != nil {
 		t.Fatalf("InsertZaiSnapshot failed: %v", err)
 	}
@@ -509,7 +509,7 @@ func TestZaiStore_SnapshotWithoutReset(t *testing.T) {
 		t.Error("Expected non-zero ID")
 	}
 
-	latest, err := s.QueryLatestZai()
+	latest, err := s.QueryLatestZai(0)
 	if err != nil {
 		t.Fatalf("QueryLatestZai failed: %v", err)
 	}
@@ -546,7 +546,7 @@ func TestZaiStore_MultipleSnapshots(t *testing.T) {
 			TokensNumber:     200000000,
 			TokensUsage:      float64(i * 1000),
 		}
-		_, err := s.InsertZaiSnapshot(snapshot)
+		_, err := s.InsertZaiSnapshot(snapshot, 0)
 		if err != nil {
 			t.Fatalf("InsertZaiSnapshot %d failed: %v", i, err)
 		}
@@ -554,7 +554,7 @@ func TestZaiStore_MultipleSnapshots(t *testing.T) {
 
 	start := base.Add(-1 * time.Hour)
 	end := base.Add(1 * time.Hour)
-	snapshots, err := s.QueryZaiRange(start, end)
+	snapshots, err := s.QueryZaiRange(start, end, 0)
 	if err != nil {
 		t.Fatalf("QueryZaiRange failed: %v", err)
 	}
@@ -562,7 +562,7 @@ func TestZaiStore_MultipleSnapshots(t *testing.T) {
 		t.Errorf("Expected 10 snapshots, got %d", len(snapshots))
 	}
 
-	latest, err := s.QueryLatestZai()
+	latest, err := s.QueryLatestZai(0)
 	if err != nil {
 		t.Fatalf("QueryLatestZai failed: %v", err)
 	}

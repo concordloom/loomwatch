@@ -2264,7 +2264,7 @@ func (h *Handler) currentBoth(w http.ResponseWriter, r *http.Request) {
 		response["synthetic"] = h.buildSyntheticCurrent()
 	}
 	if h.config.HasProvider("zai") && providerTelemetryEnabled(visibility, "zai") {
-		response["zai"] = h.buildZaiCurrent()
+		response["zai"] = h.buildZaiCurrent(h.defaultZaiAccountID())
 	}
 	if h.config.HasProvider("anthropic") && providerTelemetryEnabled(visibility, "anthropic") {
 		response["anthropic"] = h.buildAnthropicCurrent()
@@ -2376,11 +2376,14 @@ func (h *Handler) buildSyntheticCurrent() map[string]interface{} {
 
 // currentZai returns Z.ai quota status
 func (h *Handler) currentZai(w http.ResponseWriter, r *http.Request) {
-	respondJSON(w, http.StatusOK, h.buildZaiCurrent())
+	respondJSON(w, http.StatusOK, h.buildZaiCurrent(h.parseZaiAccountID(r)))
 }
 
-// buildZaiCurrent builds the Z.ai current quota response map.
-func (h *Handler) buildZaiCurrent() map[string]interface{} {
+// buildZaiCurrent builds the Z.ai current quota response map for one account.
+//
+// Fork change: takes the account explicitly now that Z.ai is multi-account.
+// Callers with no account of their own pass defaultZaiAccountID().
+func (h *Handler) buildZaiCurrent(accountID int64) map[string]interface{} {
 	now := time.Now().UTC()
 	response := map[string]interface{}{
 		"capturedAt":  now.Format(time.RFC3339),
@@ -2390,7 +2393,7 @@ func (h *Handler) buildZaiCurrent() map[string]interface{} {
 	}
 
 	if h.store != nil {
-		latest, err := h.store.QueryLatestZai(h.defaultZaiAccountID())
+		latest, err := h.store.QueryLatestZai(accountID)
 		if err != nil {
 			h.logger.Error("failed to query latest Z.ai snapshot", "error", err)
 			return response
@@ -2403,11 +2406,11 @@ func (h *Handler) buildZaiCurrent() map[string]interface{} {
 
 			// Enrich with tracker data (rate, projection)
 			if h.zaiTracker != nil {
-				if tokensSummary, err := h.zaiTracker.UsageSummary("tokens", h.defaultZaiAccountID()); err == nil && tokensSummary != nil {
+				if tokensSummary, err := h.zaiTracker.UsageSummary("tokens", accountID); err == nil && tokensSummary != nil {
 					tokensResp["currentRate"] = tokensSummary.CurrentRate
 					tokensResp["projectedUsage"] = tokensSummary.ProjectedUsage
 				}
-				if timeSummary, err := h.zaiTracker.UsageSummary("time", h.defaultZaiAccountID()); err == nil && timeSummary != nil {
+				if timeSummary, err := h.zaiTracker.UsageSummary("time", accountID); err == nil && timeSummary != nil {
 					timeResp["currentRate"] = timeSummary.CurrentRate
 					timeResp["projectedUsage"] = timeSummary.ProjectedUsage
 				}
@@ -4135,7 +4138,7 @@ func (h *Handler) summaryBoth(w http.ResponseWriter, r *http.Request) {
 		response["synthetic"] = synResp
 	}
 	if h.config.HasProvider("zai") {
-		response["zai"] = h.buildZaiSummaryMap()
+		response["zai"] = h.buildZaiSummaryMap(h.defaultZaiAccountID())
 	}
 	if h.config.HasProvider("openrouter") {
 		response["openrouter"] = h.buildOpenRouterSummaryMap()
@@ -4308,11 +4311,13 @@ func (h *Handler) buildAntigravitySummaryMap() map[string]interface{} {
 
 // summaryZai returns Z.ai usage summary
 func (h *Handler) summaryZai(w http.ResponseWriter, r *http.Request) {
-	respondJSON(w, http.StatusOK, h.buildZaiSummaryMap())
+	respondJSON(w, http.StatusOK, h.buildZaiSummaryMap(h.parseZaiAccountID(r)))
 }
 
-// buildZaiSummaryMap builds the Z.ai summary response.
-func (h *Handler) buildZaiSummaryMap() map[string]interface{} {
+// buildZaiSummaryMap builds the Z.ai summary response for one account.
+//
+// Fork change: scoped to an account now that Z.ai is multi-account.
+func (h *Handler) buildZaiSummaryMap(accountID int64) map[string]interface{} {
 	response := map[string]interface{}{
 		"tokensLimit": buildEmptyZaiSummaryResponse("tokens"),
 		"timeLimit":   buildEmptyZaiSummaryResponse("time"),
@@ -4320,10 +4325,10 @@ func (h *Handler) buildZaiSummaryMap() map[string]interface{} {
 
 	// Try tracker-based summary first (has cycle data)
 	if h.zaiTracker != nil {
-		if tokensSummary, err := h.zaiTracker.UsageSummary("tokens", h.defaultZaiAccountID()); err == nil && tokensSummary != nil {
+		if tokensSummary, err := h.zaiTracker.UsageSummary("tokens", accountID); err == nil && tokensSummary != nil {
 			response["tokensLimit"] = buildZaiTrackerSummaryResponse(tokensSummary)
 		}
-		if timeSummary, err := h.zaiTracker.UsageSummary("time", h.defaultZaiAccountID()); err == nil && timeSummary != nil {
+		if timeSummary, err := h.zaiTracker.UsageSummary("time", accountID); err == nil && timeSummary != nil {
 			response["timeLimit"] = buildZaiTrackerSummaryResponse(timeSummary)
 		}
 		return response
@@ -4331,7 +4336,7 @@ func (h *Handler) buildZaiSummaryMap() map[string]interface{} {
 
 	// Fallback to snapshot-only summary
 	if h.store != nil {
-		latest, err := h.store.QueryLatestZai(h.defaultZaiAccountID())
+		latest, err := h.store.QueryLatestZai(accountID)
 		if err != nil {
 			h.logger.Error("failed to query latest Z.ai snapshot", "error", err)
 			return response
@@ -4941,7 +4946,7 @@ func (h *Handler) insightsBoth(w http.ResponseWriter, r *http.Request, rangeDur 
 		response["synthetic"] = h.buildSyntheticInsights(hidden, rangeDur)
 	}
 	if h.config.HasProvider("zai") && providerTelemetryEnabled(visibility, "zai") {
-		response["zai"] = h.buildZaiInsights(hidden)
+		response["zai"] = h.buildZaiInsights(hidden, h.defaultZaiAccountID())
 	}
 	if h.config.HasProvider("anthropic") && providerTelemetryEnabled(visibility, "anthropic") {
 		response["anthropic"] = h.buildAnthropicInsights(hidden, rangeDur)
@@ -5238,18 +5243,20 @@ func (h *Handler) buildSyntheticInsights(hidden map[string]bool, rangeDur time.D
 // insightsZai returns Z.ai deep analytics with historical data
 func (h *Handler) insightsZai(w http.ResponseWriter, r *http.Request, rangeDur time.Duration) {
 	hidden := h.getHiddenInsightKeys()
-	respondJSON(w, http.StatusOK, h.buildZaiInsights(hidden))
+	respondJSON(w, http.StatusOK, h.buildZaiInsights(hidden, h.parseZaiAccountID(r)))
 }
 
-// buildZaiInsights builds the Z.ai insights response.
-func (h *Handler) buildZaiInsights(hidden map[string]bool) insightsResponse {
+// buildZaiInsights builds the Z.ai insights response for one account.
+//
+// Fork change: scoped to an account now that Z.ai is multi-account.
+func (h *Handler) buildZaiInsights(hidden map[string]bool, accountID int64) insightsResponse {
 	resp := insightsResponse{Stats: []insightStat{}, Insights: []insightItem{}}
 
 	if h.store == nil {
 		return resp
 	}
 
-	latest, err := h.store.QueryLatestZai(h.defaultZaiAccountID())
+	latest, err := h.store.QueryLatestZai(accountID)
 	if err != nil {
 		h.logger.Error("failed to query Z.ai data for insights", "error", err)
 		return resp

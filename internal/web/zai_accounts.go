@@ -234,3 +234,66 @@ func (h *Handler) zaiAccountDelete(w http.ResponseWriter, r *http.Request) {
 
 	respondJSON(w, http.StatusOK, map[string]interface{}{"message": "account deleted", "id": id})
 }
+
+// ZaiAccountsUsage returns current usage for every active Z.ai account.
+//
+// Fork change: feeds the multi-account overview on the Z.ai tab. Without it the
+// dashboard could only ever show one subscription, which is how a second one
+// burns unnoticed — the same failure the exporter side of this work fixes.
+// Shape mirrors /api/minimax/accounts/usage so the existing overview renderer
+// can consume it.
+func (h *Handler) ZaiAccountsUsage(w http.ResponseWriter, r *http.Request) {
+	if h.store == nil {
+		respondJSON(w, http.StatusOK, map[string]interface{}{"accounts": []interface{}{}})
+		return
+	}
+	accounts, err := h.store.QueryActiveProviderAccounts("zai")
+	if err != nil {
+		h.logger.Error("failed to query Z.ai accounts", "error", err)
+		respondJSON(w, http.StatusOK, map[string]interface{}{"accounts": []interface{}{}})
+		return
+	}
+
+	result := make([]map[string]interface{}, 0, len(accounts))
+	for _, acc := range accounts {
+		current := h.buildZaiCurrent(acc.ID)
+		result = append(result, map[string]interface{}{
+			"accountId":   acc.ID,
+			"accountName": acc.Name,
+			"capturedAt":  current["capturedAt"],
+			"quotas":      zaiOverviewQuotas(current),
+		})
+	}
+	respondJSON(w, http.StatusOK, map[string]interface{}{"accounts": result})
+}
+
+// zaiOverviewQuotas flattens the per-quota maps of buildZaiCurrent into the
+// list shape the overview cards read.
+func zaiOverviewQuotas(current map[string]interface{}) []map[string]interface{} {
+	rows := make([]map[string]interface{}, 0, 2)
+	for _, q := range []struct {
+		key   string
+		name  string
+		label string
+	}{
+		{"tokensLimit", "tokens", "Tokens Limit"},
+		{"timeLimit", "time", "Time Limit"},
+	} {
+		raw, ok := current[q.key].(map[string]interface{})
+		if !ok {
+			continue
+		}
+		row := map[string]interface{}{
+			"name":         q.name,
+			"label":        q.label,
+			"usagePercent": raw["percent"],
+			"status":       raw["status"],
+		}
+		// buildZaiCurrent calls it renewsAt; the overview cards read resetAt.
+		if reset, ok := raw["renewsAt"]; ok {
+			row["resetAt"] = reset
+		}
+		rows = append(rows, row)
+	}
+	return rows
+}

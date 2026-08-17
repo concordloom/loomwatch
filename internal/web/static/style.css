@@ -3591,6 +3591,21 @@ body.accounts-overview-mode #sessions-section {
   display: none !important;
 }
 
+/* Z.ai: обзор подписок и одиночная сетка меняются местами. У Codex и MiniMax
+   сетка одна и наполняется скриптом целиком, а у Z.ai карточки заданы в
+   шаблоне, поэтому им нужен отдельный контейнер. */
+#quota-grid-zai {
+  display: none;
+}
+
+body.accounts-overview-mode #quota-grid-zai {
+  display: grid;
+}
+
+body.accounts-overview-mode #quota-grid[data-provider="zai"] {
+  display: none !important;
+}
+
 .accounts-overview-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));

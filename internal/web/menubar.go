@@ -274,7 +274,7 @@ func (h *Handler) buildMenubarProviders(settings *menubar.Settings, includeHidde
 		}
 	}
 	if h.config != nil && h.config.HasProvider("zai") && h.providerDashboardVisible("zai", visibility) {
-		payload := h.buildZaiCurrent()
+		payload := h.buildZaiCurrent(h.defaultZaiAccountID())
 		if card := normalizeProviderCard("zai", resolveProviderTabLabel("zai", labels), "", payload, normalized.WarningPercent, normalized.CriticalPercent); card != nil {
 			providers = append(providers, *card)
 			if captured := parseCapturedAt(payload); captured.After(latest) {

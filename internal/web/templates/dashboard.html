@@ -28,6 +28,13 @@
             </button>
             <ul class="codex-profile-menu" id="codex-profile-menu" role="listbox" aria-label="Select Codex profile"></ul>
         </div>
+        <div class="codex-profile-dropdown" id="zai-profile-dropdown" style="display: none;">
+            <button class="codex-profile-trigger" id="zai-profile-trigger" aria-haspopup="listbox" aria-expanded="false">
+                <span class="codex-profile-label" id="zai-profile-label">Account</span>
+                <svg class="codex-profile-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+            </button>
+            <ul class="codex-profile-menu" id="zai-profile-menu" role="listbox" aria-label="Select Z.ai account"></ul>
+        </div>
         <div class="codex-profile-dropdown" id="minimax-profile-dropdown" style="display: none;">
             <button class="codex-profile-trigger" id="minimax-profile-trigger" aria-haspopup="listbox" aria-expanded="false">
                 <span class="codex-profile-label" id="minimax-profile-label">Account</span>
@@ -145,6 +152,14 @@
             <div class="quota-grid" id="api-integrations-grid"></div>
         </div>
         {{else}}
+        {{if eq .CurrentProvider "zai"}}
+        <!-- Обзор всех подписок Z.ai. Статическая сетка ниже показывает одну
+             выбранную подписку, поэтому обзор рендерится в отдельный
+             контейнер: иначе он затёр бы карточки, и возврат к одной подписке
+             требовал бы перезагрузки страницы. Переключает CSS по классу
+             accounts-overview-mode. -->
+        <div class="quota-grid" id="quota-grid-zai" data-provider="zai"></div>
+        {{end}}
         <div class="quota-grid" id="quota-grid" data-provider="{{.CurrentProvider}}">
             {{if eq .CurrentProvider "zai"}}
             <!-- Z.ai quota cards -->

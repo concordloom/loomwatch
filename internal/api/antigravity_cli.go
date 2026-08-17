@@ -42,7 +42,7 @@ type agySession struct {
 	conn *AntigravityConnection
 }
 
-// AntigravityCLIRunner manages a bounded warm agy process so onWatch can read
+// AntigravityCLIRunner manages a bounded warm agy process so loomWatch can read
 // the richer RetrieveUserQuotaSummary payload. The agy CLI exposes its quota
 // server only while an interactive process is alive and exits without a TTY,
 // so the process is launched in a pseudo-terminal, kept warm between polls,

@@ -1,4 +1,4 @@
-/* onWatch - Clean Minimal Dashboard Theme
+/* loomWatch - Clean Minimal Dashboard Theme
    Inspired by: logip project management UI
    Palette: Teal + Peach accents, soft shadows, rounded cards */
 
@@ -80,10 +80,26 @@
   --font-primary: 'Ubuntu', sans-serif;
   --font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
 
-  /* Transitions */
-  --transition-fast: 150ms ease;
-  --transition-base: 200ms ease;
-  --transition-slow: 300ms ease;
+  /* Motion
+     Кривые заданы явно: встроенные ease/linear слишком слабые для
+     осмысленного движения, а ease-in начинает медленно — он задерживает ровно
+     тот момент, на который смотрит человек, поэтому в интерфейсе не
+     используется. Бюджеты длительности: наведение и нажатие 100–160 мс,
+     подсказки 125–200, выпадающие списки 150–250, модальные окна 200–500.
+     Всё, что не модальное окно, укладывается в 300 мс. */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+
+  --duration-press: 120ms;
+  --duration-hover: 160ms;
+  --duration-popover: 180ms;
+  --duration-dropdown: 220ms;
+  --duration-modal: 280ms;
+
+  --transition-fast: 150ms var(--ease-out);
+  --transition-base: 200ms var(--ease-out);
+  --transition-slow: 300ms var(--ease-in-out);
 
   /* Layout Density Tokens */
   --layout-max-width: 1400px;
@@ -329,7 +345,7 @@ button, input, select { font-family: inherit; }
   font-weight: 500;
   border-radius: 6px;
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: background-color var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast), opacity var(--transition-fast);
   white-space: nowrap;
   flex-shrink: 0;
 }
@@ -404,7 +420,7 @@ button, input, select { font-family: inherit; }
   background: var(--surface-card);
   color: var(--text-secondary);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: background-color var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast), opacity var(--transition-fast);
 }
 .header-btn:hover {
   background: var(--surface-card-alt);
@@ -506,7 +522,7 @@ button, input, select { font-family: inherit; }
   background: var(--surface-card);
   color: var(--text-secondary);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: background-color var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast), opacity var(--transition-fast);
 }
 .theme-toggle:hover {
   background: var(--surface-card-alt);
@@ -1336,7 +1352,7 @@ button, input, select { font-family: inherit; }
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: background-color var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast), opacity var(--transition-fast);
 }
 
 .section-toggle:hover {
@@ -1461,7 +1477,7 @@ button, input, select { font-family: inherit; }
   border: 1px solid var(--border-light);
   padding: 12px;
   cursor: pointer;
-  transition: all var(--transition-base);
+  transition: background-color var(--transition-base), border-color var(--transition-base), color var(--transition-base), box-shadow var(--transition-base), opacity var(--transition-base);
   position: relative;
   overflow: hidden;
   background: var(--surface-card-alt);
@@ -1663,7 +1679,7 @@ button, input, select { font-family: inherit; }
   font-weight: 500;
   border-radius: 6px;
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: background-color var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast), opacity var(--transition-fast);
 }
 .range-btn:hover {
   color: var(--text-primary);
@@ -1724,7 +1740,7 @@ button, input, select { font-family: inherit; }
   font-weight: 500;
   border-radius: 4px;
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: background-color var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast), opacity var(--transition-fast);
   white-space: nowrap;
 }
 .filter-pill:hover {
@@ -1964,7 +1980,7 @@ button, input, select { font-family: inherit; }
   font-weight: 500;
   border-radius: 6px;
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: background-color var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast), opacity var(--transition-fast);
 }
 .page-btn:hover {
   background: var(--surface-card-alt);
@@ -2056,7 +2072,7 @@ button, input, select { font-family: inherit; }
   background: var(--surface-card);
   color: var(--text-secondary);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: background-color var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast), opacity var(--transition-fast);
 }
 .modal-close:hover {
   background: var(--surface-card-alt);
@@ -2509,7 +2525,7 @@ button, input, select { font-family: inherit; }
   background: var(--surface-card);
   color: var(--text-secondary);
   text-decoration: none;
-  transition: all var(--transition-fast);
+  transition: background-color var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast), opacity var(--transition-fast);
 }
 .settings-back:hover {
   background: var(--surface-card-alt);
@@ -2575,7 +2591,7 @@ button, input, select { font-family: inherit; }
   font-family: var(--font-primary);
   border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: background-color var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast), opacity var(--transition-fast);
   white-space: nowrap;
 }
 .settings-tab:hover {
@@ -2995,7 +3011,7 @@ select.settings-input {
   font-family: var(--font-primary);
   border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: background-color var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast), opacity var(--transition-fast);
 }
 .settings-add-btn:hover {
   border-color: var(--accent-teal);
@@ -3032,7 +3048,7 @@ select.settings-input {
   font-family: var(--font-primary);
   border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: background-color var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast), opacity var(--transition-fast);
 }
 .settings-test-btn:hover {
   border-color: var(--accent-teal);
@@ -3456,7 +3472,7 @@ select.settings-input {
   font-weight: 500;
   border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: background-color var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast), opacity var(--transition-fast);
   white-space: nowrap;
   max-width: 160px;
 }
@@ -3517,7 +3533,7 @@ select.settings-input {
   color: var(--text-secondary);
   border-radius: 4px;
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: background-color var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast), opacity var(--transition-fast);
   white-space: nowrap;
 }
 
@@ -3752,7 +3768,7 @@ body.accounts-overview-mode #quota-grid[data-provider="zai"] {
   border-radius: var(--radius-md);
   color: var(--text-secondary);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: background-color var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast), opacity var(--transition-fast);
   position: relative;
 }
 
@@ -3844,7 +3860,7 @@ body.accounts-overview-mode #quota-grid[data-provider="zai"] {
   font-size: 11px;
   cursor: pointer;
   border-radius: var(--radius-sm);
-  transition: all var(--transition-fast);
+  transition: background-color var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast), opacity var(--transition-fast);
 }
 
 .notification-dismiss-all:hover {
@@ -3992,7 +4008,7 @@ body.accounts-overview-mode #quota-grid[data-provider="zai"] {
   cursor: pointer;
   border-radius: var(--radius-sm);
   opacity: 0;
-  transition: all var(--transition-fast);
+  transition: background-color var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast), opacity var(--transition-fast);
 }
 
 .notification-dismiss:focus {
@@ -4166,6 +4182,94 @@ body.accounts-overview-mode #quota-grid[data-provider="zai"] {
   .progress-fill { transition: none; }
   .quota-card, .insights-panel, .chart-section, .cycle-overview-section, .cycles-section, .sessions-section {
     opacity: 1;
+    animation: none;
+  }
+}
+
+/* ═══════════════════════════════════════════
+   MOTION — правила и бюджеты в DESIGN.md
+   ═══════════════════════════════════════════ */
+
+/* Отклик на нажатие. Единственная анимация, которую человек видит сотни раз в
+   день, поэтому она короткая и едва заметная: масштаб ниже 0.95 читается как
+   «интерфейс проваливается». Только transform — раскладка не пересчитывается. */
+.quota-card:active,
+.account-overview-card:active,
+.provider-tab:active,
+.header-btn:active,
+.codex-profile-trigger:active,
+.range-btn:active {
+  transform: scale(0.97);
+  transition: transform var(--duration-press) var(--ease-out);
+}
+
+/* Критическое состояние — единственное, что пульсирует. Пульсация дорога по
+   вниманию: если ею отмечать всё, она перестаёт значить что-либо. Дышит только
+   индикатор, не вся карточка: мигающая плашка на пульте утомляет за минуту. */
+@keyframes lw-critical-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 var(--status-critical); opacity: 1; }
+  50%      { box-shadow: 0 0 0 4px transparent; opacity: 0.65; }
+}
+
+.status-badge[data-status="critical"] .status-dot,
+.status-badge[data-status="danger"] .status-dot {
+  animation: lw-critical-pulse 2s var(--ease-in-out) infinite;
+}
+
+/* Карточка на пределе подсвечивается рамкой, а не заливкой: заливка убивает
+   контраст текста, а рамка видна боковым зрением и не мешает читать число. */
+.quota-card:has(.status-badge[data-status="critical"]),
+.quota-card:has(.status-badge[data-status="danger"]) {
+  border-color: var(--status-danger);
+  box-shadow: var(--shadow-card), 0 0 0 1px var(--status-danger-bg);
+}
+
+/* Обновление значения. Панель перерисовывается каждые две минуты; без метки
+   изменения человек не замечает, что число сдвинулось, а с резкой вспышкой —
+   отвлекается. Короткий подсвет фона решает обе задачи. */
+@keyframes lw-value-changed {
+  from { background-color: var(--accent-teal-muted); }
+  to   { background-color: transparent; }
+}
+
+.usage-percent.lw-changed,
+.aoq-pct.lw-changed {
+  animation: lw-value-changed 600ms var(--ease-out);
+  border-radius: var(--radius-sm);
+}
+
+/* Появление групп — со сдвигом по времени. Стаггер декоративен, поэтому он
+   короткий и никогда не задерживает возможность нажать: карточки уже на месте
+   и кликабельны, анимируется только прозрачность и небольшой сдвиг. */
+@keyframes lw-enter {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.account-overview-card {
+  animation: lw-enter var(--duration-dropdown) var(--ease-out) backwards;
+}
+
+.account-overview-card:nth-child(1) { animation-delay: 0ms; }
+.account-overview-card:nth-child(2) { animation-delay: 45ms; }
+.account-overview-card:nth-child(3) { animation-delay: 90ms; }
+.account-overview-card:nth-child(4) { animation-delay: 135ms; }
+.account-overview-card:nth-child(n+5) { animation-delay: 180ms; }
+
+@media (prefers-reduced-motion: reduce) {
+  .quota-card:active,
+  .account-overview-card:active,
+  .provider-tab:active,
+  .header-btn:active,
+  .codex-profile-trigger:active,
+  .range-btn:active {
+    transform: none;
+  }
+  .status-badge[data-status="critical"] .status-dot,
+  .status-badge[data-status="danger"] .status-dot,
+  .usage-percent.lw-changed,
+  .aoq-pct.lw-changed,
+  .account-overview-card {
     animation: none;
   }
 }

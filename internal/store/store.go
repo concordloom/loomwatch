@@ -17,7 +17,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-// Store provides SQLite storage for onWatch
+// Store provides SQLite storage for loomWatch
 type Store struct {
 	db *sql.DB
 }
@@ -1860,7 +1860,7 @@ func (s *Store) SetSetting(key, value string) error {
 	return nil
 }
 
-// AutoRefreshTokensEnabled reports whether onWatch may perform OAuth token
+// AutoRefreshTokensEnabled reports whether loomWatch may perform OAuth token
 // refresh and write tokens back to coding-harness credential stores.
 // Defaults to true when unset (backward-compatible with existing installs).
 func (s *Store) AutoRefreshTokensEnabled() bool {

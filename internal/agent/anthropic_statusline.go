@@ -182,7 +182,7 @@ func init() {
 	bridgeSetup.checkInterval = bridgeCheckIntervalDefault
 }
 
-// onwatchDataDir returns the onWatch data directory path.
+// onwatchDataDir returns the loomWatch data directory path.
 func onwatchDataDir() string {
 	home, err := os.UserHomeDir()
 	if err != nil || home == "" {

@@ -1,4 +1,4 @@
-// onWatch Dashboard JavaScript
+// loomWatch Dashboard JavaScript
 
 const BASE_PATH = (document.querySelector('meta[name="base-path"]') || {}).content || '';
 const API_BASE = BASE_PATH;
@@ -2754,7 +2754,7 @@ function codexAutoStartBadge(quotaName) {
   const key = quotaName === 'five_hour' ? 'auto_start_5h'
     : (quotaName === 'seven_day' ? 'auto_start_7d' : null);
   if (!key || ps[key] !== 'on') return '';
-  return `<span class="auto-start-badge" title="Auto-start is on (Beta): when this window resets, onWatch sends a tiny Codex request to start the window automatically.">
+  return `<span class="auto-start-badge" title="Auto-start is on (Beta): when this window resets, loomWatch sends a tiny Codex request to start the window automatically.">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
     Auto-start
   </span>`;
@@ -3693,6 +3693,11 @@ function updateCard(quotaType, data, suffix) {
     const newVal = displayPct;
     if (Math.abs(oldVal - newVal) > 0.2) {
       animateValue(percentEl, oldVal, newVal, 400, v => `${v.toFixed(1)}%`);
+      // Fork change: короткая подсветка изменившегося числа. Панель
+      // перерисовывается раз в две минуты, и без метки сдвиг процента проходит
+      // незамеченным. Класс снимается по окончании анимации, иначе повторное
+      // изменение не подсветится.
+      flashChanged(percentEl);
     } else {
       percentEl.textContent = `${displayPct.toFixed(1)}%`;
     }
@@ -3740,6 +3745,17 @@ function updateCard(quotaType, data, suffix) {
   } else if (detailsEl) {
     detailsEl.style.display = 'none';
   }
+}
+
+// Помечает элемент как изменившийся, чтобы CSS подсветил его один раз.
+// Уважает prefers-reduced-motion: при отключённом движении подсветки нет.
+function flashChanged(el) {
+  if (!el) return;
+  if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  el.classList.remove('lw-changed');
+  void el.offsetWidth; // перезапуск анимации
+  el.classList.add('lw-changed');
+  el.addEventListener('animationend', () => el.classList.remove('lw-changed'), { once: true });
 }
 
 function animateValue(el, from, to, duration, formatter) {
@@ -6688,7 +6704,7 @@ function renderAPIIntegrationsHealth() {
       <div class="api-integrations-health-item"><span class="api-integrations-health-label">Alerts: </span><span class="api-integrations-health-value">${formatNumber((Array.isArray(health.alerts) ? health.alerts : []).length)}</span></div>
     </div>
     <div class="api-integrations-health-copy">
-      <p><strong>Rotating files:</strong> Move or rename the active <code>.jsonl</code> file, then let your script create a new one. That starts a fresh source log for new events. Historical charts remain in the database until you clear or replace the stored onWatch data.</p>
+      <p><strong>Rotating files:</strong> Move or rename the active <code>.jsonl</code> file, then let your script create a new one. That starts a fresh source log for new events. Historical charts remain in the database until you clear or replace the stored loomWatch data.</p>
     </div>
   `;
 
@@ -10744,7 +10760,7 @@ function createAPIIntegrationsToggleRow(visibility, health) {
 const providerSettingsConfig = {
   anthropic: {
     title: 'Anthropic',
-    desc: 'Configure how onWatch collects Anthropic usage data. Changes take effect after daemon restart.',
+    desc: 'Configure how loomWatch collects Anthropic usage data. Changes take effect after daemon restart.',
     fields: [
       { id: 'source', label: 'Data Source', type: 'select', options: [
         { value: 'auto', text: 'Auto (statusline + API fallback)' },
@@ -10756,7 +10772,7 @@ const providerSettingsConfig = {
       { id: 'cc_detection', label: 'Claude Code Detection', type: 'select', options: [
         { value: 'on', text: 'On (skip OAuth refresh when CC is running)' },
         { value: 'off', text: 'Off (always attempt OAuth refresh)' },
-      ], default: 'on', hint: 'When enabled, onWatch skips OAuth token refresh while Claude Code is running to prevent login disruption.' },
+      ], default: 'on', hint: 'When enabled, loomWatch skips OAuth token refresh while Claude Code is running to prevent login disruption.' },
     ],
   },
   codex: {
@@ -10777,11 +10793,11 @@ const providerSettingsConfig = {
       { id: 'auto_start_5h', label: 'Auto-start 5h window (Beta)', type: 'select', options: [
         { value: 'off', text: 'Off' },
         { value: 'on', text: 'On' },
-      ], default: 'off', noRestart: true, hint: 'Beta: when the 5-hour window resets, onWatch sends a tiny Codex request to start the window so the fresh limit begins immediately. This consumes a small amount of quota each reset. Applies on the next reset - no daemon restart needed.' },
+      ], default: 'off', noRestart: true, hint: 'Beta: when the 5-hour window resets, loomWatch sends a tiny Codex request to start the window so the fresh limit begins immediately. This consumes a small amount of quota each reset. Applies on the next reset - no daemon restart needed.' },
       { id: 'auto_start_7d', label: 'Auto-start weekly window (Beta)', type: 'select', options: [
         { value: 'off', text: 'Off' },
         { value: 'on', text: 'On' },
-      ], default: 'off', noRestart: true, hint: 'Beta: when the weekly (7-day) window resets, onWatch sends a tiny Codex request to start the window so you keep the full reserve even if you do not use Codex right away. Consumes a small amount of quota. Applies on the next reset - no daemon restart needed.' },
+      ], default: 'off', noRestart: true, hint: 'Beta: when the weekly (7-day) window resets, loomWatch sends a tiny Codex request to start the window so you keep the full reserve even if you do not use Codex right away. Consumes a small amount of quota. Applies on the next reset - no daemon restart needed.' },
     ],
   },
   copilot: {
@@ -10824,7 +10840,7 @@ const providerSettingsConfig = {
   },
   antigravity: {
     title: 'Antigravity',
-    desc: 'Choose where quota data comes from. All Antigravity variants share one Google-account quota, so onWatch shows a single card and labels the active source.',
+    desc: 'Choose where quota data comes from. All Antigravity variants share one Google-account quota, so loomWatch shows a single card and labels the active source.',
     fields: [
       { id: 'source', label: 'Data Source', type: 'select', options: [
         { value: 'both', text: 'Both (prefer agy CLI, fall back to IDE)' },

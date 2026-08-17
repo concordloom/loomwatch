@@ -1,4 +1,4 @@
-// Package config handles loading and validation of onWatch configuration.
+// Package config handles loading and validation of loomWatch configuration.
 // It loads from .env files, environment variables, and CLI flags.
 package config
 
@@ -39,18 +39,18 @@ type Config struct {
 	CopilotToken string // COPILOT_TOKEN (GitHub PAT with copilot scope)
 
 	// Codex provider configuration
-	CodexToken         string // CODEX_TOKEN or auto-detected
-	CodexAutoToken     bool   // true if token was auto-detected
-	CodexAutoSource    string // "codex" | "opencode" when auto-detected (display/logging)
-	CodexHasProfiles   bool   // true if saved profiles exist (enables bootstrap without token)
-	OpenCodeEnabled    bool   // OPENCODE_ENABLED=true: track ChatGPT via OpenCode auth.json (feeds Codex)
+	CodexToken       string // CODEX_TOKEN or auto-detected
+	CodexAutoToken   bool   // true if token was auto-detected
+	CodexAutoSource  string // "codex" | "opencode" when auto-detected (display/logging)
+	CodexHasProfiles bool   // true if saved profiles exist (enables bootstrap without token)
+	OpenCodeEnabled  bool   // OPENCODE_ENABLED=true: track ChatGPT via OpenCode auth.json (feeds Codex)
 	// OpenCode Go provider configuration
 	OpenCodeGoWorkspaceID string // OPENCODE_GO_WORKSPACE_ID
 	OpenCodeGoAuthCookie  string // OPENCODE_GO_AUTH_COOKIE
-	CodexShowAvailable string // CODEX_SHOW_AVAILABLE: "usage" | "available", default "usage" (Codex-specific override)
-	CodexAutoStart5h   bool   // CODEX_AUTO_START_5H: auto-send a starter ping when the 5h window resets (Beta, default off)
-	CodexAutoStart7d   bool   // CODEX_AUTO_START_7D: auto-send a starter ping when the weekly window resets (Beta, default off)
-	DisplayMode        string // ONWATCH_DISPLAY_MODE: "usage" | "available", default "usage" (global, applies to all providers)
+	CodexShowAvailable    string // CODEX_SHOW_AVAILABLE: "usage" | "available", default "usage" (Codex-specific override)
+	CodexAutoStart5h      bool   // CODEX_AUTO_START_5H: auto-send a starter ping when the 5h window resets (Beta, default off)
+	CodexAutoStart7d      bool   // CODEX_AUTO_START_7D: auto-send a starter ping when the weekly window resets (Beta, default off)
+	DisplayMode           string // ONWATCH_DISPLAY_MODE: "usage" | "available", default "usage" (global, applies to all providers)
 
 	// Antigravity provider configuration (auto-detected from local process)
 	AntigravityBaseURL   string // ANTIGRAVITY_BASE_URL (for Docker)
@@ -67,7 +67,7 @@ type Config struct {
 
 	// Moonshot provider configuration
 	MoonshotAPIKey string // MOONSHOT_API_KEY
-	
+
 	// DeepSeek provider configuration
 	DeepSeekAPIKey string // DEEPSEEK_API_KEY
 
@@ -126,6 +126,23 @@ func envWithFallback(primary, fallback string) string {
 		return v
 	}
 	return os.Getenv(fallback)
+}
+
+// brandEnv читает переменную под новым именем бренда, откатываясь на прежние.
+//
+// Fork change: при переименовании loomWatch → loomWatch переменные окружения
+// нельзя менять одномоментно — на прежние имена завязаны секрет
+// onwatch-providers и terragrunt. Новое имя имеет приоритет, прежние
+// продолжают работать, поэтому выкат кода и правка инфраструктуры
+// расцепляются во времени.
+func brandEnv(suffix string) string {
+	if v := os.Getenv("LOOMWATCH_" + suffix); v != "" {
+		return v
+	}
+	if v := os.Getenv("ONWATCH_" + suffix); v != "" {
+		return v
+	}
+	return os.Getenv("SYNTRACK_" + suffix)
 }
 
 // expandTilde replaces a leading ~ with the user's home directory.
@@ -346,7 +363,7 @@ func loadFromEnvAndFlags(flags *flagValues) (*Config, error) {
 	cfg.CodexAutoStart7d = os.Getenv("CODEX_AUTO_START_7D") == "true"
 
 	// Global display mode (applies to all providers unless per-provider override)
-	cfg.DisplayMode = strings.ToLower(strings.TrimSpace(os.Getenv("ONWATCH_DISPLAY_MODE")))
+	cfg.DisplayMode = strings.ToLower(strings.TrimSpace(brandEnv("DISPLAY_MODE")))
 	if cfg.DisplayMode != "usage" && cfg.DisplayMode != "available" {
 		cfg.DisplayMode = ""
 	}
@@ -377,10 +394,10 @@ func loadFromEnvAndFlags(flags *flagValues) (*Config, error) {
 
 	// OpenRouter provider
 	cfg.OpenRouterAPIKey = strings.TrimSpace(os.Getenv("OPENROUTER_API_KEY"))
-	
+
 	// Moonshot provider
 	cfg.MoonshotAPIKey = strings.TrimSpace(os.Getenv("MOONSHOT_API_KEY"))
-	
+
 	// DeepSeek provider
 	cfg.DeepSeekAPIKey = strings.TrimSpace(os.Getenv("DEEPSEEK_API_KEY"))
 
@@ -423,13 +440,13 @@ func loadFromEnvAndFlags(flags *flagValues) (*Config, error) {
 	// File-based auto-detection (DetectKimiCredentials) happens later in main.go preflight
 
 	// Custom API Integrations telemetry ingestion
-	cfg.APIIntegrationsDir = strings.TrimSpace(os.Getenv("ONWATCH_API_INTEGRATIONS_DIR"))
+	cfg.APIIntegrationsDir = strings.TrimSpace(brandEnv("API_INTEGRATIONS_DIR"))
 	cfg.APIIntegrationsEnabled = true
 	cfg.APIIntegrationsRetention = 60 * 24 * time.Hour
-	if env := strings.ToLower(strings.TrimSpace(os.Getenv("ONWATCH_API_INTEGRATIONS_ENABLED"))); env != "" {
+	if env := strings.ToLower(strings.TrimSpace(brandEnv("API_INTEGRATIONS_ENABLED"))); env != "" {
 		cfg.APIIntegrationsEnabled = env == "true" || env == "1" || env == "yes" || env == "on"
 	}
-	if env := strings.TrimSpace(os.Getenv("ONWATCH_API_INTEGRATIONS_RETENTION")); env != "" {
+	if env := strings.TrimSpace(brandEnv("API_INTEGRATIONS_RETENTION")); env != "" {
 		if env == "0" {
 			cfg.APIIntegrationsRetention = 0
 		} else if v, err := time.ParseDuration(env); err == nil {
@@ -440,7 +457,7 @@ func loadFromEnvAndFlags(flags *flagValues) (*Config, error) {
 	// Poll Interval (seconds) - ONWATCH_* first, SYNTRACK_* fallback
 	if flags.interval > 0 {
 		cfg.PollInterval = time.Duration(flags.interval) * time.Second
-	} else if env := envWithFallback("ONWATCH_POLL_INTERVAL", "SYNTRACK_POLL_INTERVAL"); env != "" {
+	} else if env := brandEnv("POLL_INTERVAL"); env != "" {
 		if v, err := strconv.Atoi(env); err == nil {
 			cfg.PollInterval = time.Duration(v) * time.Second
 		}
@@ -449,62 +466,62 @@ func loadFromEnvAndFlags(flags *flagValues) (*Config, error) {
 	// Port
 	if flags.port > 0 {
 		cfg.Port = flags.port
-	} else if env := envWithFallback("ONWATCH_PORT", "SYNTRACK_PORT"); env != "" {
+	} else if env := brandEnv("PORT"); env != "" {
 		if v, err := strconv.Atoi(env); err == nil {
 			cfg.Port = v
 		}
 	}
 
 	// Admin credentials
-	cfg.AdminUser = envWithFallback("ONWATCH_ADMIN_USER", "SYNTRACK_ADMIN_USER")
-	cfg.AdminPass = envWithFallback("ONWATCH_ADMIN_PASS", "SYNTRACK_ADMIN_PASS")
+	cfg.AdminUser = brandEnv("ADMIN_USER")
+	cfg.AdminPass = brandEnv("ADMIN_PASS")
 
 	// DB Path
 	if flags.db != "" {
 		cfg.DBPath = expandTilde(flags.db)
 		cfg.DBPathExplicit = true
-	} else if envDB := envWithFallback("ONWATCH_DB_PATH", "SYNTRACK_DB_PATH"); envDB != "" {
+	} else if envDB := brandEnv("DB_PATH"); envDB != "" {
 		cfg.DBPath = expandTilde(envDB)
 		cfg.DBPathExplicit = true
 	}
 
 	// Log Level
-	cfg.LogLevel = envWithFallback("ONWATCH_LOG_LEVEL", "SYNTRACK_LOG_LEVEL")
+	cfg.LogLevel = brandEnv("LOG_LEVEL")
 
 	// Log Format (CLI flag overrides env var)
 	if flags.logFormat != "" {
 		cfg.LogFormat = flags.logFormat
 	} else {
-		cfg.LogFormat = os.Getenv("ONWATCH_LOG_FORMAT")
+		cfg.LogFormat = brandEnv("LOG_FORMAT")
 	}
 
 	// Metrics token for Prometheus endpoint
-	cfg.MetricsToken = os.Getenv("ONWATCH_METRICS_TOKEN")
+	cfg.MetricsToken = brandEnv("METRICS_TOKEN")
 
 	// Host (bind address)
-	cfg.Host = envWithFallback("ONWATCH_HOST", "SYNTRACK_HOST")
+	cfg.Host = brandEnv("HOST")
 
 	// Secure Cookies
-	if env := envWithFallback("ONWATCH_SECURE_COOKIES", "SYNTRACK_SECURE_COOKIES"); env != "" {
+	if env := brandEnv("SECURE_COOKIES"); env != "" {
 		cfg.SecureCookies = strings.ToLower(env) == "true" || env == "1"
 	}
 
 	// Base Path (subdirectory hosting, e.g. "/onwatch")
-	cfg.BasePath = strings.TrimSpace(os.Getenv("ONWATCH_BASE_PATH"))
+	cfg.BasePath = strings.TrimSpace(brandEnv("BASE_PATH"))
 
 	// Dashboard auth mode (local login vs trusted reverse proxy)
-	cfg.AuthMode = strings.ToLower(strings.TrimSpace(os.Getenv("ONWATCH_AUTH_MODE")))
-	if env := strings.TrimSpace(os.Getenv("ONWATCH_TRUSTED_PROXY_CIDRS")); env != "" {
+	cfg.AuthMode = strings.ToLower(strings.TrimSpace(brandEnv("AUTH_MODE")))
+	if env := strings.TrimSpace(brandEnv("TRUSTED_PROXY_CIDRS")); env != "" {
 		for _, part := range strings.Split(env, ",") {
 			if p := strings.TrimSpace(part); p != "" {
 				cfg.TrustedProxyCIDRs = append(cfg.TrustedProxyCIDRs, p)
 			}
 		}
 	}
-	cfg.TrustedUserHeader = strings.TrimSpace(os.Getenv("ONWATCH_TRUSTED_USER_HEADER"))
+	cfg.TrustedUserHeader = strings.TrimSpace(brandEnv("TRUSTED_USER_HEADER"))
 
 	// Session Idle Timeout (seconds)
-	if env := envWithFallback("ONWATCH_SESSION_IDLE_TIMEOUT", "SYNTRACK_SESSION_IDLE_TIMEOUT"); env != "" {
+	if env := brandEnv("SESSION_IDLE_TIMEOUT"); env != "" {
 		if v, err := strconv.Atoi(env); err == nil {
 			cfg.SessionIdleTimeout = time.Duration(v) * time.Second
 		}
@@ -852,7 +869,7 @@ func (c *Config) String() string {
 	// Redact MiniMax token
 	minimaxDisplay := redactAPIKey(c.MiniMaxAPIKey, "")
 	fmt.Fprintf(&sb, "  MiniMaxAPIKey: %s,\n", minimaxDisplay)
-	
+
 	// Redact Moonshot token
 	moonshotDisplay := redactAPIKey(c.MoonshotAPIKey, "")
 	fmt.Fprintf(&sb, "  MoonshotAPIKey: %s,\n", moonshotDisplay)
@@ -860,7 +877,7 @@ func (c *Config) String() string {
 	// Redact DeepSeek token
 	deepseekDisplay := redactAPIKey(c.DeepSeekAPIKey, "")
 	fmt.Fprintf(&sb, "  DeepSeekAPIKey: %s,\n", deepseekDisplay)
-	
+
 	fmt.Fprintf(&sb, "  APIIntegrationsEnabled: %v,\n", c.APIIntegrationsEnabled)
 	fmt.Fprintf(&sb, "  APIIntegrationsDir: %s,\n", c.APIIntegrationsDir)
 	fmt.Fprintf(&sb, "  APIIntegrationsRetention: %v,\n", c.APIIntegrationsRetention)

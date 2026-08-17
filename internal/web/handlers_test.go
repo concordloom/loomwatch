@@ -75,8 +75,8 @@ func TestHandler_Dashboard_ReturnsHTML(t *testing.T) {
 	if !strings.Contains(body, "<!DOCTYPE html>") {
 		t.Error("expected HTML document in response")
 	}
-	if !strings.Contains(body, "onWatch") {
-		t.Error("expected 'onWatch' in response body")
+	if !strings.Contains(body, "loomWatch") {
+		t.Error("expected 'loomWatch' in response body")
 	}
 }
 

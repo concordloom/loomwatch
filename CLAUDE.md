@@ -1,6 +1,12 @@
-# onWatch
+# loomWatch
 
-Go CLI for AI quota tracking. Polls 15 providers → SQLite → Material Design 3 dashboard.
+Go CLI for AI quota tracking. Polls 15 providers → SQLite → operator dashboard.
+
+**Правя что-либо в `internal/web/` — сначала прочитай [DESIGN.md](DESIGN.md).**
+Там палитра, плотность, состояния, правила движения и запреты. Источник истины по
+стилям — `internal/web/static/style.css`; DESIGN.md описывает его, а не желаемое.
+Прежний `design-system/onwatch/MASTER.md` удалён: он описывал Material Design 3,
+которого в коде нет, и агент по нему делал чужой интерфейс.
 
 ## Task
 
@@ -88,7 +94,7 @@ On `go.sum` changes, update `vendorHash` in `flake.nix` (run `nix build .#onwatc
    - Do NOT use `gh release create` - the workflow handles release creation, cross-compilation (5 platforms), and binary uploads
    - Do NOT run `./app.sh --release` locally - the release must happen through the GitHub Actions pipeline
 
-**Anthropic Rate Limit Bypass:** Anthropic's usage API has aggressive rate limits (~5 requests per token, then 429 for ~5 min). onWatch bypasses this by refreshing the OAuth token when rate limited - each new access token gets a fresh rate limit window. Implementation details:
+**Anthropic Rate Limit Bypass:** Anthropic's usage API has aggressive rate limits (~5 requests per token, then 429 for ~5 min). loomWatch bypasses this by refreshing the OAuth token when rate limited - each new access token gets a fresh rate limit window. Implementation details:
 - `internal/agent/anthropic_agent.go`: Detects 429, calls `RefreshAnthropicToken`, saves new tokens, retries
 - `internal/api/anthropic_oauth.go`: OAuth token refresh endpoint (`console.anthropic.com/v1/oauth/token`)
 - `internal/api/anthropic_token_unix.go`: Writes to macOS Keychain + file for persistence

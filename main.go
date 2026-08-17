@@ -86,7 +86,7 @@ func main() {
 		if runtime.GOOS == "windows" && len(os.Args) == 1 {
 			if strings.Contains(err.Error(), "provider must be configured") {
 				fmt.Fprintln(os.Stderr, "")
-				fmt.Fprintln(os.Stderr, "To set up onWatch, run the PowerShell installer:")
+				fmt.Fprintln(os.Stderr, "To set up loomWatch, run the PowerShell installer:")
 				fmt.Fprintln(os.Stderr, "  irm https://raw.githubusercontent.com/onllm-dev/onwatch/main/install.ps1 | iex")
 				fmt.Fprintln(os.Stderr, "")
 				fmt.Fprintln(os.Stderr, "Or download install.bat from GitHub releases and double-click it.")
@@ -132,7 +132,7 @@ func printMenubarHelp() {
 
 func menubarHelpText() string {
 	return "" +
-		"onWatch Menubar Companion\n\n" +
+		"loomWatch Menubar Companion\n\n" +
 		"Usage: onwatch menubar [OPTIONS]\n\n" +
 		"Options:\n" +
 		"  --port PORT    Dashboard port to connect to (default: 9211)\n" +
@@ -475,7 +475,7 @@ func run() error {
 		return runStatus(testMode)
 	}
 	if hasCommand("--version", "-v", "version") {
-		fmt.Printf("onWatch v%s\n", version)
+		fmt.Printf("loomWatch v%s\n", version)
 		fmt.Println("github.com/onllm-dev/onwatch")
 		fmt.Println("Powered by onllm.dev")
 		return nil
@@ -955,7 +955,7 @@ func run() error {
 			}
 		}
 
-		// ANTHROPIC_SOURCE controls how onWatch gets Anthropic usage data:
+		// ANTHROPIC_SOURCE controls how loomWatch gets Anthropic usage data:
 		//   "auto"       - statusline when fresh, API polling as fallback (default)
 		//   "statusline" - statusline only, no API polling
 		//   "api"        - API polling only, no statusline
@@ -2043,7 +2043,7 @@ func runUpdate() error {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	u := newCLIUpdater(version, logger)
 
-	fmt.Printf("onWatch v%s - checking for updates...\n", version)
+	fmt.Printf("loomWatch v%s - checking for updates...\n", version)
 
 	info, err := u.Check()
 	if err != nil {
@@ -2105,7 +2105,7 @@ func runUpdate() error {
 func printBanner(cfg *config.Config, version string) {
 	fmt.Println()
 	fmt.Println("╔══════════════════════════════════════╗")
-	fmt.Printf("║  onWatch v%-26s ║\n", version)
+	fmt.Printf("║  loomWatch v%-26s ║\n", version)
 	fmt.Println("╠══════════════════════════════════════╣")
 
 	// Show configured providers
@@ -2205,7 +2205,7 @@ func printBanner(cfg *config.Config, version string) {
 }
 
 func printHelp() {
-	fmt.Println("onWatch - Multi-Provider API Usage Tracker")
+	fmt.Println("loomWatch - Multi-Provider API Usage Tracker")
 	fmt.Println()
 	fmt.Println("Usage: onwatch [COMMAND] [OPTIONS]")
 	fmt.Println()

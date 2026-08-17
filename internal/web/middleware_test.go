@@ -238,7 +238,7 @@ func TestAuth_SetsWWWAuthenticate(t *testing.T) {
 		t.Error("expected WWW-Authenticate header to be set")
 	}
 
-	expected := `Basic realm="onWatch"`
+	expected := `Basic realm="loomWatch"`
 	if wwwAuth != expected {
 		t.Errorf("expected WWW-Authenticate to be %q, got %q", expected, wwwAuth)
 	}

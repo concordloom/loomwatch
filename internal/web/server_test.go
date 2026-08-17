@@ -98,8 +98,8 @@ func TestServer_ServesHTML(t *testing.T) {
 	}
 
 	body, _ := io.ReadAll(resp.Body)
-	if !strings.Contains(string(body), "onWatch") {
-		t.Error("Expected body to contain 'onWatch'")
+	if !strings.Contains(string(body), "loomWatch") {
+		t.Error("Expected body to contain 'loomWatch'")
 	}
 
 	// Shutdown
@@ -140,8 +140,8 @@ func TestServer_ServesStaticCSS(t *testing.T) {
 	}
 
 	body, _ := io.ReadAll(resp.Body)
-	if !strings.Contains(string(body), "onWatch") {
-		t.Error("Expected CSS to contain 'onWatch'")
+	if !strings.Contains(string(body), "loomWatch") {
+		t.Error("Expected CSS to contain 'loomWatch'")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -181,8 +181,8 @@ func TestServer_ServesStaticJS(t *testing.T) {
 	}
 
 	body, _ := io.ReadAll(resp.Body)
-	if !strings.Contains(string(body), "onWatch") {
-		t.Error("Expected JS to contain 'onWatch'")
+	if !strings.Contains(string(body), "loomWatch") {
+		t.Error("Expected JS to contain 'loomWatch'")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -243,8 +243,8 @@ func TestServer_EmbeddedAssets(t *testing.T) {
 		path         string
 		expectInBody string
 	}{
-		{"/static/style.css", "onWatch"},
-		{"/static/app.js", "onWatch"},
+		{"/static/style.css", "loomWatch"},
+		{"/static/app.js", "loomWatch"},
 		{"/static/app.js", "const codexChartColorMap ="},
 		{"/static/app.js", "if (data.codex) merged = merged.concat"},
 		{"/static/app.js", "...renewalCategories.codex || []"},

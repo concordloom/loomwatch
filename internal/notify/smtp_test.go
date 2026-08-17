@@ -273,7 +273,7 @@ func TestNewSMTPMailer(t *testing.T) {
 		Password: "password",
 		Protocol: "starttls",
 		FromAddr: "user@example.com",
-		FromName: "onWatch",
+		FromName: "loomWatch",
 		ToAddrs:  []string{"admin@example.com"},
 	}
 	logger := slog.Default()
@@ -769,7 +769,7 @@ func TestSMTPMailer_Send_VerifyHeaders(t *testing.T) {
 		Password: "pass",
 		Protocol: "none",
 		FromAddr: "alerts@onwatch.dev",
-		FromName: "onWatch Alerts",
+		FromName: "loomWatch Alerts",
 		ToAddrs:  []string{"admin@example.com"},
 	}
 
@@ -783,7 +783,7 @@ func TestSMTPMailer_Send_VerifyHeaders(t *testing.T) {
 	data := receivedData
 	mu.Unlock()
 
-	if !strings.Contains(data, "From: onWatch Alerts <alerts@onwatch.dev>") {
+	if !strings.Contains(data, "From: loomWatch Alerts <alerts@onwatch.dev>") {
 		t.Errorf("Missing or incorrect From header in:\n%s", data)
 	}
 	if !strings.Contains(data, "To: admin@example.com") {

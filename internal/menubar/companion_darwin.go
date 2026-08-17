@@ -69,7 +69,7 @@ func (c *trayController) onReady() {
 		logger.Debug("Tray icon set from PNG")
 	}
 
-	systray.SetTooltip("onWatch menubar companion")
+	systray.SetTooltip("loomWatch menubar companion")
 	systray.SetOnTapped(func() {
 		c.toggleMenubar()
 	})
@@ -85,7 +85,7 @@ func (c *trayController) onReady() {
 		}
 	}
 
-	dashboardItem := systray.AddMenuItem("Open Dashboard", "Open the local onWatch dashboard")
+	dashboardItem := systray.AddMenuItem("Open Dashboard", "Open the local loomWatch dashboard")
 	systray.AddSeparator()
 	quitItem := systray.AddMenuItem("Quit Menubar", "Quit the menubar companion")
 
@@ -158,8 +158,8 @@ func (c *trayController) refreshLoop() {
 func (c *trayController) refreshStatus() {
 	logger := slog.Default()
 	if c == nil || c.cfg == nil || c.cfg.SnapshotProvider == nil {
-		systray.SetTitle("onWatch")
-		systray.SetTooltip("onWatch menubar companion")
+		systray.SetTitle("loomWatch")
+		systray.SetTooltip("loomWatch menubar companion")
 		return
 	}
 
@@ -167,12 +167,12 @@ func (c *trayController) refreshStatus() {
 	if err != nil {
 		logger.Error("failed to refresh menubar snapshot", "error", err)
 		systray.SetTitle("--")
-		systray.SetTooltip("onWatch menubar companion unavailable")
+		systray.SetTooltip("loomWatch menubar companion unavailable")
 		return
 	}
 	if snapshot == nil {
 		systray.SetTitle("--")
-		systray.SetTooltip("onWatch menubar companion unavailable")
+		systray.SetTooltip("loomWatch menubar companion unavailable")
 		return
 	}
 
@@ -235,14 +235,14 @@ func (c *trayController) fetchPreferences() (*Settings, error) {
 
 func trayTooltip(snapshot *Snapshot) string {
 	if snapshot == nil {
-		return "onWatch menubar companion"
+		return "loomWatch menubar companion"
 	}
 	aggregate := snapshot.Aggregate
 	if aggregate.ProviderCount == 0 {
-		return "onWatch menubar companion: no provider data available"
+		return "loomWatch menubar companion: no provider data available"
 	}
 	return fmt.Sprintf(
-		"onWatch menubar companion: %s across %d providers, updated %s",
+		"loomWatch menubar companion: %s across %d providers, updated %s",
 		aggregate.Label,
 		aggregate.ProviderCount,
 		snapshot.UpdatedAgo,

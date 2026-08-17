@@ -108,7 +108,7 @@ func (m *CodexAgentManager) SetAutoStartCheck(fn func(quotaName string) bool) {
 }
 
 // rememberProfileWrite records a profile file's current mtime so the profile
-// scanner does not treat onWatch's own credential write-back as an external
+// scanner does not treat loomWatch's own credential write-back as an external
 // modification (which would needlessly stop and restart the agent every scan).
 func (m *CodexAgentManager) rememberProfileWrite(profileName, profilePath string) {
 	if info, err := os.Stat(profilePath); err == nil {

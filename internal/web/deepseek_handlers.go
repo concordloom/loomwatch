@@ -264,7 +264,7 @@ func (h *Handler) buildDeepSeekInsights(currency string, hidden map[string]bool)
 		resp.Insights = append(resp.Insights, insightItem{
 			Type: "info", Severity: "info",
 			Title: "Getting Started",
-			Desc:  "Keep onWatch running to collect DeepSeek usage data. Insights appear after a few snapshots.",
+			Desc:  "Keep loomWatch running to collect DeepSeek usage data. Insights appear after a few snapshots.",
 		})
 		return resp
 	}

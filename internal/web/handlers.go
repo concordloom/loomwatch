@@ -2264,7 +2264,18 @@ func (h *Handler) currentBoth(w http.ResponseWriter, r *http.Request) {
 		response["synthetic"] = h.buildSyntheticCurrent()
 	}
 	if h.config.HasProvider("zai") && providerTelemetryEnabled(visibility, "zai") {
-		response["zai"] = h.buildZaiCurrent(0)
+		// Fork change: на вкладке «All» показываются все подписки, а не одна.
+		// Раньше здесь стоял аккаунт по умолчанию, и две подписки из трёх были
+		// на этой вкладке и в меню-баре невидимы — то есть ровно там, куда
+		// смотрят, когда не открывают вкладку провайдера.
+		zaiAccounts := h.zaiUsageAccounts()
+		if len(zaiAccounts) > 1 {
+			response["zaiAccounts"] = zaiAccounts
+		} else if len(zaiAccounts) == 1 {
+			response["zai"] = zaiAccounts[0]
+		} else {
+			response["zai"] = h.buildZaiCurrent(0)
+		}
 	}
 	if h.config.HasProvider("anthropic") && providerTelemetryEnabled(visibility, "anthropic") {
 		response["anthropic"] = h.buildAnthropicCurrent()

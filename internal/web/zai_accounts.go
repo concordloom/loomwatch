@@ -310,3 +310,28 @@ func zaiOverviewQuotas(current map[string]interface{}) []map[string]interface{} 
 	}
 	return rows
 }
+
+// zaiUsageAccounts возвращает текущее состояние каждой активной подписки Z.ai.
+//
+// Fork change: питает вкладку «All» и меню-бар, которые до этого показывали
+// только подписку по умолчанию. Форма ответа повторяет minimaxUsageAccounts,
+// чтобы фронтенд обрабатывал оба провайдера одинаково.
+func (h *Handler) zaiUsageAccounts() []map[string]interface{} {
+	if h.store == nil {
+		return []map[string]interface{}{}
+	}
+	accounts, err := h.store.QueryActiveProviderAccounts("zai")
+	if err != nil {
+		h.logger.Error("failed to query Z.ai accounts", "error", err)
+		return []map[string]interface{}{}
+	}
+
+	result := make([]map[string]interface{}, 0, len(accounts))
+	for _, acc := range accounts {
+		current := h.buildZaiCurrent(acc.ID)
+		current["accountId"] = acc.ID
+		current["accountName"] = acc.Name
+		result = append(result, current)
+	}
+	return result
+}

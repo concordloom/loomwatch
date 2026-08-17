@@ -6123,7 +6123,10 @@ function normalizeBothQuotas(provider, payload) {
   }
 
   if (provider === 'zai') {
+    // Короткое окно расхода идёт первым: при интенсивной работе упирается оно.
+    // Подпись берётся из данных — длина окна свойство подписки, не константа.
     const map = [
+      { key: 'tokensShortLimit', label: payload.tokensShortLimit?.name || 'Tokens Limit (short)' },
       { key: 'tokensLimit', label: 'Tokens Limit' },
       { key: 'timeLimit', label: 'Time Limit' },
       { key: 'toolCalls', label: 'Tool Calls' },
@@ -6187,6 +6190,10 @@ function buildAllProviderEntries() {
     }
     if (key === 'minimax' || key === 'minimaxAccounts') {
       providerSet.add('minimax');
+      return;
+    }
+    if (key === 'zai' || key === 'zaiAccounts') {
+      providerSet.add('zai');
       return;
     }
     if (bothProviderNames[key]) {
@@ -6351,6 +6358,28 @@ function buildAllProviderEntries() {
           historyRows: Array.isArray(historyPayload?.history)
             ? historyPayload.history
             : (Array.isArray(history.minimax) ? history.minimax : []),
+        });
+      });
+      return;
+    }
+
+    // Fork change: Z.ai стал многоаккаунтным, и на этой вкладке показывались
+    // не все подписки, а первая. Карточка на подписку — тот же приём, что у
+    // MiniMax выше, но без группировки: подписок немного, и видеть их сразу
+    // важнее компактности.
+    if (provider === 'zai' && Array.isArray(current.zaiAccounts) && current.zaiAccounts.length > 0) {
+      current.zaiAccounts.forEach((account, idx) => {
+        const accountID = account.accountId || account.id || idx + 1;
+        if (!isProviderTelemetryEnabled('zai', accountID)) return;
+        const accountName = account.accountName || account.name || `Account ${idx + 1}`;
+        entries.push({
+          provider: 'zai',
+          cardKey: sanitizeProviderCardKey(`zai-${accountID}`),
+          title: `${bothProviderNames.zai || 'Z.ai'} - ${accountName}`,
+          badge: '',
+          quotas: normalizeBothQuotas('zai', account),
+          insights: insights.zai || { stats: [], insights: [] },
+          historyRows: Array.isArray(history.zai) ? history.zai : [],
         });
       });
       return;

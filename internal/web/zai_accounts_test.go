@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -141,4 +142,91 @@ func TestZaiCurrentHonoursAccountQueryParam(t *testing.T) {
 	if got := percentFor("?account=" + strconv.FormatInt(spare.ID, 10)); got != 7 {
 		t.Fatalf("account=spare gave %v%%, want 7 — the view ignores the requested account", got)
 	}
+}
+
+// Fork change / adversarial finding: buildZaiInsights took an accountID but
+// still queried history for the default account, so a quiet subscription showed
+// the busy one's rate, projection and trend under its own name. That is exactly
+// the substitution multi-account support exists to prevent, so it gets a test.
+func TestZaiInsightsUseTheRequestedAccount(t *testing.T) {
+	h, s := newZaiTestHandler(t)
+
+	// Нагрузка кладётся именно в аккаунт по умолчанию: подмена происходила на
+	// него, поэтому тест, где расход лежит в стороннем аккаунте, дефект не
+	// ловит — история просто оказывается пустой.
+	busyID, err := s.DefaultZaiAccountID()
+	if err != nil || busyID == 0 {
+		t.Fatalf("default account: %v", err)
+	}
+	busy := struct{ ID int64 }{ID: busyID}
+	idle, err := s.CreateOrRestoreProviderAccount("zai", "idle")
+	if err != nil {
+		t.Fatalf("create idle: %v", err)
+	}
+
+	// Only the busy account consumes anything; the idle one never moves.
+	now := time.Now().UTC().Truncate(time.Second)
+	for i := 0; i < 10; i++ {
+		at := now.Add(time.Duration(-9+i) * time.Hour)
+		snap := zaiSnapshot(at, 10*i)
+		snap.TokensCurrentValue = float64(100000 * i)
+		snap.TokensUsage = 1000000
+		if _, err := s.InsertZaiSnapshot(snap, busy.ID); err != nil {
+			t.Fatalf("insert busy: %v", err)
+		}
+		idleSnap := zaiSnapshot(at, 0)
+		idleSnap.TokensCurrentValue = 0
+		idleSnap.TokensUsage = 1000000
+		if _, err := s.InsertZaiSnapshot(idleSnap, idle.ID); err != nil {
+			t.Fatalf("insert idle: %v", err)
+		}
+	}
+
+	resp := h.buildZaiInsights(map[string]bool{}, idle.ID)
+	for _, item := range resp.Insights {
+		switch item.Key {
+		case "token_rate", "projected_usage", "trend_24h", "usage_7d":
+			t.Fatalf("idle account reported %q (%s: %s) — history came from another account",
+				item.Key, item.Metric, item.Desc)
+		}
+	}
+}
+
+// The same guard for the logging history table: the consumption column has to
+// carry consumption, not the budget. Reporting the budget inverted the signal —
+// the exhausted subscription read as idle and the untouched one as the heavy
+// consumer.
+func TestZaiLoggingHistoryReportsConsumptionNotBudget(t *testing.T) {
+	h, s := newZaiTestHandler(t)
+
+	acc, err := s.CreateOrRestoreProviderAccount("zai", "sub")
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	snap := zaiSnapshot(time.Now().UTC().Add(-time.Hour).Truncate(time.Second), 91)
+	snap.TokensUsage = 140000       // бюджет окна
+	snap.TokensCurrentValue = 12345 // фактический расход
+	if _, err := s.InsertZaiSnapshot(snap, acc.ID); err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+
+	req := httptest.NewRequest("GET",
+		"/api/logging-history?provider=zai&limit=10&range=1&account="+strconv.FormatInt(acc.ID, 10), nil)
+	w := httptest.NewRecorder()
+	h.LoggingHistory(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status %d, want 200", w.Code)
+	}
+
+	body := w.Body.String()
+	if !strings.Contains(body, "12345") {
+		t.Fatalf("consumption 12345 missing from the table payload: %s", body[:min(len(body), 400)])
+	}
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }

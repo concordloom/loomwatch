@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>onWatch Menubar</title>
+    <title>loomWatch Menubar</title>
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
     <style>
         :root {
@@ -1363,7 +1363,7 @@
         <header class="menubar-header">
             <div class="header-cluster">
                 <div class="brand-mark" aria-hidden="true" id="brand-mark"></div>
-                <div class="header-value" id="header-value">onWatch</div>
+                <div class="header-value" id="header-value">loomWatch</div>
                 <div class="header-meta">
                     <span id="header-count">0</span>
                     <span class="meta-divider"></span>
@@ -1982,7 +1982,7 @@
 
             function updateHeader() {
                 const providers = visibleProviders();
-                headerValue.textContent = "onWatch";
+                headerValue.textContent = "loomWatch";
                 headerValue.classList.remove("hidden");
                 headerValue.setAttribute("aria-hidden", "false");
                 headerCount.textContent = `${providers.length} ${providers.length === 1 ? "provider" : "providers"}`;

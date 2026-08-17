@@ -93,7 +93,17 @@ func (r *ZaiQuotaResponse) ToSnapshot(capturedAt time.Time) *ZaiSnapshot {
 				b, _ := json.Marshal(limit.UsageDetails)
 				snapshot.TimeUsageDetails = string(b)
 			}
-		case "TOKENS_LIMIT":
+		// Fork change: CREDIT_LIMIT is the same spend window under another name.
+		//
+		// Z.ai labels the consumption quota by how the account is billed:
+		// older subscriptions report TOKENS_LIMIT, newer ones CREDIT_LIMIT.
+		// The payload is identical — same unit/number windows (5 hours and a
+		// week), same percentage, same nextResetTime — so the two belong in the
+		// same fields. Upstream's switch has no default branch, so an account
+		// on the newer billing produced an empty snapshot and disappeared from
+		// /metrics entirely: measured 2026-08-17 on a live max subscription
+		// that exported no series at all while two others did.
+		case "TOKENS_LIMIT", "CREDIT_LIMIT":
 			snapshot.TokensLimit = limit.Unit * limit.Number
 			snapshot.TokensUnit = limit.Unit
 			snapshot.TokensNumber = limit.Number

@@ -2264,7 +2264,7 @@ func (h *Handler) currentBoth(w http.ResponseWriter, r *http.Request) {
 		response["synthetic"] = h.buildSyntheticCurrent()
 	}
 	if h.config.HasProvider("zai") && providerTelemetryEnabled(visibility, "zai") {
-		response["zai"] = h.buildZaiCurrent(h.defaultZaiAccountID())
+		response["zai"] = h.buildZaiCurrent(0)
 	}
 	if h.config.HasProvider("anthropic") && providerTelemetryEnabled(visibility, "anthropic") {
 		response["anthropic"] = h.buildAnthropicCurrent()
@@ -2382,8 +2382,9 @@ func (h *Handler) currentZai(w http.ResponseWriter, r *http.Request) {
 // buildZaiCurrent builds the Z.ai current quota response map for one account.
 //
 // Fork change: takes the account explicitly now that Z.ai is multi-account.
-// Callers with no account of their own pass defaultZaiAccountID().
+// Вызывающие без своего аккаунта передают 0 — билдер нормализует сам.
 func (h *Handler) buildZaiCurrent(accountID int64) map[string]interface{} {
+	accountID = h.resolveZaiAccountForRead(accountID)
 	now := time.Now().UTC()
 	response := map[string]interface{}{
 		"capturedAt":  now.Format(time.RFC3339),
@@ -4138,7 +4139,7 @@ func (h *Handler) summaryBoth(w http.ResponseWriter, r *http.Request) {
 		response["synthetic"] = synResp
 	}
 	if h.config.HasProvider("zai") {
-		response["zai"] = h.buildZaiSummaryMap(h.defaultZaiAccountID())
+		response["zai"] = h.buildZaiSummaryMap(0)
 	}
 	if h.config.HasProvider("openrouter") {
 		response["openrouter"] = h.buildOpenRouterSummaryMap()
@@ -4318,6 +4319,7 @@ func (h *Handler) summaryZai(w http.ResponseWriter, r *http.Request) {
 //
 // Fork change: scoped to an account now that Z.ai is multi-account.
 func (h *Handler) buildZaiSummaryMap(accountID int64) map[string]interface{} {
+	accountID = h.resolveZaiAccountForRead(accountID)
 	response := map[string]interface{}{
 		"tokensLimit": buildEmptyZaiSummaryResponse("tokens"),
 		"timeLimit":   buildEmptyZaiSummaryResponse("time"),
@@ -4946,7 +4948,7 @@ func (h *Handler) insightsBoth(w http.ResponseWriter, r *http.Request, rangeDur 
 		response["synthetic"] = h.buildSyntheticInsights(hidden, rangeDur)
 	}
 	if h.config.HasProvider("zai") && providerTelemetryEnabled(visibility, "zai") {
-		response["zai"] = h.buildZaiInsights(hidden, h.defaultZaiAccountID())
+		response["zai"] = h.buildZaiInsights(hidden, 0)
 	}
 	if h.config.HasProvider("anthropic") && providerTelemetryEnabled(visibility, "anthropic") {
 		response["anthropic"] = h.buildAnthropicInsights(hidden, rangeDur)
@@ -5250,6 +5252,7 @@ func (h *Handler) insightsZai(w http.ResponseWriter, r *http.Request, rangeDur t
 //
 // Fork change: scoped to an account now that Z.ai is multi-account.
 func (h *Handler) buildZaiInsights(hidden map[string]bool, accountID int64) insightsResponse {
+	accountID = h.resolveZaiAccountForRead(accountID)
 	resp := insightsResponse{Stats: []insightStat{}, Insights: []insightItem{}}
 
 	if h.store == nil {
@@ -5322,8 +5325,16 @@ func (h *Handler) buildZaiInsights(hidden map[string]bool, accountID int64) insi
 		Value: fmt.Sprintf("%d%%", latest.TokensPercentage),
 		Label: "Tokens Used",
 	})
+	// Fork change: остаток печатается только когда провайдер дал бюджет. У
+	// основной подписки Z.ai абсолютных значений нет, и литеральный «0» рядом с
+	// «91% Tokens Used» противоречил карточке, где то же самое уже честно
+	// названо отсутствующим.
+	tokensLeftValue := compactNum(tokensRemaining)
+	if tokensBudget <= 0 {
+		tokensLeftValue = "n/a"
+	}
 	resp.Stats = append(resp.Stats, insightStat{
-		Value: compactNum(tokensRemaining),
+		Value: tokensLeftValue,
 		Label: "Tokens Left",
 	})
 	resp.Stats = append(resp.Stats, insightStat{
@@ -9145,6 +9156,22 @@ func (h *Handler) defaultZaiAccountID() int64 {
 		return 0
 	}
 	return accounts[0].ID
+}
+
+// resolveZaiAccountForRead нормализует аккаунт один раз на входе в билдер.
+//
+// Fork change: адверсариальная проверка нашла, что buildZaiInsights принимал
+// accountID, но внутри две выборки истории звали defaultZaiAccountID — темп,
+// прогноз и тренд считались по чужой подписке и показывались под именем
+// выбранной. Промах переноса: у MiniMax аккаунт нормализуется в начале и
+// дальше используется только он. Здесь сделано так же, чтобы «забыть
+// подставить параметр» перестало быть достижимым, а не только покрытым тестом:
+// внутри билдера обращаться к defaultZaiAccountID больше незачем.
+func (h *Handler) resolveZaiAccountForRead(accountID int64) int64 {
+	if accountID > 0 {
+		return accountID
+	}
+	return h.defaultZaiAccountID()
 }
 
 // parseMiniMaxAccountID extracts the MiniMax account ID from query params.

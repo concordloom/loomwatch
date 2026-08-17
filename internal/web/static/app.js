@@ -7613,7 +7613,12 @@ function renderCyclesTable() {
 
   const provider = getCurrentProvider();
   const quotaNames = State.cyclesQuotaNames;
-  const usePercent = provider === 'anthropic' || provider === 'copilot' || provider === 'codex' || provider === 'antigravity' || provider === 'minimax' || provider === 'gemini' || provider === 'openrouter' || provider === 'cursor' || provider === 'grok' || provider === 'kimi' || provider === 'moonshot' || provider === 'deepseek' || provider === 'opencode';
+  // Fork change: 'zai' добавлен в список. Без него ячейка печатала голое
+  // значение расхода, а Z.ai по основной подписке абсолютных чисел не даёт —
+  // в таблице стоял 0 у подписки, выжженной на 91%, и 561 у почти нетронутой.
+  // Процент провайдер отдаёт по всем подпискам, и он уже приезжает в ответе:
+  // ячейке даже вешался класс threshold-danger по 91 при тексте «0».
+  const usePercent = provider === 'anthropic' || provider === 'copilot' || provider === 'codex' || provider === 'antigravity' || provider === 'minimax' || provider === 'zai' || provider === 'gemini' || provider === 'openrouter' || provider === 'cursor' || provider === 'grok' || provider === 'kimi' || provider === 'moonshot' || provider === 'deepseek' || provider === 'opencode';
   const deltaUsesPercent = usePercent && provider !== 'minimax' && provider !== 'moonshot' && provider !== 'deepseek';
   const isLoggingHistory = State.isLoggingHistory === true;
   const showAccount = isAccountsOverviewMode(provider);

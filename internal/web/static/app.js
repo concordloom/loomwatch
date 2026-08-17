@@ -4531,6 +4531,10 @@ function overviewAccounts(provider) {
     return State.accountsOverview.accounts.map(a => ({ id: a.accountId || a.id, name: a.accountName || a.name }));
   }
   if (provider === 'minimax') return (State.minimaxAccounts || []).map(a => ({ id: a.id, name: a.name }));
+  // Fork change: without this branch Z.ai fell through to the Codex profiles
+  // below, so the combined chart and tables would have asked for someone
+  // else's account ids — wrong data rather than no data.
+  if (provider === 'zai') return (State.zaiAccounts || []).map(a => ({ id: a.id, name: a.name }));
   return (State.codexProfiles || []).map(p => ({ id: p.id, name: p.name }));
 }
 
@@ -7433,7 +7437,7 @@ async function fetchCycles() {
     // Calculate limit based on range: 1 minute polling = rangeDays * 24 * 60 records
     // Cap at 50000 for performance (enough for ~35 days of 1-minute data)
     const dynamicLimit = Math.min(50000, rangeDays * 24 * 60);
-    const accountParam = provider === 'codex' ? codexAccountParam() : provider === 'minimax' ? minimaxAccountParam() : '';
+    const accountParam = provider === 'codex' ? codexAccountParam() : provider === 'minimax' ? minimaxAccountParam() : provider === 'zai' ? zaiAccountParam() : '';
     const url = `/api/logging-history?provider=${provider}&limit=${dynamicLimit}&range=${rangeDays}${accountParam}`;
     try {
       const res = await authFetch(url);
@@ -8595,7 +8599,7 @@ async function loadModalCycles(quotaType, effectiveProvider) {
     apiType = quotaType === 'toolCalls' ? 'toolcall' : quotaType;
   }
   try {
-    const accountParam = provider === 'codex' ? codexAccountParam() : provider === 'minimax' ? minimaxAccountParam() : '';
+    const accountParam = provider === 'codex' ? codexAccountParam() : provider === 'minimax' ? minimaxAccountParam() : provider === 'zai' ? zaiAccountParam() : '';
     const res = await authFetch(`${API_BASE}/api/cycles?type=${apiType}&provider=${provider}${accountParam}`);
     if (!res.ok) return;
     const cycles = await res.json();
@@ -8906,7 +8910,7 @@ async function fetchCycleOverview() {
         break;
       }
     }
-    const accountParam = effectiveProvider === 'codex' ? codexAccountParam() : effectiveProvider === 'minimax' ? minimaxAccountParam() : '';
+    const accountParam = effectiveProvider === 'codex' ? codexAccountParam() : effectiveProvider === 'minimax' ? minimaxAccountParam() : effectiveProvider === 'zai' ? zaiAccountParam() : '';
     url = `/api/cycle-overview?provider=${effectiveProvider}&groupBy=${requestGroupBy}&limit=50${accountParam}`;
   } else {
     url = `/api/cycle-overview?${providerParam()}&groupBy=${requestGroupBy}&limit=50`;

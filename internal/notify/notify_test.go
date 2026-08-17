@@ -40,7 +40,7 @@ func storeSMTPConfig(t *testing.T, s *store.Store, host string, port int) {
 		Password:    "plaintext-pass",
 		Protocol:    "none",
 		FromAddress: "alerts@onwatch.dev",
-		FromName:    "onWatch",
+		FromName:    "loomWatch",
 		To:          "admin@example.com",
 	})
 	s.SetSetting("smtp", string(smtpJSON))
@@ -655,7 +655,7 @@ func TestNotificationEngine_ConfigureSMTP_WithEncryptedPassword(t *testing.T) {
 		Password:    "my-smtp-password", // plaintext since ConfigureSMTP reads from JSON blob
 		Protocol:    "none",
 		FromAddress: "alerts@onwatch.dev",
-		FromName:    "onWatch",
+		FromName:    "loomWatch",
 		To:          "admin@example.com",
 	})
 	s.SetSetting("smtp", string(smtpJSON))
@@ -718,7 +718,7 @@ func TestNotificationEngine_SetEncryptionKey(t *testing.T) {
 		Password:    encPass,
 		Protocol:    "none",
 		FromAddress: "alerts@onwatch.dev",
-		FromName:    "onWatch",
+		FromName:    "loomWatch",
 		To:          "admin@example.com",
 	})
 	s.SetSetting("smtp", string(smtpJSON))
@@ -760,7 +760,7 @@ func TestNotificationEngine_ConfigureSMTP_LegacyEncryptedPasswordMigratesToCurre
 		Password:    legacyCiphertext,
 		Protocol:    "none",
 		FromAddress: "alerts@onwatch.dev",
-		FromName:    "onWatch",
+		FromName:    "loomWatch",
 		To:          "admin@example.com",
 	})
 	if err := s.SetSetting("smtp", string(smtpJSON)); err != nil {
@@ -833,7 +833,7 @@ func TestNotificationEngine_ConfigureSMTP_CurrentKeyEncryptedPasswordDoesNotRewr
 		Password:    currentCiphertext,
 		Protocol:    "none",
 		FromAddress: "alerts@onwatch.dev",
-		FromName:    "onWatch",
+		FromName:    "loomWatch",
 		To:          "admin@example.com",
 	})
 	if err := s.SetSetting("smtp", string(smtpJSON)); err != nil {
@@ -1193,7 +1193,7 @@ func TestBuildBody(t *testing.T) {
 	if !strings.Contains(body, "Alert Type: warning") {
 		t.Error("Body should contain alert type")
 	}
-	if !strings.Contains(body, "-- Sent by onWatch") {
+	if !strings.Contains(body, "-- Sent by loomWatch") {
 		t.Error("Body should contain footer")
 	}
 }
@@ -1229,7 +1229,7 @@ func TestNotificationEngine_ConfigureSMTP_EmptyHost(t *testing.T) {
 		Password:    "pass",
 		Protocol:    "none",
 		FromAddress: "alerts@onwatch.dev",
-		FromName:    "onWatch",
+		FromName:    "loomWatch",
 		To:          "admin@example.com",
 	})
 	s.SetSetting("smtp", string(smtpJSON))
@@ -1273,7 +1273,7 @@ func TestNotificationEngine_ConfigureSMTP_MultipleRecipients(t *testing.T) {
 		Password:    "pass",
 		Protocol:    "none",
 		FromAddress: "alerts@onwatch.dev",
-		FromName:    "onWatch",
+		FromName:    "loomWatch",
 		To:          "admin@example.com, user2@example.com, user3@example.com",
 	})
 	s.SetSetting("smtp", string(smtpJSON))
@@ -1297,7 +1297,7 @@ func TestNotificationEngine_ConfigureSMTP_DefaultPort(t *testing.T) {
 		Password:    "pass",
 		Protocol:    "none",
 		FromAddress: "alerts@onwatch.dev",
-		FromName:    "onWatch",
+		FromName:    "loomWatch",
 		To:          "admin@example.com",
 	})
 	s.SetSetting("smtp", string(smtpJSON))

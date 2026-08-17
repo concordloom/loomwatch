@@ -5,7 +5,7 @@
             <svg class="brand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M12 2v20M2 12h20M4.93 4.93l14.14 14.14M19.07 4.93L4.93 19.07"/>
             </svg>
-            <span class="brand-text">onWatch</span>
+            <span class="brand-text">loomWatch</span>
         </a>
         {{if gt (len .Providers) 1}}
         <div class="provider-tabs" id="provider-tabs" role="tablist" aria-label="Select provider">
@@ -515,7 +515,7 @@
                             <span class="insight-card-values"><span class="insight-card-metric">JSONL + Tail</span></span>
                         </div>
                         <div class="insight-card-detail" style="max-height:none;opacity:1;margin-top:8px;padding-top:8px;">
-                            <div class="insight-card-desc">Your script makes a normal provider API call, extracts usage from the response, and appends one normalized JSON line into <code>~/.onwatch/api-integrations/</code>.<br> onWatch tails those files and stores the telemetry in SQLite.</div>
+                            <div class="insight-card-desc">Your script makes a normal provider API call, extracts usage from the response, and appends one normalized JSON line into <code>~/.onwatch/api-integrations/</code>.<br> loomWatch tails those files and stores the telemetry in SQLite.</div>
                         </div>
                     </article>
                     <article class="insight-card severity-info expanded">
@@ -524,7 +524,7 @@
                             <span class="insight-card-values"><span class="insight-card-metric">4 Steps</span></span>
                         </div>
                         <div class="insight-card-detail" style="max-height:none;opacity:1;margin-top:8px;padding-top:8px;">
-                            <div class="insight-card-desc">1. Add a wrapper function around your API call. <br> 2. Write events into <code>~/.onwatch/api-integrations/</code>.<br> 3. Keep onWatch running.<br> 4. Verify ingestion in the health panel and the chart above.</div>
+                            <div class="insight-card-desc">1. Add a wrapper function around your API call. <br> 2. Write events into <code>~/.onwatch/api-integrations/</code>.<br> 3. Keep loomWatch running.<br> 4. Verify ingestion in the health panel and the chart above.</div>
                         </div>
                     </article>
                     <article class="insight-card severity-info expanded">
@@ -749,7 +749,7 @@
 
     <footer class="app-footer">
         <div class="footer-content">
-            <span class="footer-brand"><a href="https://onwatch.onllm.dev" class="footer-link" target="_blank" rel="noopener">onWatch v{{.Version}}</a></span>
+            <span class="footer-brand"><a href="https://github.com/concordloom/loomwatch" class="footer-link" target="_blank" rel="noopener">loomWatch v{{.Version}}</a></span>
             <span id="update-badge" class="footer-update" hidden>
                 <button id="update-btn" class="footer-update-btn" title="Click to update">
                     Update to v<span id="update-version"></span>
@@ -759,9 +759,9 @@
             <div class="footer-links">
                 <a href="https://onllm.dev" class="footer-link" target="_blank" rel="noopener">onllm.dev</a>
                 <span class="footer-sep">&#183;</span>
-                <a href="https://github.com/onllm-dev/onwatch" class="footer-link" target="_blank" rel="noopener">GitHub</a>
+                <a href="https://github.com/concordloom/loomwatch" class="footer-link" target="_blank" rel="noopener">GitHub</a>
                 <span class="footer-sep">&#183;</span>
-                <a href="https://buymeacoffee.com/prakersh" class="footer-link footer-support" target="_blank" rel="noopener" title="Support onWatch">Support onWatch</a>
+                <a href="https://github.com/onllm-dev/onwatch" class="footer-link" target="_blank" rel="noopener" title="Upstream project this fork is based on">Based on onWatch · GPL-3.0</a>
             </div>
         </div>
     </footer>

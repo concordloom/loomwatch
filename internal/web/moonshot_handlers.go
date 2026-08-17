@@ -243,7 +243,7 @@ func (h *Handler) buildMoonshotInsights(hidden map[string]bool) insightsResponse
 		resp.Insights = append(resp.Insights, insightItem{
 			Type: "info", Severity: "info",
 			Title: "Getting Started",
-			Desc:  "Keep onWatch running to collect Moonshot usage data. Insights appear after a few snapshots.",
+			Desc:  "Keep loomWatch running to collect Moonshot usage data. Insights appear after a few snapshots.",
 		})
 		return resp
 	}

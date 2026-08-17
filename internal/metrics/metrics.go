@@ -30,28 +30,28 @@ type Metrics struct {
 	// a half-empty snapshot.
 	scrapeMu sync.Mutex
 
-	quotaUtilization    *prometheus.GaugeVec
-	quotaResetTimestamp *prometheus.GaugeVec
-	creditsBalance      *prometheus.GaugeVec
-	agentHealthy        *prometheus.GaugeVec
-	agentLastCycleAge   *prometheus.GaugeVec
-	buildInfo           *prometheus.GaugeVec
+	quotaUtilization    *dualGaugeVec
+	quotaResetTimestamp *dualGaugeVec
+	creditsBalance      *dualGaugeVec
+	agentHealthy        *dualGaugeVec
+	agentLastCycleAge   *dualGaugeVec
+	buildInfo           *dualGaugeVec
 
 	// Counters live outside the Scrape() reset path so they accumulate
 	// monotonically across scrapes (standard Prometheus counter semantics).
-	scrapeErrorsTotal    *prometheus.CounterVec
-	cyclesCompletedTotal *prometheus.CounterVec
-	cyclesFailedTotal    *prometheus.CounterVec
+	scrapeErrorsTotal    *dualCounterVec
+	cyclesCompletedTotal *dualCounterVec
+	cyclesFailedTotal    *dualCounterVec
 
 	// API Integrations (PR #52) - counts/spend are snapshots of the current
 	// DB aggregate rather than event-driven counters because ingestion is in
 	// a separate process path; no `_total` suffix for honesty.
-	apiIntegrationRequests *prometheus.GaugeVec
-	apiIntegrationSpendUSD *prometheus.GaugeVec
+	apiIntegrationRequests *dualGaugeVec
+	apiIntegrationSpendUSD *dualGaugeVec
 
 	// accountInfo is a join-metric (value always 1) mapping numeric account_id
 	// to human-readable account_name for Grafana etc.
-	accountInfo *prometheus.GaugeVec
+	accountInfo *dualGaugeVec
 }
 
 // New creates a new Metrics instance with a custom registry.
@@ -64,106 +64,85 @@ func New() *Metrics {
 
 	m := &Metrics{
 		reg: reg,
-		quotaUtilization: prometheus.NewGaugeVec(
-			prometheus.GaugeOpts{
-				Name: "onwatch_quota_utilization_percent",
-				Help: "Current quota utilization as a percentage (0-100)",
-			},
+		quotaUtilization: newDualGaugeVec(
+			"loomwatch_quota_utilization_percent", "onwatch_quota_utilization_percent",
+			"Current quota utilization as a percentage (0-100)",
 			[]string{"provider", "quota_type", "account_id"},
 		),
-		quotaResetTimestamp: prometheus.NewGaugeVec(
-			prometheus.GaugeOpts{
-				Name: "onwatch_quota_reset_timestamp_seconds",
-				Help: "Unix timestamp (seconds) at which the quota next resets. Compute remaining time with: metric - time()",
-			},
+		quotaResetTimestamp: newDualGaugeVec(
+			"loomwatch_quota_reset_timestamp_seconds", "onwatch_quota_reset_timestamp_seconds",
+			"Unix timestamp (seconds) at which the quota next resets. Compute remaining time with: metric - time()",
 			[]string{"provider", "quota_type", "account_id"},
 		),
-		creditsBalance: prometheus.NewGaugeVec(
-			prometheus.GaugeOpts{
-				Name: "onwatch_credits_balance",
-				Help: "Remaining credits balance. The `unit` label disambiguates per-provider semantics (usd, credits, prompt_credits).",
-			},
+		creditsBalance: newDualGaugeVec(
+			"loomwatch_credits_balance", "onwatch_credits_balance",
+			"Remaining credits balance. The `unit` label disambiguates per-provider semantics (usd, credits, prompt_credits).",
 			[]string{"provider", "account_id", "unit"},
 		),
-		agentHealthy: prometheus.NewGaugeVec(
-			prometheus.GaugeOpts{
-				Name: "onwatch_agent_healthy",
-				Help: "1 if the polling agent has recent successful data (within 2x poll interval), 0 if stale. Reflects poll freshness, not OAuth token validity.",
-			},
+		agentHealthy: newDualGaugeVec(
+			"loomwatch_agent_healthy", "onwatch_agent_healthy",
+			"1 if the polling agent has recent successful data (within 2x poll interval), 0 if stale. Reflects poll freshness, not OAuth token validity.",
 			[]string{"provider", "account_id"},
 		),
-		agentLastCycleAge: prometheus.NewGaugeVec(
-			prometheus.GaugeOpts{
-				Name: "onwatch_agent_last_cycle_age_seconds",
-				Help: "Seconds since the last successful poll cycle",
-			},
+		agentLastCycleAge: newDualGaugeVec(
+			"loomwatch_agent_last_cycle_age_seconds", "onwatch_agent_last_cycle_age_seconds",
+			"Seconds since the last successful poll cycle",
 			[]string{"provider", "account_id"},
 		),
-		buildInfo: prometheus.NewGaugeVec(
-			prometheus.GaugeOpts{
-				Name: "onwatch_build_info",
-				Help: "Build metadata for the running onWatch binary. Always 1; labels carry the info.",
-			},
+		buildInfo: newDualGaugeVec(
+			"loomwatch_build_info", "onwatch_build_info",
+			"Build metadata for the running loomWatch binary. Always 1; labels carry the info.",
 			[]string{"version", "go_version", "commit"},
 		),
-		scrapeErrorsTotal: prometheus.NewCounterVec(
-			prometheus.CounterOpts{
-				Name: "onwatch_scrape_errors_total",
-				Help: "Count of errors encountered while refreshing /metrics from the local store. Alert on rate(...) to detect broken metric collection itself.",
-			},
+		scrapeErrorsTotal: newDualCounterVec(
+			"loomwatch_scrape_errors_total", "onwatch_scrape_errors_total",
+			"Count of errors encountered while refreshing /metrics from the local store. Alert on rate(...) to detect broken metric collection itself.",
 			[]string{"provider", "error_type"},
 		),
-		cyclesCompletedTotal: prometheus.NewCounterVec(
-			prometheus.CounterOpts{
-				Name: "onwatch_cycles_completed_total",
-				Help: "Count of successful poll cycles per provider account. Use rate() for activity; divergence from cycles_failed_total indicates sustained failures.",
-			},
+		cyclesCompletedTotal: newDualCounterVec(
+			"loomwatch_cycles_completed_total", "onwatch_cycles_completed_total",
+			"Count of successful poll cycles per provider account. Use rate() for activity; divergence from cycles_failed_total indicates sustained failures.",
 			[]string{"provider", "account_id"},
 		),
-		cyclesFailedTotal: prometheus.NewCounterVec(
-			prometheus.CounterOpts{
-				Name: "onwatch_cycles_failed_total",
-				Help: "Count of failed poll cycles per provider account, labelled by reason.",
-			},
+		cyclesFailedTotal: newDualCounterVec(
+			"loomwatch_cycles_failed_total", "onwatch_cycles_failed_total",
+			"Count of failed poll cycles per provider account, labelled by reason.",
 			[]string{"provider", "account_id", "reason"},
 		),
-		apiIntegrationRequests: prometheus.NewGaugeVec(
-			prometheus.GaugeOpts{
-				Name: "onwatch_api_integration_requests",
-				Help: "Number of API integration usage events currently stored in the local DB, grouped by integration.",
-			},
+		apiIntegrationRequests: newDualGaugeVec(
+			"loomwatch_api_integration_requests", "onwatch_api_integration_requests",
+			"Number of API integration usage events currently stored in the local DB, grouped by integration.",
 			[]string{"integration"},
 		),
-		apiIntegrationSpendUSD: prometheus.NewGaugeVec(
-			prometheus.GaugeOpts{
-				Name: "onwatch_api_integration_spend_usd",
-				Help: "Cumulative USD spend tracked by API integration ingestion (from the local DB).",
-			},
+		apiIntegrationSpendUSD: newDualGaugeVec(
+			"loomwatch_api_integration_spend_usd", "onwatch_api_integration_spend_usd",
+			"Cumulative USD spend tracked by API integration ingestion (from the local DB).",
 			[]string{"integration"},
 		),
-		accountInfo: prometheus.NewGaugeVec(
-			prometheus.GaugeOpts{
-				Name: "onwatch_account_info",
-				Help: "Join-metric (always 1) mapping numeric account_id to human-readable account_name. Use `{..} * on(account_id) group_left(account_name) onwatch_account_info` in PromQL.",
-			},
+		accountInfo: newDualGaugeVec(
+			"loomwatch_account_info", "onwatch_account_info",
+			"Join-metric (always 1) mapping numeric account_id to human-readable account_name. Use `{..} * on(account_id) group_left(account_name) loomwatch_account_info` in PromQL.",
 			[]string{"provider", "account_id", "account_name"},
 		),
 	}
 
-	reg.MustRegister(
-		m.quotaUtilization,
-		m.quotaResetTimestamp,
-		m.creditsBalance,
-		m.agentHealthy,
-		m.agentLastCycleAge,
-		m.buildInfo,
-		m.scrapeErrorsTotal,
-		m.cyclesCompletedTotal,
-		m.cyclesFailedTotal,
-		m.apiIntegrationRequests,
-		m.apiIntegrationSpendUSD,
-		m.accountInfo,
-	)
+	// Каждая пара регистрируется обеими половинами: новое имя и устаревшее.
+	for _, pair := range [][]prometheus.Collector{
+		m.quotaUtilization.collectors(),
+		m.quotaResetTimestamp.collectors(),
+		m.creditsBalance.collectors(),
+		m.agentHealthy.collectors(),
+		m.agentLastCycleAge.collectors(),
+		m.buildInfo.collectors(),
+		m.scrapeErrorsTotal.collectors(),
+		m.cyclesCompletedTotal.collectors(),
+		m.cyclesFailedTotal.collectors(),
+		m.apiIntegrationRequests.collectors(),
+		m.apiIntegrationSpendUSD.collectors(),
+		m.accountInfo.collectors(),
+	} {
+		reg.MustRegister(pair...)
+	}
 
 	// Populate build_info with whatever we can discover at init time.
 	// main.go should call SetBuildInfo(version) once the app version is known.
@@ -218,7 +197,7 @@ func (m *Metrics) Gather() prometheus.Gatherer {
 // and serves them in Prometheus text format. Using this replaces the previous
 // WriteText/writeResponseWriter shim with the standard promhttp pipeline.
 //
-// Compression is disabled: onWatch metrics bodies are small (<50KB), so the
+// Compression is disabled: loomWatch metrics bodies are small (<50KB), so the
 // transport overhead of gzip is not worth it, and leaving it enabled breaks
 // callers that consume the body directly without an http.Client that decodes
 // gzip transparently.

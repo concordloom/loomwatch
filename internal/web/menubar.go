@@ -79,9 +79,9 @@ func (h *Handler) MenubarTrayTitle(w http.ResponseWriter, r *http.Request) {
 	tooltip := ""
 	if snapshot != nil {
 		if snapshot.Aggregate.ProviderCount == 0 {
-			tooltip = "onWatch: no provider data"
+			tooltip = "loomWatch: no provider data"
 		} else {
-			tooltip = fmt.Sprintf("onWatch: %s across %d providers, updated %s",
+			tooltip = fmt.Sprintf("loomWatch: %s across %d providers, updated %s",
 				snapshot.Aggregate.Label, snapshot.Aggregate.ProviderCount, snapshot.UpdatedAgo)
 		}
 		// Prefer per-segment tooltip when available (shows who is who).

@@ -1,4 +1,4 @@
-// Package web provides HTTP server components for the onWatch dashboard.
+// Package web provides HTTP server components for the loomWatch dashboard.
 package web
 
 import (
@@ -402,7 +402,7 @@ func isStaticAsset(path string, basePath ...string) bool {
 
 // writeUnauthorized sends a 401 Unauthorized response.
 func writeUnauthorized(w http.ResponseWriter) {
-	w.Header().Set("WWW-Authenticate", `Basic realm="onWatch"`)
+	w.Header().Set("WWW-Authenticate", `Basic realm="loomWatch"`)
 	w.WriteHeader(http.StatusUnauthorized)
 	http.Error(w, "Unauthorized", http.StatusUnauthorized)
 }

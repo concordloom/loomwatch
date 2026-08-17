@@ -5297,14 +5297,19 @@ func (h *Handler) buildZaiInsights(hidden map[string]bool, accountID int64) insi
 	// Historical snapshots for rate/trend computation
 	d24h := now.Add(-24 * time.Hour)
 	d7d := now.Add(-7 * 24 * time.Hour)
-	snapshots24h, _ := h.store.QueryZaiRange(d24h, now, h.defaultZaiAccountID())
-	snapshots7d, _ := h.store.QueryZaiRange(d7d, now, h.defaultZaiAccountID())
+	// Fork change: считаем по запрошенной подписке. Здесь оставался
+	// defaultZaiAccountID, из-за чего все исторические выводы (темп, прогноз,
+	// тренд, расход за неделю) строились по чужому аккаунту и показывались под
+	// именем выбранного — ровно тот класс подмены, ради которого делалась
+	// мультиаккаунтность.
+	snapshots24h, _ := h.store.QueryZaiRange(d24h, now, accountID)
+	snapshots7d, _ := h.store.QueryZaiRange(d7d, now, accountID)
 
-	// Plan capacity: "usage" field IS the daily budget (resets daily)
-	dailyTokenBudget := tokensBudget // e.g., 200,000,000 tokens/day
-	monthlyTokenCapacity := dailyTokenBudget * 30
-	dailyTimeBudget := timeBudget // e.g., 1000 time units/day
-	monthlyTimeCapacity := dailyTimeBudget * 30
+	// Budget of one reset window. The provider reports "usage" as the budget of
+	// whatever window the plan uses; it is not a day, so nothing is scaled from
+	// it (see the plan_capacity insight below).
+	dailyTokenBudget := tokensBudget
+	dailyTimeBudget := timeBudget
 
 	// Avg tokens per tool call
 	var avgTokensPerCall float64
@@ -5461,22 +5466,30 @@ func (h *Handler) buildZaiInsights(hidden map[string]bool, accountID int64) insi
 		}
 	}
 
-	// 7. Plan Capacity (daily vs monthly context)
+	// 7. Plan Capacity — budget of the reset window, without extrapolation.
+	//
+	// Fork change: this used to call the budget "daily" and advertise a monthly
+	// capacity as 30 × that. Z.ai Coding Plan windows are not days — the tokens
+	// window of the observed subscriptions resets weekly, so the monthly figure
+	// was roughly sevenfold too high and the "today's budget" wording named a
+	// window that does not exist. The budget is reported per reset window, so
+	// that is what we state; multiplying an unknown window length by 30 invents
+	// a number the provider never gave.
 	if !hidden["plan_capacity"] && dailyTokenBudget > 0 {
-		dailyUsedPct := (tokensUsed / dailyTokenBudget) * 100
-		desc := fmt.Sprintf("Daily token limit: %s. Monthly capacity: %s (30 × daily).", compactNum(dailyTokenBudget), compactNum(monthlyTokenCapacity))
-		if dailyUsedPct >= 80 {
-			desc += fmt.Sprintf(" You've consumed %.0f%% of today's budget.", dailyUsedPct)
+		windowUsedPct := (tokensUsed / dailyTokenBudget) * 100
+		desc := fmt.Sprintf("Token budget per reset window: %s.", compactNum(dailyTokenBudget))
+		if windowUsedPct >= 80 {
+			desc += fmt.Sprintf(" You've consumed %.0f%% of the current window.", windowUsedPct)
 		}
 		if dailyTimeBudget > 0 {
-			desc += fmt.Sprintf(" Daily time limit: %.0f units (monthly: %s).", dailyTimeBudget, compactNum(monthlyTimeCapacity))
+			desc += fmt.Sprintf(" Time budget per window: %.0f units.", dailyTimeBudget)
 		}
 		resp.Insights = append(resp.Insights, insightItem{
 			Key:  "plan_capacity",
 			Type: "factual", Severity: "info",
 			Title:    "Plan Capacity",
-			Metric:   compactNum(monthlyTokenCapacity),
-			Sublabel: fmt.Sprintf("%s tokens/day", compactNum(dailyTokenBudget)),
+			Metric:   compactNum(dailyTokenBudget),
+			Sublabel: "tokens per reset window",
 			Desc:     desc,
 		})
 	}
@@ -11291,22 +11304,28 @@ func (h *Handler) loggingHistoryZai(w http.ResponseWriter, r *http.Request) {
 		capturedAt = append(capturedAt, snap.CapturedAt)
 		ids = append(ids, snap.ID)
 
+		// Fork change: в колонку расхода шёл TokensUsage, который в ответе
+		// Z.ai означает БЮДЖЕТ, а не потребление (см. комментарий в
+		// buildZaiTokensQuotaResponse). Сигнал был инвертирован: подписка,
+		// выжженная на 91%, показывала 0, а почти нетронутая — 140 000, и
+		// оператор читал по таблице обратный ответ на вопрос «кто жжёт».
+		// Расход — это CurrentValue; бюджет уходит в Limit.
 		row := map[string]loggingHistoryCrossQuota{
 			"tokens": {
 				Name:     "tokens",
-				Value:    snap.TokensUsage,
-				Limit:    float64(snap.TokensLimit),
+				Value:    snap.TokensCurrentValue,
+				Limit:    snap.TokensUsage,
 				Percent:  float64(snap.TokensPercentage),
 				HasValue: true,
-				HasLimit: true,
+				HasLimit: snap.TokensUsage > 0,
 			},
 			"time": {
 				Name:     "time",
-				Value:    snap.TimeUsage,
-				Limit:    float64(snap.TimeLimit),
+				Value:    snap.TimeCurrentValue,
+				Limit:    snap.TimeUsage,
 				Percent:  float64(snap.TimePercentage),
 				HasValue: true,
-				HasLimit: true,
+				HasLimit: snap.TimeUsage > 0,
 			},
 		}
 		series = append(series, row)

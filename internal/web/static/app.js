@@ -3676,7 +3676,15 @@ function updateCard(quotaType, data, suffix) {
   }
 
   if (fractionEl) {
-    fractionEl.textContent = `${formatNumber(data.usage)} / ${formatNumber(data.limit)}`;
+    // Fork change: Z.ai reports absolute usage only for some subscriptions.
+    // The main one returns 91% with usage and limit both zero, and printing
+    // "0 / 0" under a red 91% bar reads as a contradiction — an operator can
+    // reasonably conclude the number is broken. When the provider gives no
+    // absolute figures, say so instead of inventing zeros.
+    const hasAbsolute = Number(data.limit) > 0 || Number(data.usage) > 0;
+    fractionEl.textContent = hasAbsolute
+      ? `${formatNumber(data.usage ?? 0)} / ${formatNumber(data.limit ?? 0)}`
+      : 'absolute figures not reported';
   }
 
   if (percentEl) {
@@ -3725,7 +3733,7 @@ function updateCard(quotaType, data, suffix) {
     detailsEl.innerHTML = data.usageDetails.map(d =>
       `<div class="usage-detail-row">
         <span class="usage-detail-model">${d.modelCode || d.ModelCode}</span>
-        <span class="usage-detail-count">${formatNumber(d.usage || d.Usage)}</span>
+        <span class="usage-detail-count">${formatNumber(d.usage ?? d.Usage ?? 0)}</span>
       </div>`
     ).join('');
     detailsEl.style.display = '';

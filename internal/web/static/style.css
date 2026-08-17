@@ -2631,7 +2631,10 @@ button, input, select { font-family: inherit; }
   .insights-cards { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
   .api-integrations-insights-panels { grid-template-columns: 1fr; }
   .page-summary-title { font-size: 14px; }
-  .pgs-value { font-size: 22px; }
+  /* Не ниже 24px: на меньшем кегле красный #EF4444 на светлом фоне перестаёт
+     проходить порог контраста для некрупного текста (3.8:1 против нужных 4.5),
+     а именно это число оператор и читает первым. */
+  .pgs-value { font-size: 24px; }
   .both-view { grid-template-columns: 1fr; gap: 16px; }
   .chart-container.both-charts { grid-template-columns: 1fr; }
   .provider-tabs { margin-left: 0; }

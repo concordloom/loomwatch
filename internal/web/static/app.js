@@ -4548,6 +4548,29 @@ function multiAccountPalette() {
 // Build the selectable graph windows (e.g. 5-Hour / Weekly) and a per-window
 // extractor that pulls one numeric value per history entry for an account.
 function buildOverviewWindows(provider, accounts) {
+  // Fork change: Z.ai fell through to the Codex branch below, which builds
+  // windows from quota names and reads history entries by that same key. Z.ai
+  // history is keyed differently (tokensPercent / timePercent), so every line
+  // came out empty — and because zero windows short-circuits the caller, the
+  // history requests were never even issued. Measured on the live dashboard:
+  // three datasets, zero points, no /api/history calls at all.
+  if (provider === 'zai') {
+    return [
+      {
+        key: 'tokens',
+        label: 'Tokens Limit',
+        extract: (d) => (typeof d.tokensPercent === 'number' ? d.tokensPercent : null),
+      },
+      {
+        // A subscription without a time budget reports limit 0. Returning null
+        // there keeps a flat fake line off the chart: the caller drops a window
+        // with no points.
+        key: 'time',
+        label: 'Time Limit',
+        extract: (d) => (d.timeLimit > 0 && typeof d.timePercent === 'number' ? d.timePercent : null),
+      },
+    ];
+  }
   if (provider === 'minimax') {
     const hasWeekly = accounts.some(a => (a.quotas || []).some(q => q.isWeekly || /^weekly_/.test(q.name || '')));
     const maxOver = (entry, match) => {
@@ -4588,7 +4611,9 @@ async function renderMultiAccountChart(provider, range, requestSeq) {
   if (accounts.length === 0) {
     const endpoint = provider === 'minimax'
       ? `${API_BASE}/api/minimax/accounts/usage`
-      : `${API_BASE}/api/codex/accounts/usage`;
+      : provider === 'zai'
+        ? `${API_BASE}/api/zai/accounts/usage`
+        : `${API_BASE}/api/codex/accounts/usage`;
     try {
       const res = await authFetch(endpoint);
       if (res.ok) {

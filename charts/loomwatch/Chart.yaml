@@ -5,7 +5,7 @@ annotations:
     - name: loomwatch
       image: ghcr.io/concordloom/loomwatch:1.0.4
 apiVersion: v2
-appVersion: 1.2.1
+appVersion: 1.2.2
 description: LLM subscription quota tracker with a Prometheus-first interface. Exports remaining quota per provider and account so exhaustion can be alerted on before it stops your workloads.
 home: https://github.com/concordloom/loomwatch
 icon: https://raw.githubusercontent.com/concordloom/loomwatch/main/charts/loomwatch/logo.png
@@ -29,4 +29,4 @@ type: application
 # the same repository and is released with it, so two independent numbers would
 # only raise the question "which chart version carries that fix". The release
 # workflow refuses to publish when the two disagree.
-version: 1.2.1
+version: 1.2.2

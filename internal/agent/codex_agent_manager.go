@@ -608,7 +608,7 @@ func (m *CodexAgentManager) startAgentForProfile(profile CodexProfile) error {
 	m.mu.Unlock()
 
 	// Start agent in goroutine
-	go func() {
+	go func(instance *CodexAgentInstance) {
 		defer func() {
 			if r := recover(); r != nil {
 				m.logger.Error("Codex agent panicked", "profile", profile.Name, "panic", r)
@@ -619,11 +619,10 @@ func (m *CodexAgentManager) startAgentForProfile(profile CodexProfile) error {
 			m.logger.Error("Codex agent error", "profile", profile.Name, "error", err)
 		}
 
-		// Remove from instances when done
-		m.mu.Lock()
-		delete(m.instances, profile.Name)
-		m.mu.Unlock()
-	}()
+		// A replacement may already be running under the same profile name.
+		// Remove this agent only when it is still the registered instance.
+		m.removeInstanceIfCurrent(profile.Name, instance)
+	}(instance)
 
 	return nil
 }
@@ -788,6 +787,15 @@ func (m *CodexAgentManager) stopAgent(profileName string) {
 
 	if exists && instance.Cancel != nil {
 		instance.Cancel()
+	}
+}
+
+func (m *CodexAgentManager) removeInstanceIfCurrent(profileName string, instance *CodexAgentInstance) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.instances[profileName] == instance {
+		delete(m.instances, profileName)
 	}
 }
 

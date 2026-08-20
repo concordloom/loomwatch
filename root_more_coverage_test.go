@@ -37,7 +37,7 @@ func TestRun_CommandDispatchDeterministic(t *testing.T) {
 				t.Fatalf("run version error: %v", err)
 			}
 		})
-		if !strings.Contains(out, "onWatch v") {
+		if !strings.Contains(out, "loomWatch v") {
 			t.Fatalf("expected version output, got: %s", out)
 		}
 	})

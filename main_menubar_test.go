@@ -11,7 +11,7 @@ import (
 func TestMenubarHelpText(t *testing.T) {
 	help := menubarHelpText()
 	for _, fragment := range []string{
-		"onWatch Menubar Companion",
+		"loomWatch Menubar Companion",
 		"Usage: onwatch menubar [OPTIONS]",
 		"--port PORT",
 		"--debug",

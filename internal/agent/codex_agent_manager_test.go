@@ -462,6 +462,28 @@ func TestCodexAgentManager_ScanForProfileChanges_RestartsAndDeletesProfiles(t *t
 	}
 }
 
+func TestCodexAgentManager_RemoveInstanceIfCurrent_PreservesReplacement(t *testing.T) {
+	manager := NewCodexAgentManager(nil, nil, time.Hour, nil)
+	oldInstance := &CodexAgentInstance{}
+	replacement := &CodexAgentInstance{}
+	manager.instances["work"] = replacement
+
+	manager.removeInstanceIfCurrent("work", oldInstance)
+	if got := manager.instances["work"]; got != replacement {
+		t.Fatalf("stale agent removed replacement instance: got %p, want %p", got, replacement)
+	}
+
+	manager.removeInstanceIfCurrent("work", replacement)
+	if _, exists := manager.instances["work"]; exists {
+		t.Fatal("current agent instance was not removed")
+	}
+
+	manager.removeInstanceIfCurrent("missing", oldInstance)
+	if len(manager.instances) != 0 {
+		t.Fatalf("removing an absent instance changed the registry: %v", manager.instances)
+	}
+}
+
 func TestCodexAgentManager_StopAgentAndStopAllAgents(t *testing.T) {
 	fx := newCodexManagerFixture(t)
 

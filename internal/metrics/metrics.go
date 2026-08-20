@@ -468,14 +468,14 @@ func (m *Metrics) scrapeZai(s *store.Store, staleThreshold time.Duration) {
 // zaiQuotaDeclared reports whether the provider said anything at all about a
 // quota, and gates its series on that rather than on consumption.
 //
-// The previous condition was Usage > 0. Usage is the amount spent, so it hid
-// the series exactly while the account was still healthy, and hid it
-// permanently for plans that report a percentage while leaving usage at zero -
-// the case in issue #112, where tokens_usage=0 accompanied tokens_percentage=68
-// and the only number that moved was never exported. Gating on the limit alone
-// would invert the same mistake, because Unit*Number can be zero while usage is
-// real. Any non-zero signal therefore counts as declared; a quota that is zero
-// on every axis is one the plan does not have.
+// The previous condition was Usage > 0. Usage is the amount spent, so the
+// series disappeared exactly while the account was still healthy, and stayed
+// missing for plans that report a percentage while leaving usage at zero - the
+// case in issue #112, where tokens_usage=0 accompanied tokens_percentage=68 and
+// no reset timestamp was emitted either. Gating on the limit alone would invert
+// the same mistake, since Unit*Number can be zero while usage is real. Any
+// non-zero signal therefore counts as declared; a quota reading zero on every
+// axis is one the plan does not have.
 func zaiQuotaDeclared(limit int, usage, currentValue, remaining float64, percentage int) bool {
 	return limit > 0 || usage > 0 || currentValue > 0 || remaining > 0 || percentage > 0
 }
@@ -518,11 +518,12 @@ func (m *Metrics) scrapeMiniMax(s *store.Store, staleThreshold time.Duration) {
 			}
 
 			// MiniMax plans carry a weekly window alongside the rolling
-			// five-hour one, and it is the window that burns over days. The
-			// store already reads it; exporting only the per-model values left
-			// long-horizon exhaustion unobservable. Accounts predating the
-			// weekly window report zeros and are skipped: a flat zero series
-			// would read as a permanently healthy account.
+			// five-hour one, and the weekly window is the one that burns over
+			// days. The store already reads it; exporting only the per-model
+			// values left long-horizon exhaustion unobservable, so an account
+			// could sit at 80% of its week with every quota rule silent.
+			// Accounts predating the weekly window report zeros and are
+			// skipped: a flat zero would read as permanently healthy.
 			if v.HasWeeklyQuota {
 				weeklyLabels := prometheus.Labels{
 					"provider":   method,
@@ -541,7 +542,8 @@ func (m *Metrics) scrapeMiniMax(s *store.Store, staleThreshold time.Duration) {
 // weeklyQuotaType names the weekly companion of a per-model quota. Keeping both
 // windows in the same label dimension is deliberate: a rule can then select or
 // exclude either one without knowing the model set, which changes as the
-// provider adds models.
+// provider adds models. Adding a separate label instead would change the
+// identity of the existing series and break rules already deployed against it.
 func weeklyQuotaType(modelName string) string {
 	return "weekly_" + modelName
 }

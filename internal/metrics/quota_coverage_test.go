@@ -238,3 +238,32 @@ func TestMetrics_MiniMaxWithoutWeeklyQuotaHasNoWeeklySeries(t *testing.T) {
 		t.Fatal("weekly series exported for an account that has no weekly quota")
 	}
 }
+
+// TestZaiQuotaDeclared documents which signals count as provider-declared quota data.
+func TestZaiQuotaDeclared(t *testing.T) {
+	tests := []struct {
+		name       string
+		limit      int
+		usage      float64
+		current    float64
+		remaining  float64
+		percentage int
+		want       bool
+	}{
+		{name: "nothing declared", want: false},
+		{name: "percentage only (issue #112)", percentage: 68, want: true},
+		{name: "limit only", limit: 6, want: true},
+		{name: "usage only", usage: 4000, want: true},
+		{name: "current value only", current: 12, want: true},
+		{name: "remaining only", remaining: 40, want: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := zaiQuotaDeclared(tt.limit, tt.usage, tt.current, tt.remaining, tt.percentage)
+			if got != tt.want {
+				t.Errorf("zaiQuotaDeclared() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

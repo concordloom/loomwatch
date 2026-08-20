@@ -73,9 +73,9 @@ Counters live outside the per-scrape reset path, so `rate()` / `increase()` quer
 
 - `provider` - `anthropic`, `codex`, `copilot`, `zai`, `minimax`, `antigravity`, `gemini`, `openrouter`, `api_integrations`.
 - `quota_type` - provider-specific quota identifier. For Gemini, Antigravity, and MiniMax this is the model ID (`gemini-2.5-pro`, etc.) so **cardinality grows as new models appear**; configure Prometheus retention accordingly.
-  - **MiniMax weekly window:** plans that have one also export `weekly_<model>` (`weekly_general`, `weekly_video`) alongside the rolling five-hour `<model>` series, each with its own `loomwatch_quota_reset_timestamp_seconds`. Accounts without a weekly window (pre-March-23) emit no `weekly_*` series at all rather than a flat zero.
+  - **MiniMax weekly window:** plans that have one also export `weekly_<model>` (for example `weekly_general` or `weekly_MiniMax-M2`) alongside the rolling five-hour `<model>` series, each with its own `loomwatch_quota_reset_timestamp_seconds`. Accounts without a weekly window emit no `weekly_*` series rather than a flat zero. Select the weekly window with `quota_type=~"weekly_.*"` or exclude it with `quota_type!~"weekly_.*"`.
   - Note when writing rules: `quota_type!~"video"` does **not** exclude `weekly_video`, because PromQL label matchers are fully anchored. Use `quota_type!~".*video"` if the intent is "no video quota of any window".
-  - A quota series exists when the provider **declares** the quota, not when it has been consumed. Zero utilization is a real reading; an absent series means the plan has no such quota.
+  - **Z.ai quotas:** `tokens` and `time` exist whenever the provider declares the quota, not only after consumption begins. A plan that reports a percentage while leaving the numeric budget at zero still exports; a quota the plan does not have emits no series.
 - `account_id` - numeric account ID for multi-account providers (Codex, MiniMax); `"default"` for single-account providers.
 - `account_name` - human-readable account name from `loomwatch_account_info` (join-metric).
 - `unit` - on `loomwatch_credits_balance` only: `usd` | `credits` | `prompt_credits`.

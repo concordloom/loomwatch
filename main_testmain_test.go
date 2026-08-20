@@ -20,6 +20,12 @@ func TestMain(m *testing.M) {
 	os.Unsetenv("OPENCODE_HOME")
 	os.Unsetenv("XDG_DATA_HOME")
 
+	// GitHub Actions runs jobs under systemd, so INVOCATION_ID is set on the
+	// runner and update.IsSystemd() reports true there but not on a developer
+	// machine. Clear it so the restart-path tests see the same world in both
+	// places; the systemd test opts back in with t.Setenv.
+	os.Unsetenv("INVOCATION_ID")
+
 	// Auto-start and daemon-spawn safety net: no test may shell out to
 	// launchctl, touch the developer's real LaunchAgents directory, or start a
 	// real onWatch daemon (which would poll live provider APIs). Tests that

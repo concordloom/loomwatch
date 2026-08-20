@@ -194,7 +194,7 @@ func TestPrintBannerAndHelp(t *testing.T) {
 	banner := captureStdout(t, func() {
 		printBanner(cfg, "1.2.3")
 	})
-	for _, want := range []string{"onWatch v1.2.3", "Providers:", "Synthetic API Key:", "Codex (auto):", "Mode:      TEST"} {
+	for _, want := range []string{"loomWatch v1.2.3", "Providers:", "Synthetic API Key:", "Codex (auto):", "Mode:      TEST"} {
 		if !strings.Contains(banner, want) {
 			t.Fatalf("banner should contain %q, got:\n%s", want, banner)
 		}
@@ -203,7 +203,7 @@ func TestPrintBannerAndHelp(t *testing.T) {
 	help := captureStdout(t, func() {
 		printHelp()
 	})
-	for _, want := range []string{"onWatch - Multi-Provider API Usage Tracker", "Commands:", "Test Mode (--test):"} {
+	for _, want := range []string{"loomWatch - Multi-Provider API Usage Tracker", "Commands:", "Test Mode (--test):"} {
 		if !strings.Contains(help, want) {
 			t.Fatalf("help should contain %q, got:\n%s", want, help)
 		}

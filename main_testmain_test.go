@@ -2,17 +2,28 @@ package main
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 )
 
-// TestMain runs before all tests in the main package. It unsets
-// OPENCODE_HOME/XDG_DATA_HOME so the interactive setup flow's codex credential
-// auto-detection never resolves to the host's real
-// ~/.local/share/opencode/auth.json. Setup tests set a temp HOME and drive the
-// prompts with fixed input; reading a real OpenCode ChatGPT login would shift
-// those input sequences and make the tests environment-dependent (flaky).
+// TestMain runs before all tests in the main package. It isolates OpenCode
+// credential lookup from the host so setup tests cannot read a real login and
+// enter an unexpected interactive prompt.
 func TestMain(m *testing.M) {
-	os.Unsetenv("OPENCODE_HOME")
-	os.Unsetenv("XDG_DATA_HOME")
-	os.Exit(m.Run())
+	isolationRoot, err := os.MkdirTemp("", "onwatch-test-auth-*")
+	if err != nil {
+		panic(err)
+	}
+	if err := os.Setenv("OPENCODE_HOME", filepath.Join(isolationRoot, "opencode")); err != nil {
+		_ = os.RemoveAll(isolationRoot)
+		panic(err)
+	}
+	if err := os.Setenv("XDG_DATA_HOME", filepath.Join(isolationRoot, "xdg")); err != nil {
+		_ = os.RemoveAll(isolationRoot)
+		panic(err)
+	}
+
+	code := m.Run()
+	_ = os.RemoveAll(isolationRoot)
+	os.Exit(code)
 }

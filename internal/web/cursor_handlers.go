@@ -57,13 +57,25 @@ func cursorQuotaOrder(name string) int {
 	return 99
 }
 
+// utilStatus maps a utilisation percentage onto the product-wide quota scale.
+// Shared by the Cursor and OpenCode Go handlers.
+//
+// Fork change: this used to run its own scale - warning at 60, critical at 80
+// and "exhausted" at 95. Nothing downstream knew about that fourth state:
+// statusConfig in app.js falls back to healthy for an unknown status, so a
+// quota at 97% rendered a green tick labelled "Healthy"; there is no
+// .status-badge[data-status="exhausted"] rule, so the badge lost its colour;
+// and STATUS_RANK scored it 0, so an exhausted quota never became the state a
+// card leads with. The two providers on this helper were also a grade apart
+// from the other thirteen - 85% read "critical" here and "danger" everywhere
+// else. Thresholds now match DESIGN.md.
 func utilStatus(util float64) string {
 	switch {
 	case util >= 95:
-		return "exhausted"
-	case util >= 80:
 		return "critical"
-	case util >= 60:
+	case util >= 80:
+		return "danger"
+	case util >= 50:
 		return "warning"
 	default:
 		return "healthy"

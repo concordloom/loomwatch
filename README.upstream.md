@@ -18,7 +18,7 @@ See history, get alerts, and open a local web dashboard before you hit throttlin
 
 **Compatibility & Docs**
 
-[![Version](https://img.shields.io/badge/Version-v2.13.4-0EA5E9?style=for-the-badge)](https://github.com/onllm-dev/onwatch/releases/tag/v2.13.4)
+[![Version](https://img.shields.io/badge/Version-v2.13.5-0EA5E9?style=for-the-badge)](https://github.com/onllm-dev/onwatch/releases/tag/v2.13.5)
 [![Go 1.25+](https://img.shields.io/badge/Go-1.25+-00ADD8?style=for-the-badge&logo=go&logoColor=white)](https://go.dev)
 [![Platform](https://img.shields.io/badge/macOS%20%7C%20Linux%20%7C%20Windows-orange?style=for-the-badge&logo=apple&logoColor=white)](#quick-start)
 [![pkg.go.dev](https://img.shields.io/badge/pkg.go.dev-reference-007D9C?style=for-the-badge&logo=go&logoColor=white)](https://pkg.go.dev/github.com/onllm-dev/onwatch/v2)
@@ -51,7 +51,7 @@ If onWatch helps you track your AI spending, consider giving it a star. It helps
 curl -fsSL https://raw.githubusercontent.com/onllm-dev/onwatch/main/install.sh | bash
 ```
 
-This downloads the binary to `~/.onwatch/`, creates a `.env` config, sets up a systemd service (Linux) or self-daemonizes (macOS), and adds `onwatch` to your PATH.
+This downloads the binary to `~/.onwatch/`, creates a `.env` config, sets up a systemd service (Linux) or a launchd agent (macOS, offered during install), and adds `onwatch` to your PATH.
 
 On macOS, the installer downloads the standard binary with menubar support.
 
@@ -415,7 +415,11 @@ Or click the update badge in the dashboard footer when a new version is availabl
 
 **Under systemd**, the update is fully automatic - no manual restart needed. onWatch detects its systemd service via `/proc/self/cgroup`, fixes the unit file if needed (`Restart=always`), runs `systemctl daemon-reload`, and triggers `systemctl restart` for a clean lifecycle-managed restart.
 
-**Standalone mode** (macOS, or Linux without systemd) spawns the new binary, which takes over via PID file. If the spawn fails, onWatch automatically falls back to `systemctl restart` as a safety net.
+**Under launchd** (macOS with auto-start enabled), the update restarts the agent with `launchctl kickstart -k`, so launchd keeps owning the process.
+
+**Standalone mode** (macOS without auto-start, or Linux without systemd) spawns the new binary, which takes over via PID file. If the spawn fails, onWatch automatically falls back to `systemctl restart` as a safety net.
+
+`onwatch update` always leaves onWatch running: if the daemon was stopped (after a reboot, say), the update starts it rather than exiting silently.
 
 The binary validates downloaded updates by checking executable magic bytes (ELF, Mach-O, PE) before replacing itself.
 
@@ -425,9 +429,38 @@ The binary validates downloaded updates by checking executable magic bytes (ELF,
 # systemd (Linux)
 sudo systemctl restart onwatch
 
+# launchd (macOS with auto-start enabled)
+launchctl kickstart -k gui/$UID/dev.onllm.onwatch
+
 # Standalone (macOS / Linux without systemd)
 onwatch stop && onwatch
 ```
+
+---
+
+## Auto-Start at Login (macOS)
+
+Without a launchd agent nothing restarts onWatch after a reboot or logout. The
+installer offers to set this up, and `onwatch setup` / `onwatch update` offer it
+once if it is missing. You can also manage it directly:
+
+```bash
+onwatch service install     # Start automatically at login
+onwatch service status      # Show whether the agent is installed and loaded
+onwatch service uninstall   # Remove the agent
+```
+
+The agent is a per-user LaunchAgent at
+`~/Library/LaunchAgents/dev.onllm.onwatch.plist` with `RunAtLoad` and
+`KeepAlive: {SuccessfulExit: false}` - it restarts onWatch after a crash, but a
+deliberate `onwatch stop` stays stopped until the next login. Declining the
+prompt is remembered in `~/.onwatch/.autostart-declined`, so it is only asked
+once.
+
+For unattended installs, set `ONWATCH_AUTOSTART=yes` (or `no`) before running
+`install.sh`.
+
+On Linux, this role is played by the systemd unit that `install.sh` creates.
 
 ---
 
@@ -654,6 +687,7 @@ rm -rf ~/.onwatch
 
 **Manual install (macOS):**
 ```bash
+onwatch service uninstall   # Remove the launchd auto-start agent, if enabled
 onwatch stop
 rm -rf ~/.onwatch
 sed -i '' '/# onWatch/d; /\.onwatch/d' ~/.zshrc ~/.bash_profile 2>/dev/null

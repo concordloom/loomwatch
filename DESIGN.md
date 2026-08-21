@@ -80,12 +80,20 @@ not a design: `grep -rn ">= 95" --include="*.go" internal/` returns 18 places
 Changing the scale means editing all of them; "change it in two places" is advice
 that will leave seventeen untouched.
 
-Worse: **the scale is not the only one.** `internal/web/cursor_handlers.go` ->
-`utilStatus` uses its own - the warning boundary is 60 rather than 50, there is
-no `danger` state, and at >= 95 it returns `exhausted`, which appears neither in
-the table above nor in the styles (`.exhausted-badge` is drawn in `app.js`, but
-there is no CSS rule for it). Unifying this into one scale is a separate piece of
-work; for now just know that Cursor's states are different.
+`utilStatus` in `internal/web/cursor_handlers.go`, shared by Cursor and OpenCode
+Go, used to run a second scale - warning at 60, no `danger`, and `exhausted` at
+95. It is unified with the table above now, because nothing downstream knew the
+fourth state: `statusConfig` in `app.js` falls back to healthy for an unknown
+status, so a quota at 97% rendered a green tick labelled "Healthy"; there was no
+`.status-badge[data-status="exhausted"]` rule, so the badge lost its colour; and
+`STATUS_RANK` scored it 0, so it never became the state a card leads with.
+`TestUtilStatusNeverReturnsAnUnrenderableState` keeps the two in step.
+
+`.exhausted-badge` is a different thing and stays: it is the provider's own
+"quota exhausted" flag on Antigravity and Gemini cards, not a threshold. It now
+has a rule reusing the critical tokens; `TestUrgencyBadgesHaveStyleRules` checks
+that a badge class referenced in `app.js` actually has a declaration block in
+`style.css`.
 
 **Colour is never the only carrier of meaning.** There is always a state label or
 a percentage next to it: a colour-blind reader and a monochrome screenshot must
@@ -112,10 +120,10 @@ read the same.
 ## Motion
 
 Curves and durations are defined as tokens. Do not write raw numbers in new code -
-**there are still plenty in the old code**: `style.css` holds around thirty
-declarations with raw literals, and the tokens `--duration-hover`,
-`--duration-popover`, `--duration-modal` and `--ease-drawer` are never used. That
-is debt, not an example: when you edit such a spot, move it onto tokens.
+**there are still plenty in the old code**: `style.css` holds 36 declarations
+with raw literals, and the tokens `--duration-hover`, `--duration-popover` and
+`--ease-drawer` are never used. That is debt, not an example: when you edit such
+a spot, move it onto tokens.
 
 ```css
 --ease-out:    cubic-bezier(0.23, 1, 0.32, 1);   /* enter and exit */

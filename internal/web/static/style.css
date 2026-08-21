@@ -1333,6 +1333,25 @@ button, input, select { font-family: inherit; }
   background: var(--status-critical-bg);
   color: var(--status-critical-text);
 }
+
+/* The provider's own "quota exhausted" flag, shown inline in the card title for
+   Antigravity and Gemini. It had no rule at all and rendered as bare inline
+   text, so the most urgent thing on the card was also the least visible. It
+   reuses the critical tokens rather than inventing a colour: it carries the same
+   message as the critical badge, arriving as a provider flag instead of a
+   threshold. The word is always there, so colour is not the only carrier. */
+.exhausted-badge {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  background: var(--status-critical-bg);
+  color: var(--status-critical-text);
+}
 .status-icon { width: 12px; height: 12px; }
 
 .reset-time {

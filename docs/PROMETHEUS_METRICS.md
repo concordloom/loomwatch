@@ -4,12 +4,13 @@ onWatch exposes a Prometheus-compatible `/metrics` endpoint so quota, credit, an
 
 > Status: Beta. Metric names and labels may evolve based on feedback before 1.0. Please open issues or PRs against `onllm-dev/onWatch` with suggestions.
 
-> **Переименование (2026-08-17).** Продукт называется loomWatch, ряды —
-> `loomwatch_*`. На переходный период экспортёр публикует и прежние `onwatch_*`
-> с теми же значениями и пометкой deprecated в HELP, чтобы существующие правила
-> и панели не замолчали в момент выката. Пишите новые запросы на `loomwatch_*`:
-> устаревшая половина будет снята. История, накопленная до переименования,
-> остаётся под старым именем — перенести её под новое нечем.
+> **Rename (2026-08-17).** The product is called loomWatch and the series are
+> `loomwatch_*`. For a transition period the exporter also publishes the former
+> `onwatch_*` with the same values and a deprecated marker in HELP, so that
+> existing rules and panels do not go silent at the moment of the rollout.
+> Write new queries against `loomwatch_*`: the deprecated half will be removed.
+> History accumulated before the rename stays under the old name - there is
+> nothing to migrate it across with.
 
 
 ## Migration notes (pre-1.0)

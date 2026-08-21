@@ -128,13 +128,14 @@ func envWithFallback(primary, fallback string) string {
 	return os.Getenv(fallback)
 }
 
-// brandEnv читает переменную под новым именем бренда, откатываясь на прежние.
+// brandEnv reads a variable under the new brand name, falling back to the
+// previous ones.
 //
-// Fork change: при переименовании loomWatch → loomWatch переменные окружения
-// нельзя менять одномоментно — на прежние имена завязаны секрет
-// onwatch-providers и terragrunt. Новое имя имеет приоритет, прежние
-// продолжают работать, поэтому выкат кода и правка инфраструктуры
-// расцепляются во времени.
+// Fork change: during the onWatch -> loomWatch rename the environment
+// variables cannot be switched in one step - the onwatch-providers secret and
+// terragrunt depend on the previous names. The new name takes priority while
+// the previous ones keep working, so the code rollout and the infrastructure
+// edit are decoupled in time.
 func brandEnv(suffix string) string {
 	if v := os.Getenv("LOOMWATCH_" + suffix); v != "" {
 		return v
@@ -268,10 +269,10 @@ var onwatchEnvKeys = []string{
 	"GEMINI_REFRESH_TOKEN",
 	"GEMINI_ACCESS_TOKEN",
 	"ONWATCH_",
-	// Fork change: без этого префикса файл .env, оформленный под новым именем
-	// бренда, не опознавался как наш и молча не читался — сервис поднимался на
-	// умолчаниях, включая пароль changeme. Откат имён работал для окружения, но
-	// не для файла.
+	// Fork change: without this prefix a .env file written under the new
+	// brand name was not recognised as ours and was silently ignored - the
+	// service came up on defaults, including the password changeme. The name
+	// fallback worked for the environment but not for the file.
 	"LOOMWATCH_",
 }
 

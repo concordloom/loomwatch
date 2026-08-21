@@ -2,19 +2,21 @@ package metrics
 
 import "github.com/prometheus/client_golang/prometheus"
 
-// Fork change: переходная двойная публикация рядов при переименовании бренда.
+// Fork change: transitional dual publication of series during the brand
+// rename.
 //
-// Ряды назывались onwatch_*, и на них завязаны правила Grafana и накопленная
-// история Prometheus. Одномоментное переименование погасило бы алерты и
-// оборвало графики, поэтому экспортёр какое-то время публикует оба имени:
-// loomwatch_* как основное и onwatch_* как устаревшее. Порядок снятия:
-// перевести правила на новое имя, убедиться, что они считают, и только потом
-// удалить устаревший ряд отсюда.
+// The series used to be named onwatch_*, and Grafana rules and the
+// accumulated Prometheus history depend on them. Renaming in one step would
+// have silenced alerts and cut the graphs off, so for a while the exporter
+// publishes both names: loomwatch_* as primary and onwatch_* as deprecated.
+// The removal order is: move the rules to the new name, confirm they
+// evaluate, and only then delete the deprecated series from here.
 //
-// История за прошлое остаётся под старым именем — это неизбежная цена
-// переименования, а не дефект: восстановить её под новым именем нечем.
+// Past history stays under the old name - that is the unavoidable price of
+// the rename, not a defect: there is nothing to restore it under the new
+// name from.
 
-// dualGauge пишет значение в оба ряда сразу.
+// dualGauge writes a value to both series at once.
 type dualGauge struct {
 	primary prometheus.Gauge
 	legacy  prometheus.Gauge
@@ -27,7 +29,7 @@ func (d dualGauge) Set(v float64) {
 	}
 }
 
-// dualCounter увеличивает оба ряда сразу.
+// dualCounter increments both series at once.
 type dualCounter struct {
 	primary prometheus.Counter
 	legacy  prometheus.Counter
@@ -47,7 +49,7 @@ func (d dualCounter) Add(v float64) {
 	}
 }
 
-// dualGaugeVec — пара векторов с одинаковыми метками под разными именами.
+// dualGaugeVec is a pair of vectors with identical labels under different names.
 type dualGaugeVec struct {
 	primary *prometheus.GaugeVec
 	legacy  *prometheus.GaugeVec
@@ -83,7 +85,7 @@ func (v *dualGaugeVec) collectors() []prometheus.Collector {
 	return []prometheus.Collector{v.primary, v.legacy}
 }
 
-// dualCounterVec — то же для счётчиков.
+// dualCounterVec is the same for counters.
 type dualCounterVec struct {
 	primary *prometheus.CounterVec
 	legacy  *prometheus.CounterVec

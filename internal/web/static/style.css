@@ -81,12 +81,12 @@
   --font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
 
   /* Motion
-     Кривые заданы явно: встроенные ease/linear слишком слабые для
-     осмысленного движения, а ease-in начинает медленно — он задерживает ровно
-     тот момент, на который смотрит человек, поэтому в интерфейсе не
-     используется. Бюджеты длительности: наведение и нажатие 100–160 мс,
-     подсказки 125–200, выпадающие списки 150–250, модальные окна 200–500.
-     Всё, что не модальное окно, укладывается в 300 мс. */
+     The curves are declared explicitly: the built-in ease/linear are too
+     weak for meaningful motion, and ease-in starts slowly - it delays
+     exactly the moment a person is looking at, so it is not used in this
+     interface. Duration budgets: hover and press 100-160 ms, tooltips
+     125-200, dropdowns 150-250, modals 200-500. Everything that is not a
+     modal fits within 300 ms. */
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
   --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
@@ -311,8 +311,8 @@ button, input, select { font-family: inherit; }
   color: var(--accent-teal);
 }
 
-/* Словесная часть знака: «loom» обычным, «Watch» полужирным — так пара читается
-   как одно слово с ударением на второй половине, а не как две. */
+/* The wordmark: "loom" regular, "Watch" semibold - that way the pair reads as
+   one word stressed on the second half rather than as two words. */
 .brand-text {
   font-size: 20px;
   font-weight: 400;
@@ -321,8 +321,8 @@ button, input, select { font-family: inherit; }
 }
 .brand-text b { font-weight: 700; }
 
-/* Акцентная нить знака. Отдельным правилом, потому что цвет у неё свой в обеих
-   темах, а остальная часть знака идёт currentColor. */
+/* The mark's accent thread. It gets its own rule because its colour is
+   specific in both themes, while the rest of the mark uses currentColor. */
 .brand-icon .brand-thread-hot { stroke: var(--accent-peach); }
 
 /* Provider Tabs */
@@ -553,9 +553,10 @@ button, input, select { font-family: inherit; }
   width: 100%;
 }
 
-/* Верхняя строка страницы. Раньше здесь стоял заголовок «Dashboard»; теперь
-   строка отвечает на два вопроса пульта — что ближе всего к пределу и когда
-   сбросится. При одиночном аккаунте сводки нет, и остаётся один заголовок. */
+/* The top line of the page. This used to be a "Dashboard" heading; now the
+   line answers the console's two questions - what is closest to its limit and
+   when it resets. With a single account there is no summary and only the
+   heading remains. */
 .page-summary {
   display: flex;
   align-items: center;
@@ -1217,9 +1218,9 @@ button, input, select { font-family: inherit; }
 }
 
 .progress-fill {
-  /* display:block обязателен: полосу рисуют и как <div>, и как <span> внутри
-     карточек обзора, а строчный элемент высоту игнорирует — полоса оставалась
-     пустой при непустом проценте. */
+  /* display:block is required: the bar is drawn both as a <div> and as a
+     <span> inside the overview cards, and an inline element ignores the
+     height - the bar stayed empty on a non-empty percentage. */
   display: block;
   height: 100%;
   border-radius: var(--radius-full);
@@ -2237,8 +2238,9 @@ button, input, select { font-family: inherit; }
   background: var(--surface-page);
 }
 
-/* Две половины: слева назначение пульта, справа форма. На узком экране левая
-   половина уходит — она поясняет, а не требуется для входа. */
+/* Two halves: the console's purpose on the left, the form on the right. On a
+   narrow screen the left half is dropped - it explains, it is not required to
+   log in. */
 .login-shell {
   display: grid;
   grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
@@ -2262,9 +2264,9 @@ button, input, select { font-family: inherit; }
   overflow: hidden;
 }
 
-/* Графика живёт в нижнем правом углу и накрыта вуалью: в первой версии нити
-   проходили прямо сквозь текст и роняли его контраст. Декор не имеет права
-   мешать чтению. */
+/* The graphic lives in the bottom right corner under a veil: in the first
+   version the threads ran straight through the text and destroyed its
+   contrast. Decoration has no right to interfere with reading. */
 .login-weave {
   position: absolute;
   right: -6%;
@@ -2614,8 +2616,8 @@ button, input, select { font-family: inherit; }
   .quota-card { padding: 18px; }
   .range-selector { width: 100%; }
   .range-btn { flex: 1; padding: 8px; font-size: 12px; }
-  /* Левая половина входа поясняет продукт и на узком экране только съедает
-     высоту — форма должна быть первым, что видно. */
+  /* The left half of the login screen explains the product and on a narrow
+     screen only eats height - the form has to be the first thing seen. */
   .login-shell { grid-template-columns: 1fr; min-height: 0; max-width: 420px; }
   .login-aside { display: none; }
   .login-card { padding: 32px 24px; }
@@ -2631,9 +2633,9 @@ button, input, select { font-family: inherit; }
   .insights-cards { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
   .api-integrations-insights-panels { grid-template-columns: 1fr; }
   .page-summary-title { font-size: 14px; }
-  /* Не ниже 24px: на меньшем кегле красный #EF4444 на светлом фоне перестаёт
-     проходить порог контраста для некрупного текста (3.8:1 против нужных 4.5),
-     а именно это число оператор и читает первым. */
+  /* No smaller than 24px: below that size red #EF4444 on a light background
+     stops meeting the contrast threshold for non-large text (3.8:1 against
+     the required 4.5), and this is the number the operator reads first. */
   .pgs-value { font-size: 24px; }
   .both-view { grid-template-columns: 1fr; gap: 16px; }
   .chart-container.both-charts { grid-template-columns: 1fr; }
@@ -2757,9 +2759,10 @@ button, input, select { font-family: inherit; }
   margin-left: 6px;
 }
 
-/* Разделы слева, содержимое справа. Горизонтальные «пилюли» ломались уже на
-   пяти разделах и растягивали форму на всю ширину экрана; колонка держит
-   строку формы читаемой и не меняет вид при добавлении раздела. */
+/* Sections on the left, content on the right. Horizontal pills already broke
+   at five sections and stretched the form across the full screen width; a
+   column keeps the form line readable and does not change the layout when a
+   section is added. */
 .settings-main {
   flex: 1;
   display: grid;
@@ -3627,8 +3630,9 @@ select.settings-input {
   .settings-main { padding: 16px; }
   .settings-fields { grid-template-columns: 1fr; }
   .settings-field-half { grid-column: span 1; }
-  /* На узком экране колонка разделов встаёт над формой и снова становится
-     горизонтальной лентой — вертикальный список съел бы весь первый экран. */
+  /* On a narrow screen the section column moves above the form and becomes a
+     horizontal strip again - a vertical list would eat the whole first
+     screen. */
   .settings-main { grid-template-columns: 1fr; gap: 16px; }
   .settings-tabs {
     position: static;
@@ -3835,9 +3839,10 @@ body.accounts-overview-mode #sessions-section {
   display: none !important;
 }
 
-/* Z.ai: обзор подписок и одиночная сетка меняются местами. У Codex и MiniMax
-   сетка одна и наполняется скриптом целиком, а у Z.ai карточки заданы в
-   шаблоне, поэтому им нужен отдельный контейнер. */
+/* Z.ai: the subscription overview and the single-subscription grid swap
+   places. Codex and MiniMax have one grid that the script fills entirely,
+   whereas the Z.ai cards are declared in the template, so they need a
+   container of their own. */
 #quota-grid-zai {
   display: none;
 }
@@ -4478,12 +4483,12 @@ body.accounts-overview-mode #quota-grid[data-provider="zai"] {
 }
 
 /* ═══════════════════════════════════════════
-   MOTION — правила и бюджеты в DESIGN.md
+   MOTION - rules and budgets in DESIGN.md
    ═══════════════════════════════════════════ */
 
-/* Отклик на нажатие. Единственная анимация, которую человек видит сотни раз в
-   день, поэтому она короткая и едва заметная: масштаб ниже 0.95 читается как
-   «интерфейс проваливается». Только transform — раскладка не пересчитывается. */
+/* Press feedback. The one animation a person sees hundreds of times a day, so
+   it is short and barely noticeable: a scale below 0.95 reads as "the
+   interface is caving in". transform only - no layout recalculation. */
 .quota-card:active,
 .account-overview-card:active,
 .provider-tab:active,
@@ -4494,9 +4499,10 @@ body.accounts-overview-mode #quota-grid[data-provider="zai"] {
   transition: transform var(--duration-press) var(--ease-out);
 }
 
-/* Критическое состояние — единственное среди квот, что пульсирует. Пульсация дорога по
-   вниманию: если ею отмечать всё, она перестаёт значить что-либо. Дышит только
-   индикатор, не вся карточка: мигающая плашка на пульте утомляет за минуту. */
+/* The critical state is the only quota state that pulses. Pulsing is expensive
+   in attention: mark everything with it and it stops meaning anything. Only
+   the indicator breathes, not the whole card: a blinking panel on a console
+   becomes tiring within a minute. */
 @keyframes lw-critical-pulse {
   0%, 100% { opacity: 1; }
   50%      { opacity: 0.45; }
@@ -4506,17 +4512,18 @@ body.accounts-overview-mode #quota-grid[data-provider="zai"] {
   animation: lw-critical-pulse 2s var(--ease-in-out) infinite;
 }
 
-/* Карточка на пределе подсвечивается рамкой, а не заливкой: заливка убивает
-   контраст текста, а рамка видна боковым зрением и не мешает читать число. */
+/* A card at its limit is highlighted with a border, not a fill: a fill kills
+   the text contrast, while a border is visible in peripheral vision and does
+   not get in the way of reading the number. */
 .quota-card:has(.status-badge[data-status="critical"]),
 .quota-card:has(.status-badge[data-status="danger"]) {
   border-color: var(--status-danger);
   box-shadow: var(--shadow-card), 0 0 0 1px var(--status-danger-bg);
 }
 
-/* Обновление значения. Панель перерисовывается каждые две минуты; без метки
-   изменения человек не замечает, что число сдвинулось, а с резкой вспышкой —
-   отвлекается. Короткий подсвет фона решает обе задачи. */
+/* Value update. The dashboard repaints every two minutes; with no change
+   marker a person does not notice that a number moved, and with a harsh flash
+   they get distracted. A short background highlight solves both. */
 @keyframes lw-value-changed {
   from { background-color: var(--accent-teal-muted); }
   to   { background-color: transparent; }
@@ -4527,19 +4534,20 @@ body.accounts-overview-mode #quota-grid[data-provider="zai"] {
   border-radius: var(--radius-sm);
 }
 
-/* Появление групп — со сдвигом по времени. Стаггер декоративен, поэтому он
-   короткий и никогда не задерживает возможность нажать: карточки уже на месте
-   и кликабельны, анимируется только прозрачность и небольшой сдвиг. */
+/* Groups appear with a time offset. The stagger is decorative, so it is short
+   and never delays the ability to click: the cards are already in place and
+   clickable, only opacity and a small shift are animated. */
 @keyframes lw-enter {
   from { opacity: 0; transform: translateY(6px); }
   to   { opacity: 1; transform: none; }
 }
 
 .account-overview-card {
-  /* opacity здесь обязателен: правило выше по файлу ставит 0 и рассчитывает,
-     что конечное состояние удержит forwards. both держит оба конца, но базовую
-     непрозрачность всё равно надо вернуть — иначе карточка исчезает после
-     анимации. Поймано адверсариальной проверкой на живом стенде. */
+  /* opacity is required here: a rule higher up the file sets it to 0 and
+     relies on forwards to hold the end state. both holds both ends, but the
+     base opacity still has to be restored - otherwise the card disappears
+     after the animation. Caught by an adversarial review on the live
+     stand. */
   opacity: 1;
   animation: lw-enter var(--duration-dropdown) var(--ease-out) both;
 }
@@ -4563,8 +4571,8 @@ body.accounts-overview-mode #quota-grid[data-provider="zai"] {
   .usage-percent.lw-changed {
     animation: none;
   }
-  /* Без opacity карточка осталась бы невидимой: анимацию сняли, а базовое
-     значение 0 из правила выше никто не перекрывает. */
+  /* Without opacity the card would stay invisible: the animation is removed
+     and nothing overrides the base value of 0 from the rule above. */
   .account-overview-card {
     animation: none;
     opacity: 1;

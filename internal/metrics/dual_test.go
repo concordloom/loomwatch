@@ -9,9 +9,10 @@ import (
 	"github.com/onllm-dev/onwatch/v2/internal/store"
 )
 
-// Fork change: при переименовании бренда экспортёр обязан какое-то время
-// публиковать оба имени ряда. Иначе правила Grafana, отобранные по onwatch_*,
-// замолчали бы в момент выката — а именно они сторожат исчерпание квоты.
+// Fork change: during the brand rename the exporter has to publish both series
+// names for a while. Otherwise the Grafana rules that select on onwatch_* would
+// have gone silent at the moment of the rollout - and those are exactly the
+// rules that guard quota exhaustion.
 func TestMetrics_PublishesBothNamesDuringRename(t *testing.T) {
 	s, err := store.New(":memory:")
 	if err != nil {
@@ -46,15 +47,15 @@ func TestMetrics_PublishesBothNamesDuringRename(t *testing.T) {
 		"onwatch_quota_utilization_percent",
 	} {
 		if !names[want] {
-			t.Fatalf("ряд %s отсутствует — при переименовании публикуются оба имени", want)
+			t.Fatalf("series %s is missing - both names are published during the rename", want)
 		}
 	}
 
-	// У устаревшего ряда должна быть пометка, иначе непонятно, какой снимать.
+	// The deprecated series must be marked, otherwise it is unclear which one to remove.
 	for _, f := range families {
 		if f.GetName() == "onwatch_quota_utilization_percent" {
 			if !strings.Contains(f.GetHelp(), "deprecated") {
-				t.Fatalf("устаревший ряд без пометки: %q", f.GetHelp())
+				t.Fatalf("deprecated series carries no marker: %q", f.GetHelp())
 			}
 		}
 	}

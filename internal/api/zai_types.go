@@ -72,15 +72,16 @@ type ZaiSnapshot struct {
 	TokensRemaining     float64
 	TokensPercentage    int
 	TokensNextResetTime *time.Time
-	// Второе окно расхода.
+	// Second spend window.
 	//
-	// Fork change: Coding Plan режет расход двумя окнами сразу — коротким
-	// (пять часов) и длинным (неделя), — а снимок хранил одно, потому что
-	// оба приходят под одним типом и перезаписывали друг друга. Видно было
-	// то, что стояло в чужом JSON последним: 17.08 недельное окно шло на
-	// 91%, а пятичасовое на 7%, и при интенсивной работе первым упёрлось бы
-	// именно невидимое. Длинное окно осталось в полях выше, чтобы история и
-	// ряды метрик не поменяли смысла; короткое живёт здесь.
+	// Fork change: the Coding Plan caps spend across two windows at once - a
+	// short one (five hours) and a long one (a week) - while the snapshot
+	// stored only one, because both arrive under the same type and
+	// overwrote each other. What you saw was whatever came last in someone
+	// else's JSON: on 08-17 the weekly window was at 91% and the five-hour
+	// one at 7%, and under heavy use the invisible one would have been hit
+	// first. The long window stays in the fields above so that history and
+	// the metric series keep their meaning; the short one lives here.
 	TokensShortLimit         int
 	TokensShortUnit          int
 	TokensShortNumber        int
@@ -92,12 +93,13 @@ type ZaiSnapshot struct {
 	TokensShortHasWindow     bool
 }
 
-// zaiUnitHours переводит код единицы окна в часы.
+// zaiUnitHours converts a window unit code into hours.
 //
-// Значения подтверждены живыми ответами 17.08: unit=3 с number=5 сбрасывался
-// через пять часов, unit=6 с number=1 — через неделю, unit=5 с number=1 — через
-// месяц. Неизвестный код даёт ноль: такое окно считается самым коротким и не
-// вытеснит подтверждённое длинное из основных полей.
+// The values are confirmed against live responses from 08-17: unit=3 with
+// number=5 reset after five hours, unit=6 with number=1 after a week, unit=5
+// with number=1 after a month. An unknown code yields zero: such a window is
+// treated as the shortest and cannot displace a confirmed long one from the
+// primary fields.
 func zaiUnitHours(unit int) float64 {
 	switch unit {
 	case 3:
@@ -111,7 +113,7 @@ func zaiUnitHours(unit int) float64 {
 	}
 }
 
-// zaiWindowLabel — человекочитаемое имя окна по его дескриптору.
+// zaiWindowLabel is the human-readable name of a window, from its descriptor.
 func ZaiWindowLabel(unit, number int) string {
 	switch unit {
 	case 3:
@@ -137,10 +139,10 @@ func (r *ZaiQuotaResponse) ToSnapshot(capturedAt time.Time) *ZaiSnapshot {
 		CapturedAt: capturedAt,
 	}
 
-	// Окна расхода собираются отдельно и раскладываются по длительности, а не
-	// по порядку в ответе. Раньше здесь стоял switch, и два окна одного типа
-	// перезаписывали друг друга — какое доедет до панели, решал порядок
-	// элементов в чужом JSON.
+	// Spend windows are collected separately and ordered by duration rather
+	// than by their position in the response. This used to be a switch, and
+	// two windows of the same type overwrote each other - which one reached
+	// the dashboard was decided by the element order in someone else's JSON.
 	var spendWindows []ZaiLimit
 
 	for _, limit := range r.Limits {
@@ -172,9 +174,9 @@ func (r *ZaiQuotaResponse) ToSnapshot(capturedAt time.Time) *ZaiSnapshot {
 		}
 	}
 
-	// Самое длинное окно занимает основные поля: там оно и было до появления
-	// второго, поэтому смысл истории и рядов метрик не меняется. Следующее по
-	// длине идёт в короткое.
+	// The longest window takes the primary fields: that is where it lived
+	// before the second one appeared, so the meaning of history and of the
+	// metric series does not change. The next longest becomes the short one.
 	sort.SliceStable(spendWindows, func(i, j int) bool {
 		return zaiUnitHours(spendWindows[i].Unit)*float64(spendWindows[i].Number) <
 			zaiUnitHours(spendWindows[j].Unit)*float64(spendWindows[j].Number)

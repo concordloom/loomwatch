@@ -61,9 +61,9 @@ func TestMetrics_ZaiExportsEveryAccount(t *testing.T) {
 	}, 12)
 }
 
-// Fork change: короткое окно расхода обязано быть отдельным рядом. Раньше оно
-// не доезжало до снимка, и правила сторожили только длинное — при интенсивной
-// работе первым упирается как раз короткое.
+// Fork change: the short spend window has to be its own series. It never used
+// to reach the snapshot, and the rules guarded only the long window - yet under
+// heavy use it is the short one that is hit first.
 func TestMetrics_ZaiExportsShortWindow(t *testing.T) {
 	s, err := store.New(":memory:")
 	if err != nil {

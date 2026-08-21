@@ -151,9 +151,9 @@ func TestZaiCurrentHonoursAccountQueryParam(t *testing.T) {
 func TestZaiInsightsUseTheRequestedAccount(t *testing.T) {
 	h, s := newZaiTestHandler(t)
 
-	// Нагрузка кладётся именно в аккаунт по умолчанию: подмена происходила на
-	// него, поэтому тест, где расход лежит в стороннем аккаунте, дефект не
-	// ловит — история просто оказывается пустой.
+	// The load is placed in the default account specifically: the substitution
+	// happened onto it, so a test that puts the spend in some other account
+	// does not catch the defect - the history simply comes back empty.
 	busyID, err := s.DefaultZaiAccountID()
 	if err != nil || busyID == 0 {
 		t.Fatalf("default account: %v", err)
@@ -204,8 +204,8 @@ func TestZaiLoggingHistoryReportsConsumptionNotBudget(t *testing.T) {
 		t.Fatalf("create: %v", err)
 	}
 	snap := zaiSnapshot(time.Now().UTC().Add(-time.Hour).Truncate(time.Second), 91)
-	snap.TokensUsage = 140000       // бюджет окна
-	snap.TokensCurrentValue = 12345 // фактический расход
+	snap.TokensUsage = 140000       // window budget
+	snap.TokensCurrentValue = 12345 // actual spend
 	if _, err := s.InsertZaiSnapshot(snap, acc.ID); err != nil {
 		t.Fatalf("insert: %v", err)
 	}

@@ -1160,12 +1160,13 @@ func (s *Store) migrateSchema() error {
 		}
 	}
 
-	// Fork change: колонки второго окна расхода Z.ai.
+	// Fork change: columns for the second Z.ai spend window.
 	//
-	// Coding Plan режет двумя окнами сразу — коротким (пять часов) и длинным
-	// (неделя). Снимок хранил одно, и короткое было невидимо, хотя при
-	// интенсивной работе упирается первым. Старые строки остаются с нулями и
-	// признаком отсутствия окна: дорисовать их задним числом неоткуда.
+	// The Coding Plan caps across two windows at once - a short one (five
+	// hours) and a long one (a week). The snapshot stored only one, and the
+	// short window was invisible even though it is hit first under heavy
+	// use. Old rows keep zeroes and a no-window flag: there is nowhere to
+	// backfill them from.
 	for _, col := range []string{
 		"tokens_short_limit INTEGER NOT NULL DEFAULT 0",
 		"tokens_short_unit INTEGER NOT NULL DEFAULT 0",

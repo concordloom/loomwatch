@@ -1,10 +1,12 @@
 <!--
-  Знак loomWatch: нити основы разной длины — подписки, поперечная нить — предел.
-  Одна нить ушла за предел и окрашена отдельно: это ровно то состояние, ради
-  которого на панель и смотрят.
+  The loomWatch mark: warp threads of differing length are the subscriptions,
+  the cross thread is the limit. One thread has gone past the limit and is
+  coloured separately: that is exactly the state people look at the dashboard
+  for.
 
-  На плашке акцент светлее персика из интерфейса (#F59E0B): на бирюзовом фоне
-  персик почти сливается, а во вкладке браузера знак живёт именно в 16 пикселях.
+  On the tile the accent is lighter than the peach used in the interface
+  (#F59E0B): against a teal background the peach almost blends in, and in a
+  browser tab the mark lives at 16 pixels.
 -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="loomWatch">
   <rect width="32" height="32" rx="8" fill="#0D9488"/>

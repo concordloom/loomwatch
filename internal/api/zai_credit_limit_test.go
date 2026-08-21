@@ -69,10 +69,10 @@ func TestZaiTokensLimitStillRead(t *testing.T) {
 	}
 }
 
-// Fork change: два окна расхода приходят под одним типом, и раньше они
-// перезаписывали друг друга — до панели доезжало то, что стояло в ответе
-// последним. Полезная нагрузка ниже снята с живого ключа 17.08: пятичасовое
-// окно на 7%, недельное на 91%.
+// Fork change: the two spend windows arrive under the same type, and they
+// used to overwrite each other - what reached the dashboard was whatever came
+// last in the response. The payload below was captured from a live key on
+// 08-17: the five-hour window at 7%, the weekly one at 91%.
 func TestZaiKeepsBothSpendWindows(t *testing.T) {
 	payload := []byte(`{
 	  "code": 200,
@@ -94,24 +94,24 @@ func TestZaiKeepsBothSpendWindows(t *testing.T) {
 	snap := resp.ToSnapshot(time.Now().UTC())
 
 	if snap.TokensPercentage != 91 {
-		t.Fatalf("длинное окно %d%%, ожидалось 91%%", snap.TokensPercentage)
+		t.Fatalf("long window %d%%, expected 91%%", snap.TokensPercentage)
 	}
 	if !snap.TokensShortHasWindow {
-		t.Fatal("короткое окно потеряно — именно оно упирается первым при интенсивной работе")
+		t.Fatal("short window lost - it is the one hit first under heavy use")
 	}
 	if snap.TokensShortPercentage != 7 {
-		t.Fatalf("короткое окно %d%%, ожидалось 7%%", snap.TokensShortPercentage)
+		t.Fatalf("short window %d%%, expected 7%%", snap.TokensShortPercentage)
 	}
 	if got := ZaiWindowLabel(snap.TokensShortUnit, snap.TokensShortNumber); got != "5h" {
-		t.Fatalf("подпись короткого окна %q, ожидалось \"5h\"", got)
+		t.Fatalf("short window label %q, expected \"5h\"", got)
 	}
 	if got := ZaiWindowLabel(snap.TokensUnit, snap.TokensNumber); got != "weekly" {
-		t.Fatalf("подпись длинного окна %q, ожидалось \"weekly\"", got)
+		t.Fatalf("long window label %q, expected \"weekly\"", got)
 	}
 }
 
-// Порядок элементов в ответе провайдера не должен влиять на то, какое окно
-// попадёт в основные поля: раньше выбор был позиционным.
+// The element order in the provider response must not decide which window
+// lands in the primary fields: the choice used to be positional.
 func TestZaiWindowChoiceIgnoresPayloadOrder(t *testing.T) {
 	reversed := []byte(`{
 	  "code": 200,
@@ -132,7 +132,7 @@ func TestZaiWindowChoiceIgnoresPayloadOrder(t *testing.T) {
 	snap := resp.ToSnapshot(time.Now().UTC())
 
 	if snap.TokensPercentage != 91 || snap.TokensShortPercentage != 7 {
-		t.Fatalf("перестановка окон в ответе поменяла результат: длинное=%d%% короткое=%d%%",
+		t.Fatalf("reordering the windows in the response changed the result: long=%d%% short=%d%%",
 			snap.TokensPercentage, snap.TokensShortPercentage)
 	}
 }

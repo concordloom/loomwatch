@@ -2264,10 +2264,11 @@ func (h *Handler) currentBoth(w http.ResponseWriter, r *http.Request) {
 		response["synthetic"] = h.buildSyntheticCurrent()
 	}
 	if h.config.HasProvider("zai") && providerTelemetryEnabled(visibility, "zai") {
-		// Fork change: на вкладке «All» показываются все подписки, а не одна.
-		// Раньше здесь стоял аккаунт по умолчанию, и две подписки из трёх были
-		// на этой вкладке и в меню-баре невидимы — то есть ровно там, куда
-		// смотрят, когда не открывают вкладку провайдера.
+		// Fork change: the "All" tab shows every subscription, not just one.
+		// This used to be the default account, which left two subscriptions
+		// out of three invisible on this tab and in the menu bar - that is,
+		// in exactly the places people look when they are not opening the
+		// provider tab.
 		zaiAccounts := h.zaiUsageAccounts()
 		if len(zaiAccounts) > 1 {
 			response["zaiAccounts"] = zaiAccounts
@@ -2393,7 +2394,7 @@ func (h *Handler) currentZai(w http.ResponseWriter, r *http.Request) {
 // buildZaiCurrent builds the Z.ai current quota response map for one account.
 //
 // Fork change: takes the account explicitly now that Z.ai is multi-account.
-// Вызывающие без своего аккаунта передают 0 — билдер нормализует сам.
+// Callers without an account of their own pass 0 - the builder normalises it.
 func (h *Handler) buildZaiCurrent(accountID int64) map[string]interface{} {
 	accountID = h.resolveZaiAccountForRead(accountID)
 	now := time.Now().UTC()
@@ -2431,9 +2432,10 @@ func (h *Handler) buildZaiCurrent(accountID int64) map[string]interface{} {
 			response["tokensLimit"] = tokensResp
 			response["timeLimit"] = timeResp
 			response["toolCalls"] = buildZaiToolCallsResponse(latest)
-			// Fork change: короткое окно расхода. Coding Plan режет двумя
-			// окнами сразу, и при интенсивной работе первым упирается именно
-			// оно, а раньше до панели доезжало только длинное.
+			// Fork change: the short spend window. The Coding Plan caps
+			// across two windows at once, and under heavy use it is the
+			// short one that is hit first, yet only the long one used to
+			// reach the dashboard.
 			if latest.TokensShortHasWindow {
 				response["tokensShortLimit"] = buildZaiShortTokensQuotaResponse(latest)
 			}
@@ -2513,11 +2515,11 @@ func buildZaiTokensQuotaResponse(snapshot *api.ZaiSnapshot) map[string]interface
 	return result
 }
 
-// buildZaiShortTokensQuotaResponse описывает короткое окно расхода.
+// buildZaiShortTokensQuotaResponse describes the short spend window.
 //
-// Fork change: длина окна берётся из его дескриптора, а не угадывается, и
-// попадает в имя — оператор должен видеть, что это за окно («5h»), а не просто
-// второй процент рядом с первым.
+// Fork change: the window length is taken from its descriptor rather than
+// guessed, and it goes into the name - the operator has to see which window
+// this is ("5h"), not just a second percentage next to the first.
 func buildZaiShortTokensQuotaResponse(snapshot *api.ZaiSnapshot) map[string]interface{} {
 	label := api.ZaiWindowLabel(snapshot.TokensShortUnit, snapshot.TokensShortNumber)
 	percent := float64(snapshot.TokensShortPercentage)
@@ -5359,11 +5361,11 @@ func (h *Handler) buildZaiInsights(hidden map[string]bool, accountID int64) insi
 	// Historical snapshots for rate/trend computation
 	d24h := now.Add(-24 * time.Hour)
 	d7d := now.Add(-7 * 24 * time.Hour)
-	// Fork change: считаем по запрошенной подписке. Здесь оставался
-	// defaultZaiAccountID, из-за чего все исторические выводы (темп, прогноз,
-	// тренд, расход за неделю) строились по чужому аккаунту и показывались под
-	// именем выбранного — ровно тот класс подмены, ради которого делалась
-	// мультиаккаунтность.
+	// Fork change: compute for the requested subscription. This was left on
+	// defaultZaiAccountID, so every history-derived figure (rate, forecast,
+	// trend, weekly spend) was built from another account and displayed under
+	// the selected one's name - precisely the class of substitution the
+	// multi-account work was done to prevent.
 	snapshots24h, _ := h.store.QueryZaiRange(d24h, now, accountID)
 	snapshots7d, _ := h.store.QueryZaiRange(d7d, now, accountID)
 
@@ -5384,10 +5386,10 @@ func (h *Handler) buildZaiInsights(hidden map[string]bool, accountID int64) insi
 		Value: fmt.Sprintf("%d%%", latest.TokensPercentage),
 		Label: "Tokens Used",
 	})
-	// Fork change: остаток печатается только когда провайдер дал бюджет. У
-	// основной подписки Z.ai абсолютных значений нет, и литеральный «0» рядом с
-	// «91% Tokens Used» противоречил карточке, где то же самое уже честно
-	// названо отсутствующим.
+	// Fork change: the remainder is printed only when the provider supplied a
+	// budget. The main Z.ai subscription reports no absolute figures, and a
+	// literal "0" next to "91% Tokens Used" contradicted the card, which
+	// already calls the same fact unavailable outright.
 	tokensLeftValue := compactNum(tokensRemaining)
 	if tokensBudget <= 0 {
 		tokensLeftValue = "n/a"
@@ -9217,15 +9219,16 @@ func (h *Handler) defaultZaiAccountID() int64 {
 	return accounts[0].ID
 }
 
-// resolveZaiAccountForRead нормализует аккаунт один раз на входе в билдер.
+// resolveZaiAccountForRead normalises the account once, on entry to a builder.
 //
-// Fork change: адверсариальная проверка нашла, что buildZaiInsights принимал
-// accountID, но внутри две выборки истории звали defaultZaiAccountID — темп,
-// прогноз и тренд считались по чужой подписке и показывались под именем
-// выбранной. Промах переноса: у MiniMax аккаунт нормализуется в начале и
-// дальше используется только он. Здесь сделано так же, чтобы «забыть
-// подставить параметр» перестало быть достижимым, а не только покрытым тестом:
-// внутри билдера обращаться к defaultZaiAccountID больше незачем.
+// Fork change: an adversarial review found that buildZaiInsights accepted an
+// accountID while two history queries inside it called defaultZaiAccountID -
+// the rate, the forecast and the trend were computed for a different
+// subscription and displayed under the selected one's name. A porting slip:
+// MiniMax normalises the account up front and uses only that afterwards. The
+// same is done here so that "forgetting to pass the parameter" stops being
+// reachable rather than merely being covered by a test: there is no longer any
+// reason to touch defaultZaiAccountID from inside a builder.
 func (h *Handler) resolveZaiAccountForRead(accountID int64) int64 {
 	if accountID > 0 {
 		return accountID
@@ -11390,12 +11393,12 @@ func (h *Handler) loggingHistoryZai(w http.ResponseWriter, r *http.Request) {
 		capturedAt = append(capturedAt, snap.CapturedAt)
 		ids = append(ids, snap.ID)
 
-		// Fork change: в колонку расхода шёл TokensUsage, который в ответе
-		// Z.ai означает БЮДЖЕТ, а не потребление (см. комментарий в
-		// buildZaiTokensQuotaResponse). Сигнал был инвертирован: подписка,
-		// выжженная на 91%, показывала 0, а почти нетронутая — 140 000, и
-		// оператор читал по таблице обратный ответ на вопрос «кто жжёт».
-		// Расход — это CurrentValue; бюджет уходит в Limit.
+		// Fork change: the spend column was fed TokensUsage, which in the
+		// Z.ai response means the BUDGET, not consumption (see the comment in
+		// buildZaiTokensQuotaResponse). The signal was inverted: a
+		// subscription burned to 91% showed 0 while an almost untouched one
+		// showed 140,000, and the table gave the operator the opposite answer
+		// to "who is burning". Spend is CurrentValue; the budget goes to Limit.
 		row := map[string]loggingHistoryCrossQuota{
 			"tokens": {
 				Name:     "tokens",

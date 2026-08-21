@@ -271,8 +271,8 @@ func (h *Handler) ZaiAccountsUsage(w http.ResponseWriter, r *http.Request) {
 // list shape the overview cards read.
 func zaiOverviewQuotas(current map[string]interface{}) []map[string]interface{} {
 	rows := make([]map[string]interface{}, 0, 2)
-	// Короткое окно идёт первым: при интенсивной работе упирается именно оно,
-	// поэтому в карточке подписки оператор должен видеть его сразу.
+	// The short window comes first: it is the one hit under heavy use, so the
+	// operator has to see it immediately on the subscription card.
 	for _, q := range []struct {
 		key   string
 		name  string
@@ -288,8 +288,9 @@ func zaiOverviewQuotas(current map[string]interface{}) []map[string]interface{} 
 		}
 		label := q.label
 		if label == "" {
-			// Имя короткого окна приходит вместе с данными: длина окна —
-			// свойство подписки, а не константа панели.
+			// The short window's name arrives with the data: the window
+			// length is a property of the subscription, not a dashboard
+			// constant.
 			if w, ok := raw["window"].(string); ok && w != "" {
 				label = "Tokens Limit (" + w + ")"
 			} else {
@@ -311,11 +312,12 @@ func zaiOverviewQuotas(current map[string]interface{}) []map[string]interface{} 
 	return rows
 }
 
-// zaiUsageAccounts возвращает текущее состояние каждой активной подписки Z.ai.
+// zaiUsageAccounts returns the current state of every active Z.ai
+// subscription.
 //
-// Fork change: питает вкладку «All» и меню-бар, которые до этого показывали
-// только подписку по умолчанию. Форма ответа повторяет minimaxUsageAccounts,
-// чтобы фронтенд обрабатывал оба провайдера одинаково.
+// Fork change: it feeds the "All" tab and the menu bar, which until now showed
+// only the default subscription. The response shape mirrors
+// minimaxUsageAccounts so the frontend can treat both providers identically.
 func (h *Handler) zaiUsageAccounts() []map[string]interface{} {
 	if h.store == nil {
 		return []map[string]interface{}{}

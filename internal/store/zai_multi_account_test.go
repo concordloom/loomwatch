@@ -151,9 +151,9 @@ func TestZaiAccountResolutionFallsBackToDefault(t *testing.T) {
 	}
 }
 
-// Fork change: короткое окно расхода должно переживать запись и чтение. Тест
-// заодно сторожит соответствие списков колонок в INSERT и SELECT — рассогласование
-// там компилятор не ловит, оно выстреливает только на живой базе.
+// Fork change: the short spend window has to survive a write and a read. The
+// test also guards the INSERT and SELECT column lists against drifting apart -
+// the compiler does not catch that, it only fires against a live database.
 func TestZaiShortWindowSurvivesRoundTrip(t *testing.T) {
 	s, err := New(":memory:")
 	if err != nil {
@@ -185,14 +185,14 @@ func TestZaiShortWindowSurvivesRoundTrip(t *testing.T) {
 		t.Fatalf("QueryLatestZai: %v", err)
 	}
 	if !got.TokensShortHasWindow || got.TokensShortPercentage != 7 {
-		t.Fatalf("короткое окно не прочиталось: has=%v pct=%d",
+		t.Fatalf("short window did not read back: has=%v pct=%d",
 			got.TokensShortHasWindow, got.TokensShortPercentage)
 	}
 	if got.TokensShortNextResetTime == nil || !got.TokensShortNextResetTime.Equal(shortReset) {
-		t.Fatalf("время сброса короткого окна потеряно: %v", got.TokensShortNextResetTime)
+		t.Fatalf("short window reset time lost: %v", got.TokensShortNextResetTime)
 	}
 	if got.TokensPercentage != 91 {
-		t.Fatalf("длинное окно %d%%, ожидалось 91%%", got.TokensPercentage)
+		t.Fatalf("long window %d%%, expected 91%%", got.TokensPercentage)
 	}
 
 	rows, err := s.QueryZaiRange(now.Add(-time.Hour), now.Add(time.Hour), acc)
@@ -200,6 +200,6 @@ func TestZaiShortWindowSurvivesRoundTrip(t *testing.T) {
 		t.Fatalf("QueryZaiRange: %v rows=%d", err, len(rows))
 	}
 	if rows[0].TokensShortPercentage != 7 {
-		t.Fatalf("в выборке диапазона короткое окно %d%%, ожидалось 7%%", rows[0].TokensShortPercentage)
+		t.Fatalf("in the range query the short window is %d%%, expected 7%%", rows[0].TokensShortPercentage)
 	}
 }

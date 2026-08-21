@@ -3693,10 +3693,10 @@ function updateCard(quotaType, data, suffix) {
     const newVal = displayPct;
     if (Math.abs(oldVal - newVal) > 0.2) {
       animateValue(percentEl, oldVal, newVal, 400, v => `${v.toFixed(1)}%`);
-      // Fork change: короткая подсветка изменившегося числа. Панель
-      // перерисовывается раз в две минуты, и без метки сдвиг процента проходит
-      // незамеченным. Класс снимается по окончании анимации, иначе повторное
-      // изменение не подсветится.
+      // Fork change: a brief highlight on a changed number. The dashboard
+      // repaints every two minutes, and without a marker a shift in the
+      // percentage goes unnoticed. The class is removed when the animation
+      // ends, otherwise a repeat change would not highlight.
       flashChanged(percentEl);
     } else {
       percentEl.textContent = `${displayPct.toFixed(1)}%`;
@@ -3747,13 +3747,13 @@ function updateCard(quotaType, data, suffix) {
   }
 }
 
-// Помечает элемент как изменившийся, чтобы CSS подсветил его один раз.
-// Уважает prefers-reduced-motion: при отключённом движении подсветки нет.
+// Marks an element as changed so CSS highlights it once.
+// Respects prefers-reduced-motion: with motion off there is no highlight.
 function flashChanged(el) {
   if (!el) return;
   if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   el.classList.remove('lw-changed');
-  void el.offsetWidth; // перезапуск анимации
+  void el.offsetWidth; // restart the animation
   el.classList.add('lw-changed');
   el.addEventListener('animationend', () => el.classList.remove('lw-changed'), { once: true });
 }
@@ -4170,10 +4170,11 @@ async function fetchCurrent() {
     return;
   }
 
-  // Вне режима всех подписок сводка описывала бы не то, что на экране: она
-  // считается только по обзорному ответу и иначе осталась бы висеть с числами
-  // предыдущего вида. Показания, не относящиеся к показанному, хуже отсутствия
-  // показаний, поэтому строка сворачивается до заголовка.
+  // Outside all-subscriptions mode the summary would describe something
+  // other than what is on screen: it is computed only from the overview
+  // response and would otherwise hang there with the previous view's numbers.
+  // Readings that do not belong to what is shown are worse than no readings,
+  // so the line collapses to the heading.
   collapsePageSummary();
 
   try {
@@ -4339,9 +4340,9 @@ async function fetchCurrent() {
 
       } else if (provider === 'zai') {
         updateCard('tokensLimit', data.tokensLimit);
-        // Fork change: короткое окно рисуется только если подписка его
-        // объявила — у части подписок окно одно, и пустая карточка была бы
-        // хуже отсутствующей.
+        // Fork change: the short window is drawn only if the subscription
+        // declared it - some subscriptions have a single window, and an
+        // empty card would be worse than an absent one.
         const shortCard = document.getElementById('card-tokensShortLimit');
         if (data.tokensShortLimit) {
           if (shortCard) shortCard.style.display = '';
@@ -4591,8 +4592,8 @@ function accountOverviewCardHTML(provider, account, idx) {
 // operator actually opens this panel with: what is closest to its limit, and
 // when does it reset. Built from the same payload the cards are built from, so
 // it cannot drift from them; hidden when there is nothing to summarise.
-// Свернуть строку сводки до заголовка: ведущее значение и счётчики убираются,
-// цветная метка состояния гасится.
+// Collapse the summary line to the heading: the leading value and the counters
+// are removed and the coloured state marker is cleared.
 function collapsePageSummary() {
   const root = document.getElementById('page-summary');
   const titleEl = document.getElementById('page-summary-title');
@@ -6308,8 +6309,9 @@ function normalizeBothQuotas(provider, payload) {
   }
 
   if (provider === 'zai') {
-    // Короткое окно расхода идёт первым: при интенсивной работе упирается оно.
-    // Подпись берётся из данных — длина окна свойство подписки, не константа.
+    // The short spend window comes first: it is the one hit under heavy use.
+    // The label comes from the data - the window length is a property of the
+    // subscription, not a constant.
     const map = [
       { key: 'tokensShortLimit', label: payload.tokensShortLimit?.name || 'Tokens Limit (short)' },
       { key: 'tokensLimit', label: 'Tokens Limit' },
@@ -6548,10 +6550,11 @@ function buildAllProviderEntries() {
       return;
     }
 
-    // Fork change: Z.ai стал многоаккаунтным, и на этой вкладке показывались
-    // не все подписки, а первая. Карточка на подписку — тот же приём, что у
-    // MiniMax выше, но без группировки: подписок немного, и видеть их сразу
-    // важнее компактности.
+    // Fork change: Z.ai became multi-account, and this tab showed only the
+    // first subscription rather than all of them. A card per subscription is
+    // the same approach as MiniMax above, but without grouping: there are few
+    // subscriptions, and seeing them all at once matters more than
+    // compactness.
     if (provider === 'zai' && Array.isArray(current.zaiAccounts) && current.zaiAccounts.length > 0) {
       current.zaiAccounts.forEach((account, idx) => {
         const accountID = account.accountId || account.id || idx + 1;
@@ -7839,11 +7842,12 @@ function renderCyclesTable() {
 
   const provider = getCurrentProvider();
   const quotaNames = State.cyclesQuotaNames;
-  // Fork change: 'zai' добавлен в список. Без него ячейка печатала голое
-  // значение расхода, а Z.ai по основной подписке абсолютных чисел не даёт —
-  // в таблице стоял 0 у подписки, выжженной на 91%, и 561 у почти нетронутой.
-  // Процент провайдер отдаёт по всем подпискам, и он уже приезжает в ответе:
-  // ячейке даже вешался класс threshold-danger по 91 при тексте «0».
+  // Fork change: 'zai' was added to the list. Without it the cell printed the
+  // bare spend value, and Z.ai reports no absolute figures for the main
+  // subscription - the table showed 0 for a subscription burned to 91% and 561
+  // for an almost untouched one. The provider does return a percentage for
+  // every subscription, and it already arrives in the response: the cell was
+  // even given the threshold-danger class at 91 while displaying "0".
   const usePercent = provider === 'anthropic' || provider === 'copilot' || provider === 'codex' || provider === 'antigravity' || provider === 'minimax' || provider === 'zai' || provider === 'gemini' || provider === 'openrouter' || provider === 'cursor' || provider === 'grok' || provider === 'kimi' || provider === 'moonshot' || provider === 'deepseek' || provider === 'opencode';
   const deltaUsesPercent = usePercent && provider !== 'minimax' && provider !== 'moonshot' && provider !== 'deepseek';
   const isLoggingHistory = State.isLoggingHistory === true;

@@ -167,11 +167,11 @@
         </div>
         {{else}}
         {{if eq .CurrentProvider "zai"}}
-        <!-- Обзор всех подписок Z.ai. Статическая сетка ниже показывает одну
-             выбранную подписку, поэтому обзор рендерится в отдельный
-             контейнер: иначе он затёр бы карточки, и возврат к одной подписке
-             требовал бы перезагрузки страницы. Переключает CSS по классу
-             accounts-overview-mode. -->
+        <!-- Overview of every Z.ai subscription. The static grid below shows
+             one selected subscription, so the overview renders into a separate
+             container: otherwise it would overwrite the cards, and going back
+             to a single subscription would require a page reload. CSS swaps
+             them by the accounts-overview-mode class. -->
         <div class="quota-grid" id="quota-grid-zai" data-provider="zai"></div>
         {{end}}
         <div class="quota-grid" id="quota-grid" data-provider="{{.CurrentProvider}}">
@@ -207,8 +207,9 @@
                 </footer>
             </article>
 
-            <!-- Короткое окно расхода Coding Plan. Скрыто, пока подписка его не
-                 объявила: у части подписок окно одно. -->
+            <!-- The Coding Plan short spend window. Hidden until the
+                 subscription declares it: some subscriptions have a single
+                 window. -->
             <article class="quota-card" data-quota="tokensShortLimit" id="card-tokensShortLimit" role="button" tabindex="0" aria-label="View short window details" style="display: none;">
                 <header class="card-header">
                     <h2 class="quota-title">

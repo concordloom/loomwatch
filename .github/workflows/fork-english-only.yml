@@ -1,0 +1,44 @@
+name: English only
+
+# loomWatch is open source: everything in the repository is written in English
+# so that contributors who do not read Russian can follow the history and the
+# code. A written rule alone did not hold, so it is enforced here as well.
+#
+# Fork-owned workflow: upstream has no equivalent, so syncing never has to
+# resolve a conflict in this file.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  english-only:
+    runs-on: ubuntu-latest
+    name: English only
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Tracked files
+        run: scripts/check-english.sh
+
+      - name: Commit messages on this pull request
+        if: github.event_name == 'pull_request'
+        run: |
+          range='${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}'
+          bad=0
+          while read -r sha; do
+            [ -n "$sha" ] || continue
+            if git log -1 --pretty=%B "$sha" | grep -qP '[\x{0400}-\x{04FF}]'; then
+              echo "Cyrillic in the message of $sha: $(git log -1 --pretty=%s "$sha")" >&2
+              bad=1
+            fi
+          done < <(git rev-list --no-merges "$range")
+          if [ "$bad" -ne 0 ]; then
+            echo "Commit messages in this repository are written in English. See CLAUDE.md." >&2
+            exit 1
+          fi
+          echo "Commit messages are English."

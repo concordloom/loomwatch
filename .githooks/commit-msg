@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Reject a commit message that is not in English. See scripts/check-english.sh.
+#
+# Enable once per clone:
+#   git config core.hooksPath .githooks
+set -euo pipefail
+root="$(git rev-parse --show-toplevel)"
+exec "$root/scripts/check-english.sh" --message "$1"

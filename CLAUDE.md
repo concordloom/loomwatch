@@ -2,11 +2,13 @@
 
 Go CLI for AI quota tracking. Polls 15 providers → SQLite → operator dashboard.
 
-**Правя что-либо в `internal/web/` — сначала прочитай [DESIGN.md](DESIGN.md).**
-Там палитра, плотность, состояния, правила движения и запреты. Источник истины по
-стилям — `internal/web/static/style.css`; DESIGN.md описывает его, а не желаемое.
-Прежний `design-system/onwatch/MASTER.md` удалён: он описывал Material Design 3,
-которого в коде нет, и агент по нему делал чужой интерфейс.
+**Before changing anything under `internal/web/`, read [DESIGN.md](DESIGN.md)
+first.** It covers the palette, density, states, motion rules and prohibitions.
+The source of truth for styles is `internal/web/static/style.css`; DESIGN.md
+describes that file, not an aspiration. The former
+`design-system/onwatch/MASTER.md` is deleted: it described Material Design 3,
+which is not in the code, and an agent following it built somebody else's
+interface.
 
 ## Task
 
@@ -105,3 +107,17 @@ On `go.sum` changes, update `vendorHash` in `flake.nix` (run `nix build .#onwatc
 ## Style
 
 - Use `-` (hyphen) instead of `—` (em dash) in all text
+- **English only in the repository.** Commit messages, code comments, doc files,
+  identifiers, log lines and UI strings are all English. This is an open-source
+  product: contributors who cannot read Russian must be able to follow the
+  history and the code. Chatting with the maintainer in Russian is fine -
+  anything that lands in git is not. This applies to agents too: do not mirror
+  the language of a request into the repository, and do not match surrounding
+  text if you ever find non-English text there - report it instead.
+
+  Enforced mechanically, because the written rule alone did not hold:
+  `scripts/check-english.sh` scans tracked files and commit messages, the
+  `.githooks/` commit-msg and pre-commit hooks run it locally (enable once per
+  clone with `git config core.hooksPath .githooks`), and
+  `.github/workflows/fork-english-only.yml` runs it on every push and pull
+  request.

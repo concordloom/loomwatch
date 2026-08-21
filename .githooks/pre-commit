@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Reject staged files containing Cyrillic. See scripts/check-english.sh.
+#
+# Enable once per clone:
+#   git config core.hooksPath .githooks
+set -euo pipefail
+root="$(git rev-parse --show-toplevel)"
+mapfile -d '' staged < <(git diff --cached --name-only --diff-filter=ACM -z)
+[ "${#staged[@]}" -eq 0 ] && exit 0
+exec "$root/scripts/check-english.sh" --files "${staged[@]}"

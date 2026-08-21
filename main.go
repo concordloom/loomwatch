@@ -27,6 +27,7 @@ import (
 	"github.com/onllm-dev/onwatch/v2/internal/config"
 	"github.com/onllm-dev/onwatch/v2/internal/menubar"
 	"github.com/onllm-dev/onwatch/v2/internal/notify"
+	"github.com/onllm-dev/onwatch/v2/internal/service"
 	"github.com/onllm-dev/onwatch/v2/internal/store"
 	"github.com/onllm-dev/onwatch/v2/internal/tracker"
 	"github.com/onllm-dev/onwatch/v2/internal/update"
@@ -102,6 +103,11 @@ func main() {
 var (
 	pidDir  = defaultPIDDir()
 	pidFile = filepath.Join(pidDir, "onwatch.pid")
+
+	// initialPIDFilePath records the real installation's PID file as resolved
+	// at startup. Tests move HOME around, so it must be captured once here
+	// rather than recomputed later from a HOME a test has already changed.
+	initialPIDFilePath = filepath.Join(defaultPIDDir(), "onwatch.pid")
 )
 
 // hasFlag checks if a flag exists anywhere in os.Args[1:].
@@ -147,6 +153,10 @@ func stopPreviousInstance(port int, testMode bool) {
 	myPID := os.Getpid()
 	stopped := false
 
+	if productionPIDFileOffLimits() {
+		return
+	}
+
 	// Method 1: PID file (handles both "PID" and "PID:PORT" formats)
 	if data, err := os.ReadFile(pidFile); err == nil {
 		content := strings.TrimSpace(string(data))
@@ -173,12 +183,15 @@ func stopPreviousInstance(port int, testMode bool) {
 		}
 		os.Remove(pidFile)
 
-		// If PID file had a port and we didn't stop it, try that specific port
-		if !stopped && filePort > 0 {
+		// If PID file had a port and we didn't stop it, try that specific port.
+		// Skipped in test mode: this function documents that test mode uses the
+		// PID file only, and without the guard a test whose PID file names port
+		// 9211 scans it and SIGTERMs the developer's real running onWatch.
+		if !testMode && !stopped && filePort > 0 {
 			conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", filePort), 500*time.Millisecond)
 			if err == nil {
 				conn.Close()
-				if pids := findOnwatchOnPort(filePort); len(pids) > 0 {
+				if pids := findOnwatchOnPortFn(filePort); len(pids) > 0 {
 					for _, foundPID := range pids {
 						if foundPID == myPID {
 							continue
@@ -197,12 +210,12 @@ func stopPreviousInstance(port int, testMode bool) {
 
 	// Method 2: Check if the port is in use and kill the occupying onwatch process
 	// Skip in test mode to avoid accidentally killing production instances
-	if !testMode && !stopped && port > 0 {
+	if !testMode && !stopped && port > 0 && scanningDefaultPortsAllowed() {
 		conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", port), 500*time.Millisecond)
 		if err == nil {
 			conn.Close()
 			// Port is occupied - find which process holds it
-			if pids := findOnwatchOnPort(port); len(pids) > 0 {
+			if pids := findOnwatchOnPortFn(port); len(pids) > 0 {
 				for _, pid := range pids {
 					if pid == myPID {
 						continue
@@ -222,6 +235,9 @@ func stopPreviousInstance(port int, testMode bool) {
 		time.Sleep(500 * time.Millisecond)
 	}
 }
+
+// findOnwatchOnPortFn is the seam used to observe port scanning in tests.
+var findOnwatchOnPortFn = findOnwatchOnPort
 
 // findOnwatchOnPort uses lsof (macOS/Linux) to find onwatch processes on a port.
 func findOnwatchOnPort(port int) []int {
@@ -380,8 +396,110 @@ func writePIDFile(port int) error {
 	return os.WriteFile(pidFile, []byte(content), 0644)
 }
 
+// removePIDFile deletes the PID file only if it still names this process.
+//
+// During a takeover the new instance writes the PID file while the old one is
+// still shutting down (stopPreviousInstance waits 500ms; a graceful shutdown
+// takes longer). An unconditional remove there deletes the new instance's
+// entry, leaving a running daemon that `onwatch update` cannot find.
 func removePIDFile() {
+	data, err := os.ReadFile(pidFile)
+	if err != nil {
+		return
+	}
+	if parsePIDContent(string(data)) != os.Getpid() {
+		return
+	}
 	os.Remove(pidFile)
+}
+
+// shouldDaemonize reports whether this process must fork itself into the
+// background. A launchd-supervised process must not: launchd tracks the PID it
+// started, so forking and exiting looks like a crash and it relaunches in a
+// loop.
+func shouldDaemonize(debugMode, isDaemonChild, underLaunchd, inDocker bool) bool {
+	return !debugMode && !isDaemonChild && !underLaunchd && !inDocker
+}
+
+// shouldWriteOwnPIDFile reports whether this process writes its own PID file.
+// The daemonize parent writes it for its child; a launchd job has no such
+// parent, so without this `onwatch status`/`stop`/`update` would not find it.
+func shouldWriteOwnPIDFile(debugMode, underLaunchd bool) bool {
+	return debugMode || underLaunchd
+}
+
+// testDaemonIsolationEnv returns environment overrides that confine a spawned
+// test-binary daemon to throwaway state. It is empty for real onWatch builds,
+// so production behaviour is unchanged.
+func testDaemonIsolationEnv(exe string) []string {
+	if !isTestBinary(exe) {
+		return nil
+	}
+	dir, err := os.MkdirTemp("", "onwatch-test-daemon")
+	if err != nil {
+		return nil
+	}
+	_ = os.MkdirAll(filepath.Join(dir, ".onwatch", "data"), 0o755)
+	env := []string{
+		"HOME=" + dir,
+		"ONWATCH_DB_PATH=" + filepath.Join(dir, "onwatch.db"),
+	}
+	if port, err := freeLocalPort(); err == nil {
+		env = append(env, fmt.Sprintf("ONWATCH_PORT=%d", port))
+	}
+	return env
+}
+
+// freeLocalPort reserves and releases an ephemeral port, returning its number.
+func freeLocalPort() (int, error) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return 0, err
+	}
+	defer ln.Close()
+	return ln.Addr().(*net.TCPAddr).Port, nil
+}
+
+// scanningDefaultPortsAllowed gates the "kill whatever onwatch listens on the
+// default port" fallbacks.
+//
+// Under `go test` that fallback SIGTERMs the developer's real running onWatch,
+// because the production binary passes isOnwatchProcess. Tests that need the
+// fallback bind their own random port and reach it through the PID-file path,
+// which stays available. Always true for real onWatch builds.
+var scanningDefaultPortsAllowed = func() bool {
+	exe, err := os.Executable()
+	if err != nil {
+		return true
+	}
+	return !isTestBinary(exe)
+}
+
+// usingProductionPIDFile reports whether the PID file in effect is the real
+// installation's. Tests that isolate pidFile into a temp dir are unaffected.
+func usingProductionPIDFile() bool {
+	return pidFile == initialPIDFilePath || pidFile == filepath.Join(defaultPIDDir(), "onwatch.pid")
+}
+
+// productionPIDFileOffLimits reports whether this process must ignore the real
+// PID file.
+//
+// Under `go test`, a test that calls runStop/stopPreviousInstance without
+// overriding the pidFile global reads the developer's real PID file and
+// SIGTERMs their running onWatch. Always false for real onWatch builds.
+var productionPIDFileOffLimits = func() bool {
+	exe, err := os.Executable()
+	if err != nil {
+		return false
+	}
+	return isTestBinary(exe) && usingProductionPIDFile()
+}
+
+// isTestBinary reports whether the executable is a `go test` binary rather than
+// a real onWatch build.
+func isTestBinary(exe string) bool {
+	base := filepath.Base(exe)
+	return strings.HasSuffix(base, ".test") || strings.HasSuffix(base, ".test.exe")
 }
 
 // daemonize re-executes the current binary as a detached background process.
@@ -414,6 +532,15 @@ func daemonize(cfg *config.Config) error {
 	cmd.Stdout = logFile
 	cmd.Stderr = logFile
 	cmd.Env = append(os.Environ(), "_ONWATCH_DAEMON=1")
+	// Under `go test` os.Executable() is the test binary, and the child is
+	// re-executed with the process-global os.Args that tests mutate. Such a
+	// child has been observed reaching full daemon startup against the real
+	// installation - production .env, port 9211, the production database, a
+	// menubar companion - replacing the developer's running onWatch with a
+	// stale test binary. Pin it to a scratch home, database and port so it
+	// cannot reach production no matter which test spawned it. Duplicate keys
+	// resolve to the last value, so these override the inherited ones.
+	cmd.Env = append(cmd.Env, testDaemonIsolationEnv(exe)...)
 	cmd.SysProcAttr = daemonSysProcAttr()
 
 	if err := cmd.Start(); err != nil {
@@ -467,6 +594,9 @@ func run() error {
 			return nil
 		}
 		return runMenubarCommand()
+	}
+	if hasCommand("service", "--service", "autostart") {
+		return runService()
 	}
 	if hasCommand("stop", "--stop") {
 		return runStop(testMode)
@@ -536,6 +666,9 @@ func run() error {
 	}
 
 	isDaemonChild := os.Getenv("_ONWATCH_DAEMON") == "1"
+	// launchd supervises the process itself: forking into the background would
+	// make launchd think the job died and relaunch it in a loop.
+	underLaunchd := service.UnderLaunchd()
 
 	// Write early diagnostic to stderr (inherited log file fd) BEFORE slog is configured.
 	// If the daemon child crashes during init, this ensures the log file isn't empty.
@@ -596,9 +729,10 @@ func run() error {
 		}
 	}
 
-	// Daemonize: if not in debug mode, not already the daemon child, and NOT in Docker, fork
+	// Daemonize: if not in debug mode, not already the daemon child, not
+	// supervised by launchd, and NOT in Docker, fork.
 	// Docker containers should always run in foreground mode (logs to stdout)
-	if !cfg.DebugMode && !isDaemonChild && !cfg.IsDockerEnvironment() {
+	if shouldDaemonize(cfg.DebugMode, isDaemonChild, underLaunchd, cfg.IsDockerEnvironment()) {
 		printBanner(cfg, version)
 		return daemonize(cfg)
 	}
@@ -606,8 +740,10 @@ func run() error {
 	// From here on, we are either the daemon child or running in --debug mode.
 
 	// In daemon mode, the parent already wrote the PID file with our PID.
-	// In debug mode, we write our own PID file.
-	if cfg.DebugMode {
+	// In debug mode - and under launchd, where there is no parent - we write
+	// our own, so `onwatch status`, `onwatch stop` and `onwatch update` can
+	// find the running instance.
+	if shouldWriteOwnPIDFile(cfg.DebugMode, underLaunchd) {
 		if err := writePIDFile(cfg.Port); err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: could not write PID file: %v\n", err)
 		}
@@ -1755,6 +1891,11 @@ func runStop(testMode bool) error {
 		label = "onwatch (test)"
 	}
 
+	if productionPIDFileOffLimits() {
+		fmt.Printf("No running %s instance found\n", label)
+		return nil
+	}
+
 	// Method 1: PID file (handles both "PID" and "PID:PORT" formats)
 	if data, err := os.ReadFile(pidFile); err == nil {
 		content := strings.TrimSpace(string(data))
@@ -1793,7 +1934,7 @@ func runStop(testMode bool) error {
 			conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", port), 500*time.Millisecond)
 			if err == nil {
 				conn.Close()
-				if pids := findOnwatchOnPort(port); len(pids) > 0 {
+				if pids := findOnwatchOnPortFn(port); len(pids) > 0 {
 					for _, foundPID := range pids {
 						if foundPID == myPID {
 							continue
@@ -1812,7 +1953,7 @@ func runStop(testMode bool) error {
 
 	// Method 2: Port-based fallback - check default ports
 	// Skip in test mode to avoid killing production instances
-	if !testMode && !stopped {
+	if !testMode && !stopped && scanningDefaultPortsAllowed() {
 		// Check both old (8932) and new (9211) default ports for backwards compatibility
 		for _, port := range []int{9211, 8932} {
 			conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", port), 500*time.Millisecond)
@@ -1820,7 +1961,7 @@ func runStop(testMode bool) error {
 				continue
 			}
 			conn.Close()
-			if pids := findOnwatchOnPort(port); len(pids) > 0 {
+			if pids := findOnwatchOnPortFn(port); len(pids) > 0 {
 				for _, pid := range pids {
 					if pid == myPID {
 						continue
@@ -1842,6 +1983,12 @@ func runStop(testMode bool) error {
 	if menubarPID := readRuntimePID(menubarPIDPath(testMode)); menubarPID > 0 {
 		_ = stopMenubarProcess(testMode)
 		fmt.Printf("Stopped %s menubar companion (PID %d)\n", label, menubarPID)
+	}
+	// The agent stays stopped now (KeepAlive only covers crashes), but launchd
+	// starts it again at the next login - say so rather than surprise the user.
+	if stopped && !testMode && autostartSupported() && autostartInstalled() {
+		fmt.Println("Auto-start is enabled: onWatch will start again at your next login.")
+		fmt.Println("  Disable with: onwatch service uninstall")
 	}
 	return nil
 }
@@ -1936,7 +2083,7 @@ func runStatus(testMode bool) error {
 					} else if !testMode {
 						// Check which port it's listening on (skip in test mode)
 						for _, checkPort := range []int{9211, 8932, 8080, 9000} {
-							if pids := findOnwatchOnPort(checkPort); len(pids) > 0 {
+							if pids := findOnwatchOnPortFn(checkPort); len(pids) > 0 {
 								for _, p := range pids {
 									if p == pid {
 										fmt.Printf("  Dashboard: http://localhost:%d\n", checkPort)
@@ -1984,12 +2131,14 @@ func runStatus(testMode bool) error {
 					if dbPath != "" {
 						fmt.Printf("  Database:  %s (%s)\n", dbPath, humanSize(dbSize))
 					}
+					printAutostartLine()
 
 					return nil
 				}
 			}
 			// Stale PID file
 			fmt.Printf("%s is not running (stale PID file for PID %d)\n", label, pid)
+			printAutostartLine()
 			return nil
 		}
 	}
@@ -2002,7 +2151,7 @@ func runStatus(testMode bool) error {
 				continue
 			}
 			conn.Close()
-			if pids := findOnwatchOnPort(port); len(pids) > 0 {
+			if pids := findOnwatchOnPortFn(port); len(pids) > 0 {
 				for _, pid := range pids {
 					if pid == myPID {
 						continue
@@ -2016,7 +2165,22 @@ func runStatus(testMode bool) error {
 	}
 
 	fmt.Printf("%s is not running\n", label)
+	printAutostartLine()
 	return nil
+}
+
+// printAutostartLine reports whether anything will bring onWatch back after a
+// reboot. Only meaningful where auto-start is managed by onWatch (macOS).
+func printAutostartLine() {
+	if !autostartSupported() {
+		return
+	}
+	if autostartInstalled() {
+		fmt.Println("  Auto-start: enabled (launchd, starts at login)")
+		return
+	}
+	fmt.Println("  Auto-start: disabled - onWatch will not return after a reboot")
+	fmt.Println("              enable with: onwatch service install")
 }
 
 // humanSize returns a human-readable file size.
@@ -2064,40 +2228,13 @@ func runUpdate() error {
 
 	fmt.Printf("Updated successfully to v%s\n", info.LatestVersion)
 
-	// If a daemon is running, stop it and start a fresh one
-	if data, err := os.ReadFile(pidFile); err == nil {
-		content := strings.TrimSpace(string(data))
-		var pid int
-		if strings.Contains(content, ":") {
-			parts := strings.Split(content, ":")
-			if len(parts) >= 1 {
-				pid, _ = strconv.Atoi(parts[0])
-			}
-		} else {
-			pid, _ = strconv.Atoi(content)
-		}
-		if pid > 0 && pid != os.Getpid() {
-			fmt.Println("Restarting daemon...")
-			// Stop old daemon
-			if proc, err := os.FindProcess(pid); err == nil {
-				_ = proc.Signal(syscall.SIGTERM)
-				time.Sleep(1 * time.Second)
-			}
-			// Start new daemon with the updated binary (no args = daemonize with .env config)
-			exePath, err := os.Executable()
-			if err == nil {
-				exePath, _ = filepath.EvalSymlinks(exePath)
-				cmd := exec.Command(exePath)
-				cmd.Env = os.Environ()
-				if err := cmd.Start(); err != nil {
-					fmt.Fprintf(os.Stderr, "Warning: restart failed: %v\n", err)
-					fmt.Println("Please restart onwatch manually.")
-				} else {
-					fmt.Printf("New daemon started (PID %d)\n", cmd.Process.Pid)
-				}
-			}
-		}
-	}
+	// Always leave onWatch running the new binary - including when it was not
+	// running before, which is the common case after a reboot.
+	restartAfterUpdate()
+
+	// An update is also the moment to notice that nothing would have brought
+	// onWatch back after that reboot.
+	offerAutostart(bufio.NewReader(os.Stdin))
 
 	return nil
 }
@@ -2214,6 +2351,7 @@ func printHelp() {
 	fmt.Println("  stop, --stop       Stop the running onwatch instance")
 	fmt.Println("  status, --status   Show status of the running instance")
 	fmt.Println("  update, --update   Check for updates and self-update")
+	fmt.Println("  service <action>   Manage auto-start at login (macOS): install, uninstall, status")
 	fmt.Println()
 	fmt.Println("Codex Profile Management:")
 	fmt.Println("  codex profile save <name>    Save current Codex credentials as a named profile")
@@ -2263,6 +2401,8 @@ func printHelp() {
 	fmt.Println("  onwatch status                    # Check if running")
 	fmt.Println("  onwatch --status                  # Same as 'status'")
 	fmt.Println("  onwatch update                    # Check for updates and self-update")
+	fmt.Println("  onwatch service install           # Start automatically at login (macOS)")
+	fmt.Println("  onwatch service status            # Show auto-start state")
 	fmt.Println("  onwatch --test --debug            # Run test instance (isolated)")
 	fmt.Println("  onwatch --test stop               # Stop only test instance")
 	fmt.Println("  onwatch --test status             # Check test instance status")

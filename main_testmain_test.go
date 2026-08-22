@@ -32,25 +32,20 @@ func TestMain(m *testing.M) {
 	}
 
 	// GitHub Actions runs jobs under systemd, so INVOCATION_ID is set on the
-	// runner and update.IsSystemd() reports true there but not on a developer
-	// machine. Clear it so the restart-path tests see the same world in both
-	// places; the systemd test opts back in with t.Setenv.
+	// runner and service.IsSystemd() reports true there but not on a developer
+	// machine. Clear it so tests see the same world in both places; a test that
+	// wants the systemd branch opts back in with t.Setenv.
 	os.Unsetenv("INVOCATION_ID")
 
-	// Auto-start and daemon-spawn safety net: no test may shell out to
-	// launchctl, touch the developer's real LaunchAgents directory, or start a
-	// real onWatch daemon (which would poll live provider APIs). Tests that
-	// exercise these paths override the stubs themselves.
+	// Auto-start safety net: no test may shell out to launchctl or touch the
+	// developer's real LaunchAgents directory. Tests that exercise these paths
+	// override the stubs themselves.
 	autostartSupported = func() bool { return false }
 	autostartInstalled = func() bool { return false }
 	autostartLoaded = func() bool { return false }
 	autostartInstall = func(service.Options) (string, error) { return "", nil }
 	autostartUninstall = func() error { return nil }
-	autostartRestart = func() error { return nil }
-	startDaemonProcess = func(string) (int, error) { return 0, nil }
 	stdinIsTerminal = func() bool { return false }
-	systemctlRestart = func() error { return nil }
-	inContainer = func() bool { return false }
 
 	code := m.Run()
 	_ = os.RemoveAll(isolationRoot)

@@ -246,8 +246,9 @@ containerSecurityContext:
   runAsGroup: 65532
   runAsNonRoot: true
   ## The binary writes only to the mounted volume, so the root filesystem can
-  ## stay read-only. This also removes the last theoretical path for the
-  ## built-in self-update to overwrite /app/onwatch.
+  ## stay read-only. Nothing in the image needs to write to itself: the unit of
+  ## delivery is the image, and self-update was removed rather than shipped
+  ## against a filesystem that refuses it.
   ##
   readOnlyRootFilesystem: true
   privileged: false

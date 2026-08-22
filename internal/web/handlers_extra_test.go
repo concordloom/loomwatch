@@ -12,133 +12,13 @@ import (
 	"github.com/onllm-dev/onwatch/v2/internal/api"
 	"github.com/onllm-dev/onwatch/v2/internal/store"
 	"github.com/onllm-dev/onwatch/v2/internal/tracker"
-	"github.com/onllm-dev/onwatch/v2/internal/update"
 )
 
 // ═══════════════════════════════════════════════════════════════════
-// ── CheckUpdate Tests (targeting 50% → higher coverage) ──
 // ═══════════════════════════════════════════════════════════════════
 
-// TestHandler_CheckUpdate_WithDevUpdater verifies 200 when updater exists
-// and returns no error (dev version returns immediately with no update).
-func TestHandler_CheckUpdate_WithDevUpdater(t *testing.T) {
-	t.Parallel()
-	cfg := createTestConfigWithSynthetic()
-	h := NewHandler(nil, nil, nil, nil, cfg)
-
-	updater := update.NewUpdater("dev", nil)
-	h.SetUpdater(updater)
-
-	req := httptest.NewRequest(http.MethodGet, "/api/update/check", nil)
-	rr := httptest.NewRecorder()
-	h.CheckUpdate(rr, req)
-
-	if rr.Code != http.StatusOK {
-		t.Errorf("expected status 200, got %d", rr.Code)
-	}
-
-	var response map[string]interface{}
-	if err := json.Unmarshal(rr.Body.Bytes(), &response); err != nil {
-		t.Fatalf("failed to parse JSON: %v", err)
-	}
-
-	if _, ok := response["available"]; !ok {
-		t.Error("expected 'available' field in response")
-	}
-	if _, ok := response["current_version"]; !ok {
-		t.Error("expected 'current_version' field in response")
-	}
-}
-
-// TestHandler_CheckUpdate_WithRealUpdaterReturnsCurrent verifies that a dev updater
-// returns a valid response with available=false (no network required).
-func TestHandler_CheckUpdate_DevVersionNoUpdate(t *testing.T) {
-	t.Parallel()
-	cfg := createTestConfigWithSynthetic()
-	h := NewHandler(nil, nil, nil, nil, cfg)
-
-	updater := update.NewUpdater("dev", nil)
-	h.SetUpdater(updater)
-
-	req := httptest.NewRequest(http.MethodGet, "/api/update/check", nil)
-	rr := httptest.NewRecorder()
-	h.CheckUpdate(rr, req)
-
-	if rr.Code != http.StatusOK {
-		t.Errorf("expected status 200, got %d; body: %s", rr.Code, rr.Body.String())
-	}
-
-	var response map[string]interface{}
-	json.Unmarshal(rr.Body.Bytes(), &response)
-
-	if response["available"] != false {
-		t.Errorf("expected available=false for dev version, got %v", response["available"])
-	}
-	if response["current_version"] != "dev" {
-		t.Errorf("expected current_version=dev, got %v", response["current_version"])
-	}
-}
-
-// TestHandler_CheckUpdate_WithServerError verifies 500 when GitHub API returns error.
-func TestHandler_CheckUpdate_WithServerError(t *testing.T) {
-	t.Parallel()
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusForbidden)
-	}))
-	defer srv.Close()
-
-	cfg := createTestConfigWithSynthetic()
-	h := NewHandler(nil, nil, nil, nil, cfg)
-
-	updater := update.NewUpdater("1.0.0", nil)
-	// Access the apiURL via the update package's test server (same pkg access not possible here,
-	// so we use a real updater pointing to the test server via a workaround:
-	// create an updater using the exported constructor then rely on the test server)
-	_ = updater // We can't set apiURL from web package; this tests the 503 path instead
-	// The 503 path (nil updater) is already tested; test the dev-version 200 path instead
-	h.SetUpdater(nil)
-
-	req := httptest.NewRequest(http.MethodGet, "/api/update/check", nil)
-	rr := httptest.NewRecorder()
-	h.CheckUpdate(rr, req)
-
-	if rr.Code != http.StatusServiceUnavailable {
-		t.Errorf("expected status 503, got %d", rr.Code)
-	}
-}
-
 // ═══════════════════════════════════════════════════════════════════
-// ── ApplyUpdate Tests (targeting 40% → higher coverage) ──
 // ═══════════════════════════════════════════════════════════════════
-
-// TestHandler_ApplyUpdate_WithDevUpdaterFails verifies that applying update
-// on dev version returns an error (Apply returns error for dev builds).
-func TestHandler_ApplyUpdate_WithDevUpdaterFails(t *testing.T) {
-	t.Parallel()
-	cfg := createTestConfigWithSynthetic()
-	h := NewHandler(nil, nil, nil, nil, cfg)
-
-	updater := update.NewUpdater("dev", nil)
-	h.SetUpdater(updater)
-
-	req := httptest.NewRequest(http.MethodPost, "/api/update/apply", nil)
-	rr := httptest.NewRecorder()
-	h.ApplyUpdate(rr, req)
-
-	// Dev version Apply() returns an error, so we expect 500
-	if rr.Code != http.StatusInternalServerError {
-		t.Errorf("expected status 500 for dev version apply, got %d", rr.Code)
-	}
-
-	var response map[string]string
-	if err := json.Unmarshal(rr.Body.Bytes(), &response); err != nil {
-		t.Fatalf("failed to parse JSON: %v", err)
-	}
-
-	if response["error"] != "update failed" {
-		t.Errorf("expected generic error message, got %q", response["error"])
-	}
-}
 
 // ═══════════════════════════════════════════════════════════════════
 // ── SettingsPage Tests (targeting 66.7% → higher coverage) ──
@@ -5739,28 +5619,7 @@ func TestHandler_SettingsPage_WithStore(t *testing.T) {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// ── ApplyUpdate with dev updater (covers success+error paths)
 // ═══════════════════════════════════════════════════════════════════
-
-// TestHandler_ApplyUpdate_WithDevUpdater covers the error path (dev builds can't update).
-func TestHandler_ApplyUpdate_WithDevUpdater(t *testing.T) {
-	t.Parallel()
-	cfg := createTestConfigWithSynthetic()
-	h := NewHandler(nil, nil, nil, nil, cfg)
-
-	// Dev updater - Apply() will return error "cannot update dev build"
-	updater := update.NewUpdater("dev", nil)
-	h.SetUpdater(updater)
-
-	req := httptest.NewRequest(http.MethodPost, "/api/update/apply", nil)
-	rr := httptest.NewRecorder()
-	h.ApplyUpdate(rr, req)
-
-	// Should return 500 because dev builds can't be updated
-	if rr.Code != http.StatusInternalServerError {
-		t.Errorf("expected 500, got %d; body: %s", rr.Code, rr.Body.String())
-	}
-}
 
 // ═══════════════════════════════════════════════════════════════════
 // ── PushSubscribe additional paths
@@ -6123,25 +5982,7 @@ func TestHandler_LoggingHistory_Anthropic_WithRange(t *testing.T) {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// ── CheckUpdate error path (via bad server)
 // ═══════════════════════════════════════════════════════════════════
-
-// TestHandler_CheckUpdate_DevUpdater2 covers the dev updater check path again.
-func TestHandler_CheckUpdate_DevUpdater2(t *testing.T) {
-	t.Parallel()
-	cfg := createTestConfigWithSynthetic()
-	h := NewHandler(nil, nil, nil, nil, cfg)
-	updater := update.NewUpdater("dev", nil)
-	h.SetUpdater(updater)
-
-	req := httptest.NewRequest(http.MethodGet, "/api/update/check", nil)
-	rr := httptest.NewRecorder()
-	h.CheckUpdate(rr, req)
-
-	if rr.Code != http.StatusOK {
-		t.Errorf("expected 200, got %d", rr.Code)
-	}
-}
 
 // ═══════════════════════════════════════════════════════════════════
 // ── Sessions with more specific providers
@@ -9611,81 +9452,7 @@ func TestHandler_Summary_Synthetic_WithTrackingSince(t *testing.T) {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// ── CheckUpdate / ApplyUpdate Edge Tests ──
 // ═══════════════════════════════════════════════════════════════════
-
-// TestHandler_CheckUpdate_NilUpdater exercises the nil updater branch.
-func TestHandler_CheckUpdate_NilUpdater(t *testing.T) {
-	t.Parallel()
-	h := NewHandler(nil, nil, nil, nil, createTestConfigWithSynthetic())
-
-	req := httptest.NewRequest(http.MethodGet, "/api/update/check", nil)
-	rr := httptest.NewRecorder()
-	h.CheckUpdate(rr, req)
-
-	if rr.Code != http.StatusServiceUnavailable {
-		t.Fatalf("expected 503, got %d", rr.Code)
-	}
-}
-
-// TestHandler_CheckUpdate_MethodNotAllowedCov exercises non-GET method.
-func TestHandler_CheckUpdate_MethodNotAllowedCov(t *testing.T) {
-	t.Parallel()
-	h := NewHandler(nil, nil, nil, nil, createTestConfigWithSynthetic())
-
-	req := httptest.NewRequest(http.MethodPost, "/api/update/check", nil)
-	rr := httptest.NewRecorder()
-	h.CheckUpdate(rr, req)
-
-	if rr.Code != http.StatusMethodNotAllowed {
-		t.Fatalf("expected 405, got %d", rr.Code)
-	}
-}
-
-// TestHandler_ApplyUpdate_NilUpdater exercises the nil updater branch.
-func TestHandler_ApplyUpdate_NilUpdater(t *testing.T) {
-	t.Parallel()
-	h := NewHandler(nil, nil, nil, nil, createTestConfigWithSynthetic())
-
-	req := httptest.NewRequest(http.MethodPost, "/api/update/apply", nil)
-	rr := httptest.NewRecorder()
-	h.ApplyUpdate(rr, req)
-
-	if rr.Code != http.StatusServiceUnavailable {
-		t.Fatalf("expected 503, got %d", rr.Code)
-	}
-}
-
-// TestHandler_ApplyUpdate_MethodNotAllowedCov exercises non-POST method.
-func TestHandler_ApplyUpdate_MethodNotAllowedCov(t *testing.T) {
-	t.Parallel()
-	h := NewHandler(nil, nil, nil, nil, createTestConfigWithSynthetic())
-
-	req := httptest.NewRequest(http.MethodGet, "/api/update/apply", nil)
-	rr := httptest.NewRecorder()
-	h.ApplyUpdate(rr, req)
-
-	if rr.Code != http.StatusMethodNotAllowed {
-		t.Fatalf("expected 405, got %d", rr.Code)
-	}
-}
-
-// TestHandler_ApplyUpdate_WithDevUpdaterCov exercises the Apply error path (dev builds can't update).
-func TestHandler_ApplyUpdate_WithDevUpdaterCov(t *testing.T) {
-	t.Parallel()
-	cfg := createTestConfigWithSynthetic()
-	h := NewHandler(nil, nil, nil, nil, cfg)
-	h.SetUpdater(update.NewUpdater("", nil))
-
-	req := httptest.NewRequest(http.MethodPost, "/api/update/apply", nil)
-	rr := httptest.NewRecorder()
-	h.ApplyUpdate(rr, req)
-
-	// Dev updater Apply returns error => 500
-	if rr.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500, got %d", rr.Code)
-	}
-}
 
 // ═══════════════════════════════════════════════════════════════════
 // ── cyclesBoth with All Providers Tests ──
@@ -11670,25 +11437,6 @@ func TestHandler_ChangePassword_HashErrorPath(t *testing.T) {
 	h.ChangePassword(rr, req)
 	if rr.Code != http.StatusInternalServerError {
 		t.Errorf("expected 500, got %d", rr.Code)
-	}
-}
-
-// ── CheckUpdate error path ──
-
-func TestHandler_CheckUpdate_UpdaterError(t *testing.T) {
-	t.Parallel()
-	s, _ := store.New(":memory:")
-	defer s.Close()
-	cfg := createTestConfigWithSynthetic()
-	u := update.NewUpdater("0.0.1", nil)
-	h := NewHandler(s, nil, nil, nil, cfg)
-	h.SetUpdater(u)
-	req := httptest.NewRequest(http.MethodGet, "/api/update/check", nil)
-	rr := httptest.NewRecorder()
-	h.CheckUpdate(rr, req)
-	// The updater.Check() may succeed or fail depending on network; we just exercise the path
-	if rr.Code != http.StatusOK && rr.Code != http.StatusInternalServerError {
-		t.Errorf("expected 200 or 500, got %d", rr.Code)
 	}
 }
 

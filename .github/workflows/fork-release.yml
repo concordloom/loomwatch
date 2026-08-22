@@ -13,8 +13,8 @@
 # upstream base it was cut from recorded separately in UPSTREAM_VERSION. A
 # derived scheme such as `2.13.3-loom.1` was rejected: under SemVer a hyphen
 # suffix denotes a PRE-release, so it sorts BELOW 2.13.3, and anything that
-# compares versions - including this project's own updater - would read the
-# fork as older than the release it is built on.
+# compares versions - a chart bump, a digest pin, an operator reading two
+# numbers - would read the fork as older than the release it is built on.
 #
 # Tag prefix `loom-v` is not decoration. A fork inherits the upstream tag
 # namespace wholesale - this repository carries 90 upstream tags, `v1.0.0`
@@ -57,10 +57,11 @@ jobs:
           persist-credentials: false
 
       # Catches the common human error of tagging without bumping VERSION.
-      # The binary embeds VERSION (see main.go), so a mismatch would ship an
-      # image whose tag and self-reported version disagree - and the updater
-      # compares the embedded value against the latest release tag, so it would
-      # then report an update against itself forever.
+      # The binary embeds VERSION (see main.go) and reports it on /metrics as
+      # onwatch_build_info, which is what a deployment is verified against. A
+      # mismatch ships an image whose tag and self-reported version disagree,
+      # so every check of "is the right revision running" answers the wrong
+      # question and keeps answering it.
       - name: Verify VERSION matches the tag
         run: |
           tag="${{ inputs.ref || github.ref_name }}"
@@ -188,7 +189,7 @@ jobs:
             echo "helm install loomwatch oci://ghcr.io/${{ github.repository_owner }}/charts/loomwatch --version ${{ steps.version.outputs.version }}"
             echo '```'
             echo
-            echo "Self-update inside a container is unsupported: the unit of"
+            echo "There is no self-update and no binaries: the unit of"
             echo "delivery is the image."
             echo
           } > notes.md

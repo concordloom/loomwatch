@@ -9594,78 +9594,6 @@ function renderPagination(table, page, totalPages) {
   return html;
 }
 
-// ── Self-Update ──
-
-async function checkForUpdate() {
-  try {
-    const res = await authFetch('/api/update/check');
-    const data = await res.json();
-    const badge = document.getElementById('update-badge');
-    if (data.available) {
-      const versionSpan = document.getElementById('update-version');
-      if (badge && versionSpan) {
-        versionSpan.textContent = data.latest_version;
-        badge.hidden = false;
-      }
-    } else if (badge) {
-      badge.hidden = true;
-    }
-  } catch (e) {
-    // Silent fail - update check is best-effort
-  }
-}
-
-async function applyUpdate() {
-  const btn = document.getElementById('update-btn');
-  if (!btn) return;
-
-  const origText = btn.textContent;
-  btn.textContent = 'Updating...';
-  btn.disabled = true;
-
-  try {
-    const res = await authFetch('/api/update/apply', { method: 'POST' });
-    if (!res.ok) {
-      const data = await res.json();
-      btn.textContent = 'Update failed';
-      btn.disabled = false;
-      // update failed - error shown in UI
-      setTimeout(() => { btn.textContent = origText; }, 3000);
-      return;
-    }
-    btn.textContent = 'Restarting...';
-    // Poll until server comes back with new version
-    setTimeout(() => pollForRestart(), 3000);
-  } catch (e) {
-    btn.textContent = 'Update failed';
-    btn.disabled = false;
-    setTimeout(() => { btn.textContent = origText; }, 3000);
-  }
-}
-
-function pollForRestart() {
-  let serverWentDown = false;
-  const interval = setInterval(async () => {
-    try {
-      await fetch('/api/update/check');
-      if (serverWentDown) {
-        // Server is back up after going down - force fresh page load (no cache)
-        clearInterval(interval);
-        window.location.href = window.location.pathname + '?_=' + Date.now();
-      }
-      // Server still responding (hasn't died yet) - keep waiting
-    } catch (e) {
-      // Network error = server went down
-      serverWentDown = true;
-    }
-  }, 1000);
-  // Force reload after 30s even if we didn't detect restart
-  setTimeout(() => {
-    clearInterval(interval);
-    window.location.href = window.location.pathname + '?_=' + Date.now();
-  }, 30000);
-}
-
 // ═══════════════════════════════════════════
 // SETTINGS PAGE
 // ═══════════════════════════════════════════
@@ -12465,16 +12393,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     startCountdowns();
     startAutoRefresh();
-
-    // Check for updates on load and every 60 minutes
-    checkForUpdate();
-    setInterval(checkForUpdate, 3600000);
-
-    // Update button click handler
-    const updateBtn = document.getElementById('update-btn');
-    if (updateBtn) {
-      updateBtn.addEventListener('click', applyUpdate);
-    }
 
     // Update sessions table header for "both" mode
     const provider = getCurrentProvider();

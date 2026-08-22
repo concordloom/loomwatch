@@ -4,18 +4,13 @@ import (
 	"bufio"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
-	"syscall"
-	"time"
 
 	"github.com/mattn/go-isatty"
 
-	"github.com/onllm-dev/onwatch/v2/internal/config"
 	"github.com/onllm-dev/onwatch/v2/internal/service"
-	"github.com/onllm-dev/onwatch/v2/internal/update"
 )
 
 // Auto-start (launchd) plumbing, indirected so tests never shell out to
@@ -23,7 +18,6 @@ import (
 var (
 	autostartInstall   = service.Install
 	autostartUninstall = service.Uninstall
-	autostartRestart   = service.Restart
 	autostartInstalled = service.IsInstalled
 	autostartLoaded    = service.Loaded
 	autostartOptions   = service.DefaultOptions
@@ -141,7 +135,7 @@ func runService() error {
 		switch action {
 		case "status":
 			fmt.Println("Auto-start management is macOS-only.")
-			fmt.Println("On Linux, install.sh creates a systemd unit: systemctl --user status onwatch")
+			fmt.Println("On Linux the daemon runs under whatever unit you created: systemctl --user status onwatch")
 			return nil
 		default:
 			return fmt.Errorf("onwatch service: auto-start management is macOS-only (Linux uses systemd)")
@@ -216,61 +210,6 @@ func printServiceHelp() {
 
 // --- post-update restart -------------------------------------------------
 
-// restartArgs carries the user's configuration flags into the restarted daemon
-// so `onwatch update --port 8080` does not come back on the default port. The
-// update verb itself is dropped, and so are the foreground flags: the restart
-// must end in a background daemon, not a process tied to this terminal.
-func restartArgs(args []string) []string {
-	var out []string
-	for _, a := range args {
-		switch a {
-		case "update", "--update", "--debug", "--debugstdout":
-			continue
-		}
-		out = append(out, a)
-	}
-	return out
-}
-
-// daemonEnv strips the markers that tell a process it is already the daemon.
-// Inheriting either one would stop the new process from backgrounding itself.
-func daemonEnv(env []string) []string {
-	out := make([]string, 0, len(env))
-	for _, kv := range env {
-		if strings.HasPrefix(kv, "_ONWATCH_DAEMON=") || strings.HasPrefix(kv, "_ONWATCH_LAUNCHD=") {
-			continue
-		}
-		out = append(out, kv)
-	}
-	return out
-}
-
-// startDaemonProcess launches the (already updated) binary as a fresh daemon.
-// Overridden in tests - `go test` must never spawn a real onWatch.
-var startDaemonProcess = func(exePath string) (int, error) {
-	cmd := exec.Command(exePath, restartArgs(os.Args[1:])...)
-	cmd.Env = daemonEnv(os.Environ())
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Start(); err != nil {
-		return 0, err
-	}
-
-	// The launcher forks the daemon and exits; wait for it so its output does
-	// not race the shell prompt, but never block forever on it.
-	done := make(chan error, 1)
-	go func() { done <- cmd.Wait() }()
-	select {
-	case err := <-done:
-		if err != nil {
-			return 0, err
-		}
-	case <-time.After(30 * time.Second):
-	}
-
-	return daemonPIDFromFile(), nil
-}
-
 // parsePIDContent handles both the "PID:PORT" and legacy "PID" file formats.
 func parsePIDContent(content string) int {
 	content = strings.TrimSpace(content)
@@ -287,117 +226,4 @@ func daemonPIDFromFile() int {
 		return 0
 	}
 	return parsePIDContent(string(data))
-}
-
-// runningDaemonPID returns the PID of a live daemon recorded in the PID file.
-// A stale PID file (process gone after a reboot or crash) reports not running.
-func runningDaemonPID() (int, bool) {
-	pid := daemonPIDFromFile()
-	if pid <= 0 || pid == os.Getpid() {
-		return 0, false
-	}
-	proc, err := os.FindProcess(pid)
-	if err != nil {
-		return 0, false
-	}
-	if err := proc.Signal(syscall.Signal(0)); err != nil {
-		return 0, false
-	}
-	// The PID file can name a PID the OS has since recycled onto an unrelated
-	// process; the update path would otherwise SIGTERM it and then wait on it.
-	if !isOnwatchProcess(pid) {
-		return 0, false
-	}
-	return pid, true
-}
-
-// waitForExit blocks until the process is gone or the deadline passes.
-func waitForExit(pid int, timeout time.Duration) {
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
-		proc, err := os.FindProcess(pid)
-		if err != nil {
-			return
-		}
-		if err := proc.Signal(syscall.Signal(0)); err != nil {
-			return
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
-}
-
-// systemctlRestart asks systemd to restart the detected onWatch unit.
-var systemctlRestart = func() error {
-	return exec.Command("systemctl", "restart", update.DetectServiceName()).Run()
-}
-
-// inContainer reports whether this process runs inside Docker or Kubernetes.
-var inContainer = func() bool {
-	return (&config.Config{}).IsDockerEnvironment()
-}
-
-// restartAfterUpdate leaves onWatch running the new binary, whether or not it
-// was running before. An update that silently leaves the daemon stopped is the
-// bug this exists to prevent.
-func restartAfterUpdate() {
-	// When launchd owns the process, let it do the restart so the job stays
-	// supervised and keeps its auto-start behaviour.
-	if autostartSupported() && autostartInstalled() && autostartLoaded() {
-		fmt.Println("Restarting via launchd...")
-		if err := autostartRestart(); err == nil {
-			fmt.Printf("onWatch restarted (launchd agent %s)\n", service.Label)
-			return
-		}
-		fmt.Fprintln(os.Stderr, "Warning: launchctl kickstart failed, falling back to a direct restart")
-	}
-
-	// systemd owns the lifecycle on Linux: spawning here would create an
-	// unsupervised daemon beside the unit, and would restart a service the
-	// operator had deliberately stopped.
-	if update.IsSystemd() {
-		fmt.Println("Running under systemd - restarting the service...")
-		if err := systemctlRestart(); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: systemctl restart failed: %v\n", err)
-			fmt.Println("Restart manually with: systemctl restart onwatch")
-		}
-		return
-	}
-
-	// In a container onWatch is PID 1 and runs in the foreground; there is
-	// nothing to background and no PID file to read. Restarting the container
-	// is the operator's call.
-	if inContainer() {
-		fmt.Println("Running in a container - restart the container to pick up the new binary.")
-		return
-	}
-
-	if pid, running := runningDaemonPID(); running {
-		fmt.Println("Restarting daemon...")
-		if proc, err := os.FindProcess(pid); err == nil {
-			_ = proc.Signal(syscall.SIGTERM)
-			waitForExit(pid, 5*time.Second)
-		}
-	} else {
-		fmt.Println("onWatch was not running - starting the updated daemon...")
-	}
-
-	exePath, err := os.Executable()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: could not locate the updated binary: %v\n", err)
-		fmt.Println("Please start onwatch manually.")
-		return
-	}
-	if resolved, err := filepath.EvalSymlinks(exePath); err == nil {
-		exePath = resolved
-	}
-
-	newPID, err := startDaemonProcess(exePath)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: restart failed: %v\n", err)
-		fmt.Println("Please start onwatch manually.")
-		return
-	}
-	if newPID > 0 {
-		fmt.Printf("onWatch is running (PID %d)\n", newPID)
-	}
 }

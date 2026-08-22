@@ -94,7 +94,7 @@ The `VERSION` file at the project root is the single source of truth. The Makefi
 VERSION := $(shell cat VERSION)
 ```
 
-To bump the version, edit `VERSION` and rebuild. The GitHub Actions workflow and `make release-local` both read from this file.
+To bump the version, use `scripts/set-version.sh`, which keeps `VERSION` and both chart fields in step. The release workflow verifies that they agree.
 
 ---
 
@@ -105,6 +105,11 @@ onWatch uses pure Go SQLite (`modernc.org/sqlite`), so cross-compilation works w
 ```bash
 make release-local
 ```
+
+`make release-local` is `./app.sh --release`, which this fork does not release
+from - see Release Pipeline below. It builds five platforms' worth of binaries
+that are not published; useful for checking that a change still cross-compiles,
+not for cutting a release.
 
 This produces binaries in `dist/`:
 

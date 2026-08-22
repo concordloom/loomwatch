@@ -223,6 +223,16 @@ func TestMain_ErrorPath(t *testing.T) {
 func TestRun_UpdateIsARecognisedRemovedVerb(t *testing.T) {
 	for _, arg := range []string{"update", "--update"} {
 		t.Run(arg, func(t *testing.T) {
+			// If the dispatch arm is ever deleted, run() reaches daemon startup
+			// from here. The daemon it spawns is sandboxed by
+			// testDaemonIsolationEnv, but daemonize writes the PID file before
+			// that, and in a developer's real HOME that clobbers the pointer to
+			// their running daemon. The guard has to fail safely as well as
+			// loudly.
+			oldPIDFile := pidFile
+			pidFile = filepath.Join(t.TempDir(), "onwatch.pid")
+			t.Cleanup(func() { pidFile = oldPIDFile })
+
 			setTestArgs(t, []string{"onwatch", arg})
 			err := run()
 			if err == nil {

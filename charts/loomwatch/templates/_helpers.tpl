@@ -77,10 +77,14 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 Image reference.
 A digest, when given, replaces the tag entirely: the two together would let the
 tag drift while the digest silently decided what actually runs.
+An empty tag falls back to the chart's appVersion, which is the version this
+chart ships. A literal default here is what let chart 1.7.0 go out pointing at
+image 1.0.4: the two numbers are kept equal on purpose, so only one of them
+should exist.
 */}}
 {{- define "loomwatch.image" -}}
 {{- $registry := default .Values.image.registry .Values.global.imageRegistry -}}
-{{- $tag := .Values.image.tag | toString -}}
+{{- $tag := default .Chart.AppVersion .Values.image.tag | toString -}}
 {{- if .Values.image.digest -}}
 {{- printf "%s/%s@%s" $registry .Values.image.repository (.Values.image.digest | toString) -}}
 {{- else -}}

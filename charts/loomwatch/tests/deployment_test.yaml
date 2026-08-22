@@ -68,6 +68,16 @@ tests:
             name: tmp
             mountPath: /tmp
 
+  - it: tags the image with the version this chart ships, not a literal of its own
+    asserts:
+      # The regression this guards: chart 1.7.0 shipped with a hard-coded
+      # `tag: 1.0.4` in values.yaml and defaulted every install to an image
+      # three minor versions behind the chart. An empty tag now resolves to
+      # appVersion, so the pattern also catches a trailing bare colon.
+      - matchRegex:
+          path: spec.template.spec.containers[0].image
+          pattern: "^ghcr\\.io/concordloom/loomwatch:[0-9]+\\.[0-9]+\\.[0-9]+$"
+
   - it: lets the digest replace the tag rather than sit beside it
     set:
       image.tag: 1.0.1

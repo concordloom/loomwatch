@@ -67,7 +67,7 @@ diagnosticMode:
 ## ref: https://github.com/concordloom/loomwatch/pkgs/container/loomwatch
 ## @param image.registry [default: ghcr.io] loomwatch image registry
 ## @param image.repository loomwatch image repository
-## @param image.tag loomwatch image tag (immutable tags are recommended)
+## @param image.tag loomwatch image tag; empty means the chart's appVersion, which is the version this chart ships
 ## @param image.digest loomwatch image digest in the way sha256:aa.... Please note this parameter, if set, will override the tag
 ## @param image.pullPolicy loomwatch image pull policy
 ## @param image.pullSecrets loomwatch image pull secrets
@@ -75,7 +75,11 @@ diagnosticMode:
 image:
   registry: ghcr.io
   repository: concordloom/loomwatch
-  tag: 1.0.4
+  ## Left empty on purpose: the chart and the application are released
+  ## together and carry the same number, so appVersion is the tag. A literal
+  ## here is a second copy of that number, and the copy is what goes stale.
+  ##
+  tag: ""
   ## Pinning by digest is strongly recommended for a component whose readings
   ## alerts are built on: a moving tag lets the running version change with no
   ## diff in whatever declares it.

@@ -438,30 +438,19 @@ Measured with the built-in `tools/perf-monitor` while provider agents ran in par
 
 ---
 
-## Self-Update Mechanism
-
-onWatch includes a self-update system that downloads new releases from GitHub and replaces the running binary. The update can be triggered from the dashboard (update badge in footer) or via `onwatch update`.
-
-### Update Flow
-
-1. **Check**: Queries `https://api.github.com/repos/onllm-dev/onwatch/releases/latest` (cached for 1 hour)
-2. **Apply**: Downloads the platform-specific binary, validates magic bytes (ELF/Mach-O/PE), replaces the current binary using remove+rename (Unix) or backup-rename (Windows)
-3. **Migrate**: Fixes the systemd unit file if running under systemd (`Restart=always`, `RestartSec=5`)
-4. **Restart**: `systemctl restart` under systemd, `launchctl kickstart -k` under launchd, or a fresh spawn in standalone mode
-
-`runUpdate()` always ends with onWatch running. A PID file naming a dead process (the normal state after a reboot) counts as "not running", and the updater starts the new binary instead of exiting silently.
+## Service Lifecycle
 
 ### systemd Integration
 
-Under systemd, onWatch auto-detects its service name from `/proc/self/cgroup` and uses `systemctl restart` for proper lifecycle management. Three layers ensure reliability:
+Under systemd, loomWatch detects its service name from `/proc/self/cgroup` so
+`onwatch service` can drive `systemctl restart` rather than guessing a unit
+name. `MigrateSystemdUnit()` runs once at startup and brings an existing unit
+up to `Restart=always` and `RestartSec=5`.
 
-| Layer | When | Purpose |
-|-------|------|---------|
-| `Apply()` | After binary replacement | Fixes unit file before any restart attempt |
-| `Restart()` | After apply | Runs `systemctl restart <service>` |
-| Startup | Every boot | Safety net — re-checks unit file settings |
-
-The startup migration runs before `stopPreviousInstance()`. This is critical for upgrades from older versions: when an old binary spawns the new binary as a post-update child, the child fixes the unit file while the parent is still alive, then kills the parent. systemd sees the main PID die, and `Restart=always` triggers an automatic restart with the new binary.
+Those units were written by an installer this fork no longer ships, so the
+migration only finds work on a host installed before that. In a container there
+is no systemd and it is a no-op, which is the deployment this fork supports.
+All of it lives in `internal/service/systemd.go`.
 
 ### launchd Integration (macOS)
 
@@ -476,17 +465,16 @@ macOS has no systemd equivalent, so onWatch manages a per-user LaunchAgent at `~
 
 `_ONWATCH_LAUNCHD=1` changes two things in `run()`: the process stays in the foreground (forking would make launchd think the job died and relaunch it in a loop), and it writes its own PID file, since there is no daemonize parent to write one.
 
-Auto-start is opt-in. `install.sh`, `onwatch setup`, and `onwatch update` each offer it once when the agent is missing; declining writes `~/.onwatch/.autostart-declined` so the offer is not repeated. `ONWATCH_AUTOSTART=yes|no` answers the installer prompt non-interactively.
+Auto-start is opt-in. `onwatch setup` offers it once when the agent is missing; declining writes `~/.onwatch/.autostart-declined` so the offer is not repeated. `ONWATCH_AUTOSTART=yes|no` answers the prompt non-interactively.
 
 ### Key Source Files
 
 | File | Purpose |
 |------|---------|
-| `internal/update/update.go` | Version check, download, binary replacement, systemd migration |
+| `internal/service/systemd.go` | systemd detection, service-name discovery, unit migration |
 | `internal/service/launchd.go` | macOS LaunchAgent plist rendering, install/uninstall/kickstart |
-| `internal/web/handlers.go` | `/api/update/check` and `/api/update/apply` endpoints |
-| `main.go` | `MigrateSystemdUnit()` call on startup, `runUpdate()` CLI handler |
-| `service_cmd.go` | `onwatch service` subcommand, auto-start offer, post-update restart |
+| `main.go` | `MigrateSystemdUnit()` call on startup |
+| `service_cmd.go` | `onwatch service` subcommand and the auto-start offer |
 
 ---
 

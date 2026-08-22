@@ -106,10 +106,10 @@ onWatch uses pure Go SQLite (`modernc.org/sqlite`), so cross-compilation works w
 make release-local
 ```
 
-`make release-local` is `./app.sh --release`, which this fork does not release
-from - see Release Pipeline below. It builds five platforms' worth of binaries
-that are not published; useful for checking that a change still cross-compiles,
-not for cutting a release.
+`make release-local` is an alias for `./app.sh --release`, which `CLAUDE.md`
+says not to run locally, and this section is a description of the Makefile
+rather than a recommendation. This fork publishes no binaries at all - a
+release comes out of the pipeline, as described under Release Pipeline below.
 
 This produces binaries in `dist/`:
 

@@ -31,9 +31,9 @@ class TestDataTables:
         )
         assert len(headers) >= 5
         sort_keys = [h.get_attribute("data-sort-key") for h in headers]
+        assert "id" in sort_keys
         assert "start" in sort_keys
-        assert "peak" in sort_keys
-        assert "total" in sort_keys
+        assert any(key.startswith("cq_") for key in sort_keys)
 
     def test_cycles_pagination_controls(self, dashboard_page: Page) -> None:
         """The cycles section should have pagination controls."""

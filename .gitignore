@@ -96,3 +96,6 @@ onwatch-test
 /result
 /result-*
 .direnv/
+
+# Gopnik: machine-local Stage 2 values (deployment address, credentials)
+/gopnik.local.env

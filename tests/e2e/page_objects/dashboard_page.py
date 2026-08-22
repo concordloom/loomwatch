@@ -111,6 +111,13 @@ class DashboardPage:
             return el.inner_text().strip()
         return ""
 
+    def get_last_updated_tooltip(self) -> str:
+        """Return the last updated tooltip, which carries the full phrase."""
+        el = self.page.query_selector("#last-updated")
+        if el:
+            return (el.get_attribute("title") or "").strip()
+        return ""
+
     def select_chart_range(self, range_value: str) -> None:
         """Click a chart range button by its data-range attribute."""
         self.page.click(

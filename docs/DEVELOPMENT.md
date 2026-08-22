@@ -225,34 +225,24 @@ Binary sizes: ~15 MB per platform.
 
 ## Release Pipeline
 
-### Local
+This fork releases itself, and `CLAUDE.md` holds the authoritative steps. In
+short: bump `VERSION` and `charts/loomwatch/Chart.yaml` together with
+`scripts/set-version.sh`, land it on `main` through a pull request, then tag the
+merge commit `loom-v<version>` and push the tag.
 
-```bash
-./app.sh --release    # or: make release-local
-ls -lh dist/
-```
+Pushing that tag is the whole trigger. `.github/workflows/fork-release.yml`
+checks that the tag, `VERSION` and the chart agree, lints and unit-tests the
+chart, then publishes the container image and the chart to `ghcr.io` and creates
+the GitHub release.
 
-### GitHub Actions
+Two things this pipeline deliberately does not do. It ships **no binaries**: the
+unit of delivery is the image. And it never uses the `v*` tag namespace, which
+belongs to the upstream tags this repository inherited - a sync must not be able
+to trigger a release here.
 
-The workflow at `.github/workflows/release.yml` triggers on:
-
-- **Tag push** (`v*`): Builds all platforms and creates a GitHub Release
-- **Manual dispatch**: Optionally creates a release with the `publish` input
-
-To release:
-
-```bash
-# Update VERSION file
-echo "2.10.4" > VERSION
-
-# Commit, tag, push
-git add VERSION
-git commit -m "chore: bump version to 2.10.4"
-git tag v2.10.4
-git push && git push --tags
-```
-
-The workflow builds, tests, and publishes binaries automatically.
+Do not run `./app.sh --release` locally. It cross-compiles five platforms' worth
+of binaries this fork does not ship, and a release has to come out of the
+pipeline rather than off a workstation.
 
 ---
 
@@ -442,10 +432,10 @@ Measured with the built-in `tools/perf-monitor` while provider agents ran in par
 
 ### systemd Integration
 
-Under systemd, loomWatch detects its service name from `/proc/self/cgroup` so
-`onwatch service` can drive `systemctl restart` rather than guessing a unit
-name. `MigrateSystemdUnit()` runs once at startup and brings an existing unit
-up to `Restart=always` and `RestartSec=5`.
+`MigrateSystemdUnit()` runs once at daemon startup and brings an existing unit
+up to `Restart=always` and `RestartSec=5`. It detects the service name from
+`/proc/self/cgroup` rather than guessing it. Nothing else calls into systemd:
+`onwatch service` manages the macOS LaunchAgent and says so on Linux.
 
 Those units were written by an installer this fork no longer ships, so the
 migration only finds work on a host installed before that. In a container there

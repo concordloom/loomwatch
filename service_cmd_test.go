@@ -34,8 +34,8 @@ func newAutostartHarness(t *testing.T) *autostartHarness {
 	h := &autostartHarness{}
 
 	prevSupported, prevInstalled, prevLoaded := autostartSupported, autostartInstalled, autostartLoaded
-	prevInstall, prevUninstall, prevRestart := autostartInstall, autostartUninstall, autostartRestart
-	prevSpawn, prevTerm := startDaemonProcess, stdinIsTerminal
+	prevInstall, prevUninstall := autostartInstall, autostartUninstall
+	prevTerm := stdinIsTerminal
 
 	autostartSupported = func() bool { return h.supported }
 	autostartInstalled = func() bool { return h.installed }
@@ -49,20 +49,12 @@ func newAutostartHarness(t *testing.T) *autostartHarness {
 		return "/tmp/fake/dev.onllm.onwatch.plist", nil
 	}
 	autostartUninstall = func() error { h.uninstall++; h.installed = false; return nil }
-	autostartRestart = func() error {
-		h.restarts++
-		return h.restartErr
-	}
-	startDaemonProcess = func(path string) (int, error) {
-		h.spawns = append(h.spawns, path)
-		return h.spawnPID, h.spawnErr
-	}
 	stdinIsTerminal = func() bool { return h.terminal }
 
 	t.Cleanup(func() {
 		autostartSupported, autostartInstalled, autostartLoaded = prevSupported, prevInstalled, prevLoaded
-		autostartInstall, autostartUninstall, autostartRestart = prevInstall, prevUninstall, prevRestart
-		startDaemonProcess, stdinIsTerminal = prevSpawn, prevTerm
+		autostartInstall, autostartUninstall = prevInstall, prevUninstall
+		stdinIsTerminal = prevTerm
 	})
 	return h
 }
@@ -92,30 +84,6 @@ func TestParsePIDContent(t *testing.T) {
 		if got := parsePIDContent(in); got != want {
 			t.Errorf("parsePIDContent(%q) = %d, want %d", in, got, want)
 		}
-	}
-}
-
-func TestRunningDaemonPID(t *testing.T) {
-	isolateHome(t)
-
-	if _, ok := runningDaemonPID(); ok {
-		t.Error("no PID file should report not running")
-	}
-
-	// A PID file left behind by a reboot points at a process that is gone.
-	if err := os.WriteFile(pidFile, []byte("999998:9211"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if _, ok := runningDaemonPID(); ok {
-		t.Error("stale PID file should report not running")
-	}
-
-	// Our own PID means we are the updater, not the daemon.
-	if err := os.WriteFile(pidFile, []byte(fmt.Sprintf("%d:9211", os.Getpid())), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if _, ok := runningDaemonPID(); ok {
-		t.Error("own PID should report not running")
 	}
 }
 
@@ -463,57 +431,6 @@ func TestOfferAutostartEmptyLineAcceptsDefault(t *testing.T) {
 
 	if h.installCall != 1 {
 		t.Errorf("empty line should accept the (Y/n) default, installCall=%d", h.installCall)
-	}
-}
-
-func TestRestartArgs(t *testing.T) {
-	cases := []struct {
-		in, want []string
-	}{
-		{[]string{"update"}, nil},
-		{[]string{"--update"}, nil},
-		{[]string{"update", "--port", "8080"}, []string{"--port", "8080"}},
-		{[]string{"--db", "/tmp/x.db", "update"}, []string{"--db", "/tmp/x.db"}},
-		// The restart must background itself, so foreground flags are dropped.
-		{[]string{"update", "--debug"}, nil},
-		{[]string{"update", "--debugstdout", "--port", "9000"}, []string{"--port", "9000"}},
-	}
-	for _, c := range cases {
-		got := restartArgs(c.in)
-		if len(got) != len(c.want) {
-			t.Errorf("restartArgs(%v) = %v, want %v", c.in, got, c.want)
-			continue
-		}
-		for i := range got {
-			if got[i] != c.want[i] {
-				t.Errorf("restartArgs(%v) = %v, want %v", c.in, got, c.want)
-				break
-			}
-		}
-	}
-}
-
-// Inheriting either marker would tell the new process it is already the daemon,
-// so it would stay in the foreground instead of backgrounding itself.
-func TestDaemonEnvStripsDaemonMarkers(t *testing.T) {
-	in := []string{"HOME=/Users/x", "_ONWATCH_DAEMON=1", "PATH=/bin", "_ONWATCH_LAUNCHD=1", "ONWATCH_PORT=9211"}
-	got := daemonEnv(in)
-
-	for _, kv := range got {
-		if strings.HasPrefix(kv, "_ONWATCH_DAEMON=") || strings.HasPrefix(kv, "_ONWATCH_LAUNCHD=") {
-			t.Errorf("daemonEnv kept %q", kv)
-		}
-	}
-	for _, want := range []string{"HOME=/Users/x", "PATH=/bin", "ONWATCH_PORT=9211"} {
-		found := false
-		for _, kv := range got {
-			if kv == want {
-				found = true
-			}
-		}
-		if !found {
-			t.Errorf("daemonEnv dropped %q", want)
-		}
 	}
 }
 

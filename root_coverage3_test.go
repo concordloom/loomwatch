@@ -2888,32 +2888,6 @@ func TestStopPreviousInstance_NoPIDFile(t *testing.T) {
 // run() - via setTestArgs for update command with real version
 // ---------------------------------------------------------------------------
 
-func TestRun_UpdateCommand(t *testing.T) {
-	origVersion := version
-	version = "999.999.996"
-	t.Cleanup(func() { version = origVersion })
-
-	oldPIDFile := pidFile
-	pidFile = filepath.Join(t.TempDir(), "onwatch.pid")
-	t.Cleanup(func() { pidFile = oldPIDFile })
-
-	setTestArgs(t, []string{"onwatch", "update"})
-
-	out := captureStdout(t, func() {
-		err := run()
-		if err != nil {
-			if strings.Contains(err.Error(), "update check failed") {
-				t.Logf("network error (expected): %v", err)
-				return
-			}
-			t.Fatalf("run update error: %v", err)
-		}
-	})
-	if !strings.Contains(out, "checking for updates") {
-		t.Logf("output: %s", out)
-	}
-}
-
 // ---------------------------------------------------------------------------
 // runStop() - test mode with running parent PID (exercises SIGTERM path)
 // ---------------------------------------------------------------------------

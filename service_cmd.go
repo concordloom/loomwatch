@@ -4,16 +4,12 @@ import (
 	"bufio"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
-	"syscall"
-	"time"
 
 	"github.com/mattn/go-isatty"
 
-	"github.com/onllm-dev/onwatch/v2/internal/config"
 	"github.com/onllm-dev/onwatch/v2/internal/service"
 )
 
@@ -22,7 +18,6 @@ import (
 var (
 	autostartInstall   = service.Install
 	autostartUninstall = service.Uninstall
-	autostartRestart   = service.Restart
 	autostartInstalled = service.IsInstalled
 	autostartLoaded    = service.Loaded
 	autostartOptions   = service.DefaultOptions
@@ -215,61 +210,6 @@ func printServiceHelp() {
 
 // --- post-update restart -------------------------------------------------
 
-// restartArgs carries the user's configuration flags into the restarted daemon
-// so `onwatch update --port 8080` does not come back on the default port. The
-// update verb itself is dropped, and so are the foreground flags: the restart
-// must end in a background daemon, not a process tied to this terminal.
-func restartArgs(args []string) []string {
-	var out []string
-	for _, a := range args {
-		switch a {
-		case "update", "--update", "--debug", "--debugstdout":
-			continue
-		}
-		out = append(out, a)
-	}
-	return out
-}
-
-// daemonEnv strips the markers that tell a process it is already the daemon.
-// Inheriting either one would stop the new process from backgrounding itself.
-func daemonEnv(env []string) []string {
-	out := make([]string, 0, len(env))
-	for _, kv := range env {
-		if strings.HasPrefix(kv, "_ONWATCH_DAEMON=") || strings.HasPrefix(kv, "_ONWATCH_LAUNCHD=") {
-			continue
-		}
-		out = append(out, kv)
-	}
-	return out
-}
-
-// startDaemonProcess launches the (already updated) binary as a fresh daemon.
-// Overridden in tests - `go test` must never spawn a real onWatch.
-var startDaemonProcess = func(exePath string) (int, error) {
-	cmd := exec.Command(exePath, restartArgs(os.Args[1:])...)
-	cmd.Env = daemonEnv(os.Environ())
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Start(); err != nil {
-		return 0, err
-	}
-
-	// The launcher forks the daemon and exits; wait for it so its output does
-	// not race the shell prompt, but never block forever on it.
-	done := make(chan error, 1)
-	go func() { done <- cmd.Wait() }()
-	select {
-	case err := <-done:
-		if err != nil {
-			return 0, err
-		}
-	case <-time.After(30 * time.Second):
-	}
-
-	return daemonPIDFromFile(), nil
-}
-
 // parsePIDContent handles both the "PID:PORT" and legacy "PID" file formats.
 func parsePIDContent(content string) int {
 	content = strings.TrimSpace(content)
@@ -286,51 +226,4 @@ func daemonPIDFromFile() int {
 		return 0
 	}
 	return parsePIDContent(string(data))
-}
-
-// runningDaemonPID returns the PID of a live daemon recorded in the PID file.
-// A stale PID file (process gone after a reboot or crash) reports not running.
-func runningDaemonPID() (int, bool) {
-	pid := daemonPIDFromFile()
-	if pid <= 0 || pid == os.Getpid() {
-		return 0, false
-	}
-	proc, err := os.FindProcess(pid)
-	if err != nil {
-		return 0, false
-	}
-	if err := proc.Signal(syscall.Signal(0)); err != nil {
-		return 0, false
-	}
-	// The PID file can name a PID the OS has since recycled onto an unrelated
-	// process; the update path would otherwise SIGTERM it and then wait on it.
-	if !isOnwatchProcess(pid) {
-		return 0, false
-	}
-	return pid, true
-}
-
-// waitForExit blocks until the process is gone or the deadline passes.
-func waitForExit(pid int, timeout time.Duration) {
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
-		proc, err := os.FindProcess(pid)
-		if err != nil {
-			return
-		}
-		if err := proc.Signal(syscall.Signal(0)); err != nil {
-			return
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
-}
-
-// systemctlRestart asks systemd to restart the detected onWatch unit.
-var systemctlRestart = func() error {
-	return exec.Command("systemctl", "restart", service.DetectServiceName()).Run()
-}
-
-// inContainer reports whether this process runs inside Docker or Kubernetes.
-var inContainer = func() bool {
-	return (&config.Config{}).IsDockerEnvironment()
 }

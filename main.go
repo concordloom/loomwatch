@@ -611,6 +611,12 @@ func run() error {
 	if hasCommand("setup", "--setup") {
 		return runSetup()
 	}
+	// `update` was a command until 1.8.0. It stays recognised so that typing it
+	// says what happened, rather than falling through to the daemon and quietly
+	// starting one - which is what an unknown argument does here.
+	if hasCommand("update", "--update") {
+		return fmt.Errorf("self-update was removed in 1.8.0: this build ships no binaries to update to, and the unit of delivery is the image")
+	}
 	if hasCommand("--help", "-h") {
 		printHelp()
 		return nil

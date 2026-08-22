@@ -2,11 +2,12 @@ package service
 
 // systemd support for the Linux side of service management.
 //
-// These helpers lived in internal/update until self-update was removed. They
-// were written to make a self-update restart survive systemd, but only the
-// migration was ever about that: IsSystemd and DetectServiceName are what
-// `onwatch service` uses to restart the daemon, and they outlive the feature
-// they shipped beside.
+// These helpers lived in internal/update until self-update was removed. Only
+// MigrateSystemdUnit is still reached at runtime, from the daemon at startup
+// (main.go): it keeps an inherited unit's restart policy current. The other
+// three are its own machinery - IsSystemd gates it, DetectServiceName names the
+// unit, findUnitFile locates it - and they are exported because their tests
+// drive them directly.
 
 import (
 	"log/slog"

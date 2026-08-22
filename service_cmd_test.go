@@ -357,7 +357,7 @@ func TestShouldWriteOwnPIDFile(t *testing.T) {
 }
 
 // /dev/null is a character device, so a ModeCharDevice check would call it a
-// terminal and `onwatch update < /dev/null` would take the prompt's default -
+// terminal and `onwatch setup < /dev/null` would take the prompt's default -
 // silently installing a login item nobody asked for.
 func TestStdinIsTerminalRejectsDevNull(t *testing.T) {
 	devnull, err := os.Open(os.DevNull)

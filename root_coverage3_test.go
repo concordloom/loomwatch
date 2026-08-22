@@ -1259,17 +1259,6 @@ func TestDaemonChildRun_HelperProcess(t *testing.T) {
 		os.Args = []string{"onwatch", "--debug", "--test"}
 		main()
 		os.Exit(0)
-	case "run_update_check":
-		// Run update with an old version string so GitHub returns "update available"
-		// Apply() will likely fail (binary not writable in test env) -> covers error path
-		os.Args = []string{"onwatch", "update"}
-		main() // This will try to apply update and likely fail
-		os.Exit(0)
-	case "run_update_error":
-		// Run update command that will fail (non-dev version + bad network)
-		os.Args = []string{"onwatch", "update"}
-		main()
-		os.Exit(0)
 	case "debug_default_password":
 		// Run with default password to trigger the warning branch
 		os.Args = []string{"onwatch", "--debug", "--test"}
@@ -1799,40 +1788,6 @@ func TestDaemonChildRun_DebugModeLogLevels(t *testing.T) {
 				"ONWATCH_LOG_LEVEL="+logLevel,
 			), 400)
 		})
-	}
-}
-
-// TestRunUpdate_CheckAvailableViaSubprocess tests the "update available" path
-// by running with an old version (0.0.1) so GitHub returns a newer version.
-// Apply() will likely fail because the test binary isn't in a writable location,
-// which covers the "update failed" error return path.
-func TestRunUpdate_CheckAvailableViaSubprocess(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping update subprocess test in short mode")
-	}
-
-	cmd := exec.Command(os.Args[0], "-test.run=TestDaemonChildRun_HelperProcess", "-test.v")
-	cmd.Env = append(os.Environ(),
-		"GO_DAEMON_HELPER=1",
-		"DAEMON_HELPER_MODE=run_update_check",
-		// Override version to trigger "update available"
-		// Note: version var can't be set via env, so this relies on the actual version
-		// being old enough that GitHub has a newer release
-	)
-
-	// Run with timeout
-	done := make(chan error, 1)
-	if err := cmd.Start(); err != nil {
-		t.Fatalf("start subprocess: %v", err)
-	}
-	go func() { done <- cmd.Wait() }()
-
-	select {
-	case <-done:
-		// Subprocess completed (either updated or failed)
-	case <-time.After(15 * time.Second):
-		cmd.Process.Kill()
-		<-done
 	}
 }
 

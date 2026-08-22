@@ -62,7 +62,7 @@ func clearAutostartDecline() {
 // stdinIsTerminal reports whether prompts can be answered. Piped installs and
 // cron runs must never block - or, worse, take a default - on input nobody is
 // there to give. A ModeCharDevice check is not enough: /dev/null is a character
-// device too, so `onwatch update < /dev/null` would look interactive.
+// device too, so `onwatch setup < /dev/null` would look interactive.
 var stdinIsTerminal = realStdinIsTerminal
 
 func realStdinIsTerminal() bool {
@@ -208,7 +208,7 @@ func printServiceHelp() {
 	fmt.Println("  status      Show whether the launchd agent is installed and loaded")
 }
 
-// --- post-update restart -------------------------------------------------
+// --- PID file parsing ------------------------------------------------------
 
 // parsePIDContent handles both the "PID:PORT" and legacy "PID" file formats.
 func parsePIDContent(content string) int {
@@ -218,12 +218,4 @@ func parsePIDContent(content string) int {
 	}
 	pid, _ := strconv.Atoi(content)
 	return pid
-}
-
-func daemonPIDFromFile() int {
-	data, err := os.ReadFile(pidFile)
-	if err != nil {
-		return 0
-	}
-	return parsePIDContent(string(data))
 }

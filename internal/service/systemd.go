@@ -5,9 +5,8 @@ package service
 // These helpers lived in internal/update until self-update was removed. Only
 // MigrateSystemdUnit is still reached at runtime, from the daemon at startup
 // (main.go): it keeps an inherited unit's restart policy current. The other
-// three are its own machinery - IsSystemd gates it, DetectServiceName names the
-// unit, findUnitFile locates it - and they are exported because their tests
-// drive them directly.
+// three are its own machinery: IsSystemd gates it, DetectServiceName names the
+// unit, findUnitFile locates it. Nothing outside this package calls them.
 
 import (
 	"log/slog"

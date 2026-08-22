@@ -211,3 +211,26 @@ func TestMain_ErrorPath(t *testing.T) {
 		t.Fatalf("expected startup error, got: %v", err)
 	}
 }
+
+// TestRun_UpdateIsARecognisedRemovedVerb guards the trapdoor that leaked a live
+// daemon out of every test run before 1.8.0: an argument `run()` does not
+// recognise falls through the whole dispatch chain and starts the daemon. When
+// `update` stopped being a command, the test that exercised it kept passing
+// while spawning a real server that never exited. `update` therefore stays
+// recognised, and this asserts that it is - if the dispatch arm is ever removed
+// as dead code, run() reaches daemon startup here and this test hangs or fails
+// rather than passing quietly.
+func TestRun_UpdateIsARecognisedRemovedVerb(t *testing.T) {
+	for _, arg := range []string{"update", "--update"} {
+		t.Run(arg, func(t *testing.T) {
+			setTestArgs(t, []string{"onwatch", arg})
+			err := run()
+			if err == nil {
+				t.Fatalf("run(%q) returned nil; the verb fell through to daemon startup", arg)
+			}
+			if !strings.Contains(err.Error(), "self-update was removed") {
+				t.Fatalf("run(%q) error = %v, want the removal message", arg, err)
+			}
+		})
+	}
+}

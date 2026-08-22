@@ -77,7 +77,7 @@ go build -ldflags="-s -w" -o onwatch.exe .
 ./app.sh --build --run    # Build + run in debug mode (or: make run)
 ./app.sh --clean          # Remove binary, coverage, dist/ (or: make clean)
 ./app.sh --smoke          # Quick validation: vet + build + short tests
-./app.sh --release        # Cross-compile all 5 platforms (or: make release-local)
+# ./app.sh --release      # Cross-compiles 5 platforms this fork does not ship - see Release Pipeline
 ./app.sh --deps           # Install Go + git for your platform
 make dev                  # go run . --debug --interval 10
 make lint                 # go fmt + go vet

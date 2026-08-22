@@ -60,6 +60,40 @@ nix develop                 # Shell with go/gopls/gotools/gofumpt (or `direnv al
 
 On `go.sum` changes, update `vendorHash` in `flake.nix` (run `nix build .#onwatch`, paste the `got: sha256-...` from the error). Flake tracks `nixos-unstable` because `go.mod` requires Go >= 1.25.7.
 
+## Verification cycle
+
+Gopnik is installed in this repository, under `.claude/skills/`, and what it
+checks is recorded in `gopnik.json`: Stage 1 is what runs here, Stage 2 is what
+proves a change works on the deployed instance. Neither is worth rediscovering
+per task - read the file.
+
+Every task runs the same four steps:
+
+1. **The statement.** Before work starts, `gopnik-critic` attacks the wording
+   and the completion criteria. A task nobody can fail is a task nobody can
+   finish.
+2. **The approach.** Before code exists, `gopnik-critic` attacks the chosen
+   solution. This is the cheapest slot in the cycle: refuting a plan costs
+   minutes, refuting a finished implementation costs a rewrite.
+3. **The implementation.**
+4. **The gate.** `gopnik` attacks the completed change, both stages, before
+   anything is called done. Its verdict - `READY` or `NOT READY` - goes into
+   the pull request with the evidence behind it. A `BLOCKER` fix voids the
+   verdict: what shipped is then not what was checked, so the next round is a
+   new round.
+
+The two skills are not interchangeable. The gate examines the **work**; the
+critic examines **what is said about** the work. So the critic also runs
+outside those slots, whenever a change carries a claim - "the cause is X",
+"this is not our bug", "the class is closed", "this will not happen again".
+`gopnik` will prove the change works and will not touch the diagnosis it was
+built on.
+
+Stage 2 talks to the deployed instance, and its address and credentials are
+machine-local: they live in `gopnik.local.env`, which `.gitignore` keeps out of
+commits. Create one from the variables `scripts/check-deployed-ui.py` documents.
+Nothing about a particular deployment belongs in this repository.
+
 ## Guardrails
 
 | Rule | Reason |

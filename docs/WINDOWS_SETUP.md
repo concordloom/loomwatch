@@ -1,57 +1,29 @@
 # Windows Setup Guide
 
-This guide covers installing and configuring onWatch on Windows. Choose between the **one-click installer** (recommended) or **manual setup** for full control.
+This guide covers running loomWatch on Windows and configuring its providers.
+
+loomWatch is a cluster product: it is delivered as a container image and a Helm
+chart, and it publishes no binaries. Upstream's Windows installers are not part
+of this fork - the PowerShell one-liner and `install.bat` that older copies of
+this guide offered installed `onllm-dev/onwatch`, which is a different product
+with a different feature set. If a laptop application is what you want, use
+upstream directly.
+
+What remains supported on Windows is building the binary from this source tree
+and running it yourself. Everything below - the configuration file, the provider
+tokens, the dashboard - applies to that.
 
 ---
 
-## Option 1: One-Click Installer (Recommended)
+## Step 1: Build the binary
 
-The PowerShell installer handles everything automatically: downloading the binary, configuring providers, creating the `.env` file, and adding onWatch to your PATH.
-
-### Method A: PowerShell Command
-
-Open PowerShell and run:
+Requires Go (the version in `go.mod`) and Git.
 
 ```powershell
-irm https://raw.githubusercontent.com/onllm-dev/onwatch/main/install.ps1 | iex
-```
-
-### Method B: Download install.bat
-
-1. Download `install.bat` from the [Releases](https://github.com/onllm-dev/onwatch/releases) page
-2. Double-click `install.bat`
-3. Follow the interactive prompts
-
-The installer will:
-- Download the Windows binary to `%USERPROFILE%\.onwatch\bin\`
-- Auto-detect Claude Code and Codex tokens if available
-- Guide you through configuring API providers
-- Create dashboard credentials
-- Create the `.env` configuration file
-- Add onWatch to your user PATH
-- Start onWatch in the background
-
----
-
-## Option 2: Manual Setup
-
-If you prefer full control or the installer doesn't work for your environment, follow these steps.
-
-### Step 1: Download the Binary
-
-1. Go to the [Releases](https://github.com/onllm-dev/onwatch/releases) page
-2. Download `onwatch-windows-amd64.exe`
-3. Create the installation directory:
-
-```powershell
-mkdir "$env:USERPROFILE\.onwatch\bin" -Force
+git clone https://github.com/concordloom/loomwatch
+cd loomwatch
+go build -o "$env:USERPROFILE\.onwatch\bin\onwatch.exe" .
 mkdir "$env:USERPROFILE\.onwatch\data" -Force
-```
-
-4. Move the binary:
-
-```powershell
-Move-Item onwatch-windows-amd64.exe "$env:USERPROFILE\.onwatch\bin\onwatch.exe"
 ```
 
 ### Step 2: Create the Configuration File
@@ -314,7 +286,7 @@ Windows Defender may flag `onwatch.exe` as `Program:Win32/Wacapew.A!ml`. **This 
 4. Click **Add an exclusion** → **Folder**
 5. Add: `C:\Users\<your-username>\.onwatch`
 
-The source code is fully auditable at [github.com/onllm-dev/onwatch](https://github.com/onllm-dev/onwatch) (GPL-3.0).
+The source code is fully auditable at [github.com/concordloom/loomwatch](https://github.com/concordloom/loomwatch) (GPL-3.0).
 
 ### "No provider data appears in dashboard"
 
@@ -327,9 +299,8 @@ If the app starts but no quota cards update:
 
 ### Binary Flashes and Closes Immediately
 
-This happens when double-clicking the binary without configuration. Either:
-- Use the one-click installer: `irm https://raw.githubusercontent.com/onllm-dev/onwatch/main/install.ps1 | iex`
-- Follow the manual setup steps above
+This happens when double-clicking the binary without configuration. Create the configuration file described above and start the binary from a
+terminal, where the error is visible.
 
 ### Port Already in Use
 
@@ -361,21 +332,14 @@ If Claude Code or Codex tokens aren't auto-detected:
 
 ---
 
-## Updating onWatch
+## Updating loomWatch
 
-### Using Self-Update
+There is no self-update: this fork ships no binaries for one to download, and
+the feature was removed rather than left offering a download that cannot exist.
 
-```powershell
-cd "$env:USERPROFILE\.onwatch"
-.\bin\onwatch.exe update
-```
-
-### Manual Update
-
-1. Stop onWatch: `.\bin\onwatch.exe stop`
-2. Download the new binary from [Releases](https://github.com/onllm-dev/onwatch/releases)
-3. Replace `%USERPROFILE%\.onwatch\bin\onwatch.exe`
-4. Start onWatch: `.\bin\onwatch.exe`
+1. Stop loomWatch: `.\bin\onwatch.exe stop`
+2. Pull this repository and rebuild, as in Step 1
+3. Start it again: `.\bin\onwatch.exe`
 
 ---
 
@@ -401,7 +365,7 @@ $newPath = ($path -split ';' | Where-Object { $_ -notlike "*\.onwatch*" }) -join
 
 ## Support
 
-- [GitHub Issues](https://github.com/onllm-dev/onwatch/issues)
+- [GitHub Issues](https://github.com/concordloom/loomwatch/issues)
 - [README](../README.md)
 - [Development Guide](DEVELOPMENT.md)
 #### MiniMax

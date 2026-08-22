@@ -86,10 +86,9 @@ func main() {
 		if runtime.GOOS == "windows" && len(os.Args) == 1 {
 			if strings.Contains(err.Error(), "provider must be configured") {
 				fmt.Fprintln(os.Stderr, "")
-				fmt.Fprintln(os.Stderr, "To set up loomWatch, run the PowerShell installer:")
-				fmt.Fprintln(os.Stderr, "  irm https://raw.githubusercontent.com/onllm-dev/onwatch/main/install.ps1 | iex")
-				fmt.Fprintln(os.Stderr, "")
-				fmt.Fprintln(os.Stderr, "Or download install.bat from GitHub releases and double-click it.")
+				fmt.Fprintln(os.Stderr, "loomWatch needs at least one provider configured before it can start.")
+				fmt.Fprintln(os.Stderr, "Run `onwatch setup`, or write a .env file next to the binary.")
+				fmt.Fprintln(os.Stderr, "See docs/WINDOWS_SETUP.md.")
 				fmt.Fprintln(os.Stderr, "")
 				fmt.Fprint(os.Stderr, "Press Enter to exit...")
 				bufio.NewReader(os.Stdin).ReadBytes('\n')
@@ -605,8 +604,8 @@ func run() error {
 	}
 	if hasCommand("--version", "-v", "version") {
 		fmt.Printf("loomWatch v%s\n", version)
-		fmt.Println("github.com/onllm-dev/onwatch")
-		fmt.Println("Powered by onllm.dev")
+		fmt.Println("github.com/concordloom/loomwatch")
+		fmt.Println("A fork of onWatch by onllm.dev")
 		return nil
 	}
 	if hasCommand("setup", "--setup") {

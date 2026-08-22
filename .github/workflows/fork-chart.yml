@@ -57,6 +57,21 @@ jobs:
             exit 1
           fi
 
+      # A chart that renders an image older than itself: 1.7.0 shipped with
+      # `image.tag: 1.0.4` hard-coded in values.yaml, so every install that
+      # followed the README ran a three-minor-versions-old binary. The check
+      # above compares two fields inside Chart.yaml and never looked at what
+      # the chart actually renders.
+      - name: Default image tag matches app version
+        run: |
+          a="$(awk '/^appVersion:/ {print $2; exit}' charts/loomwatch/Chart.yaml)"
+          img="$(helm template lw charts/loomwatch \
+            | grep -oE 'ghcr\.io/concordloom/loomwatch[:@][^"[:space:]]+' | head -1)"
+          if [ "$img" != "ghcr.io/concordloom/loomwatch:$a" ]; then
+            echo "chart renders image '$img' but appVersion is '$a'"
+            exit 1
+          fi
+
       - name: Lint
         run: helm lint charts/loomwatch
 

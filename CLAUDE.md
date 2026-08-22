@@ -86,15 +86,34 @@ On `go.sum` changes, update `vendorHash` in `flake.nix` (run `nix build .#onwatc
 
 **Containers:** `IsDockerEnvironment()` in `config.go` detects Docker/K8s. Containers run foreground only.
 
-**Release process (all 3 steps required):**
-1. Update version in all 3 places:
-   - `VERSION` file (the single source of truth, e.g. `2.11.42`)
-   - `README.md` version badge text (`Version-v2.11.42`)
-   - `README.md` version badge link (`/releases/tag/v2.11.42`)
-2. Commit, push to main, and create a git tag (`git tag v2.11.42 && git push origin main --tags`)
-3. Trigger the GitHub Actions release workflow: `gh workflow run release.yml -f tag=v2.11.42`
-   - Do NOT use `gh release create` - the workflow handles release creation, cross-compilation (5 platforms), and binary uploads
-   - Do NOT run `./app.sh --release` locally - the release must happen through the GitHub Actions pipeline
+**Release process:**
+
+This fork releases itself, and the steps below are the only ones that apply.
+Upstream's process does not: it bumps version badges this README does not have,
+tags in the `v*` namespace, and dispatches
+`.github/workflows/release.yml`, which is upstream's workflow, has no fork
+guard, and would publish upstream's code under this fork's name.
+
+1. Bump the version in both places, which must agree:
+   - `VERSION` (the single source of truth, e.g. `1.7.1`)
+   - `charts/loomwatch/Chart.yaml`: `version` and `appVersion`
+2. Land it on `main` through a pull request - `main` is protected.
+3. Tag the merge commit and push the tag:
+   `git tag loom-v1.7.1 && git push origin loom-v1.7.1`
+
+Pushing a `loom-v*` tag is the whole trigger. `.github/workflows/fork-release.yml`
+checks that the tag, `VERSION` and the chart all agree, lints and unit-tests the
+chart, then publishes the container image and the chart to `ghcr.io` and creates
+the GitHub release. A fork release carries no binaries: the unit of delivery is
+the image.
+
+The `loom-v` prefix is not decoration. `v*` belongs to the 91 upstream tags this
+repository inherited, so an upstream tag arriving through a sync must never be
+able to trigger a release here.
+
+Do not run `./app.sh --release` locally: it cross-compiles five platforms' worth
+of binaries this fork does not ship, and a release has to come out of the
+pipeline rather than off a workstation.
 
 **Anthropic Rate Limit Bypass:** Anthropic's usage API has aggressive rate limits (~5 requests per token, then 429 for ~5 min). loomWatch bypasses this by refreshing the OAuth token when rate limited - each new access token gets a fresh rate limit window. Implementation details:
 - `internal/agent/anthropic_agent.go`: Detects 429, calls `RefreshAnthropicToken`, saves new tokens, retries

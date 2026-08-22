@@ -62,10 +62,10 @@ class TestDashboard:
         assert updated_text != ""
 
     def test_version_in_footer(self, dashboard_page: Page) -> None:
-        """Dashboard footer should display the onWatch version."""
+        """Dashboard footer should display the loomWatch version."""
         dash = DashboardPage(dashboard_page)
         version_text = dash.get_version_text()
-        assert "onWatch" in version_text
+        assert "loomWatch" in version_text
         assert re.search(r"v[\d.]+", version_text) or "dev" in version_text.lower()
 
     def test_settings_link_present(self, dashboard_page: Page) -> None:
@@ -80,4 +80,5 @@ class TestDashboard:
         dashboard_page.wait_for_timeout(3000)
         text = dash.get_last_updated()
         assert text != ""
-        assert "Last updated" in text
+        assert text.startswith("Updated ")
+        assert "Last updated at" in dash.get_last_updated_tooltip()

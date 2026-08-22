@@ -30,7 +30,6 @@ import (
 	"github.com/onllm-dev/onwatch/v2/internal/service"
 	"github.com/onllm-dev/onwatch/v2/internal/store"
 	"github.com/onllm-dev/onwatch/v2/internal/tracker"
-	"github.com/onllm-dev/onwatch/v2/internal/update"
 	"github.com/onllm-dev/onwatch/v2/internal/web"
 )
 
@@ -401,7 +400,7 @@ func writePIDFile(port int) error {
 // During a takeover the new instance writes the PID file while the old one is
 // still shutting down (stopPreviousInstance waits 500ms; a graceful shutdown
 // takes longer). An unconditional remove there deletes the new instance's
-// entry, leaving a running daemon that `onwatch update` cannot find.
+// entry, leaving a running daemon that `onwatch status` cannot find.
 func removePIDFile() {
 	data, err := os.ReadFile(pidFile)
 	if err != nil {
@@ -423,7 +422,7 @@ func shouldDaemonize(debugMode, isDaemonChild, underLaunchd, inDocker bool) bool
 
 // shouldWriteOwnPIDFile reports whether this process writes its own PID file.
 // The daemonize parent writes it for its child; a launchd job has no such
-// parent, so without this `onwatch status`/`stop`/`update` would not find it.
+// parent, so without this `onwatch status` and `stop` would not find it.
 func shouldWriteOwnPIDFile(debugMode, underLaunchd bool) bool {
 	return debugMode || underLaunchd
 }
@@ -610,9 +609,6 @@ func run() error {
 		fmt.Println("Powered by onllm.dev")
 		return nil
 	}
-	if hasCommand("update", "--update") {
-		return runUpdate()
-	}
 	if hasCommand("setup", "--setup") {
 		return runSetup()
 	}
@@ -677,11 +673,11 @@ func run() error {
 	}
 
 	// Auto-fix systemd unit file BEFORE stopping the previous instance.
-	// When a post-update child runs this, the daemon-reload completes while
+	// The daemon-reload completes while
 	// the parent is still alive (systemd tracks it). After the child kills
 	// the parent below, systemd sees Restart=always and auto-starts the new binary.
 	// No-op if not under systemd or already up to date.
-	update.MigrateSystemdUnit(slog.Default())
+	service.MigrateSystemdUnit(slog.Default())
 
 	// Stop any previous instance (parent does this, daemon child skips it)
 	if !isDaemonChild {
@@ -741,7 +737,7 @@ func run() error {
 
 	// In daemon mode, the parent already wrote the PID file with our PID.
 	// In debug mode - and under launchd, where there is no parent - we write
-	// our own, so `onwatch status`, `onwatch stop` and `onwatch update` can
+	// our own, so `onwatch status` and `onwatch stop` can
 	// find the running instance.
 	if shouldWriteOwnPIDFile(cfg.DebugMode, underLaunchd) {
 		if err := writePIDFile(cfg.Port); err != nil {
@@ -1749,8 +1745,6 @@ func run() error {
 	if minimaxMgr != nil {
 		handler.SetMiniMaxAgentManager(minimaxMgr)
 	}
-	updater := update.NewUpdater(version, logger)
-	handler.SetUpdater(updater)
 
 	// Create login rate limiter for brute force protection
 	loginRateLimiter := web.NewLoginRateLimiter(1000)
@@ -2194,51 +2188,6 @@ func humanSize(bytes int64) string {
 	return fmt.Sprintf("%.1fMB", float64(bytes)/(1024*1024))
 }
 
-type cliUpdater interface {
-	Check() (update.UpdateInfo, error)
-	Apply() error
-}
-
-var newCLIUpdater = func(v string, logger *slog.Logger) cliUpdater {
-	return update.NewUpdater(v, logger)
-}
-
-func runUpdate() error {
-	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-	u := newCLIUpdater(version, logger)
-
-	fmt.Printf("loomWatch v%s - checking for updates...\n", version)
-
-	info, err := u.Check()
-	if err != nil {
-		return fmt.Errorf("update check failed: %w", err)
-	}
-
-	if !info.Available {
-		fmt.Printf("Already at the latest version (v%s)\n", version)
-		return nil
-	}
-
-	fmt.Printf("Update available: v%s → v%s\n", info.CurrentVersion, info.LatestVersion)
-	fmt.Printf("Downloading from %s\n", info.DownloadURL)
-
-	if err := u.Apply(); err != nil {
-		return fmt.Errorf("update failed: %w", err)
-	}
-
-	fmt.Printf("Updated successfully to v%s\n", info.LatestVersion)
-
-	// Always leave onWatch running the new binary - including when it was not
-	// running before, which is the common case after a reboot.
-	restartAfterUpdate()
-
-	// An update is also the moment to notice that nothing would have brought
-	// onWatch back after that reboot.
-	offerAutostart(bufio.NewReader(os.Stdin))
-
-	return nil
-}
-
 func printBanner(cfg *config.Config, version string) {
 	fmt.Println()
 	fmt.Println("╔══════════════════════════════════════╗")
@@ -2350,7 +2299,6 @@ func printHelp() {
 	fmt.Println("  setup, --setup     Interactive setup wizard (configure providers and .env)")
 	fmt.Println("  stop, --stop       Stop the running onwatch instance")
 	fmt.Println("  status, --status   Show status of the running instance")
-	fmt.Println("  update, --update   Check for updates and self-update")
 	fmt.Println("  service <action>   Manage auto-start at login (macOS): install, uninstall, status")
 	fmt.Println()
 	fmt.Println("Codex Profile Management:")
@@ -2400,7 +2348,6 @@ func printHelp() {
 	fmt.Println("  onwatch --stop                    # Same as 'stop'")
 	fmt.Println("  onwatch status                    # Check if running")
 	fmt.Println("  onwatch --status                  # Same as 'status'")
-	fmt.Println("  onwatch update                    # Check for updates and self-update")
 	fmt.Println("  onwatch service install           # Start automatically at login (macOS)")
 	fmt.Println("  onwatch service status            # Show auto-start state")
 	fmt.Println("  onwatch --test --debug            # Run test instance (isolated)")

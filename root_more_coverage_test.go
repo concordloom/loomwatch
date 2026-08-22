@@ -41,22 +41,6 @@ func TestRun_CommandDispatchDeterministic(t *testing.T) {
 			t.Fatalf("expected version output, got: %s", out)
 		}
 	})
-
-	t.Run("update command dev mode", func(t *testing.T) {
-		origVersion := version
-		version = "dev"
-		t.Cleanup(func() { version = origVersion })
-
-		setTestArgs(t, []string{"onwatch", "update"})
-		out := captureStdout(t, func() {
-			if err := run(); err != nil {
-				t.Fatalf("run update error: %v", err)
-			}
-		})
-		if !strings.Contains(out, "Already at the latest version") {
-			t.Fatalf("expected no-update output, got: %s", out)
-		}
-	})
 }
 
 func TestStopPreviousInstance_SelfPIDFileIsSafeAndRemoved(t *testing.T) {

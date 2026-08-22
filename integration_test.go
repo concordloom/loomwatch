@@ -959,7 +959,7 @@ func TestIntegration_Zai_ResetDetection(t *testing.T) {
 		TimeCurrentValue:    900,
 	}
 	db.InsertZaiSnapshot(snap1, 0)
-	zaiTr.Process(snap1)
+	zaiTr.Process(snap1, 0)
 
 	// Second snapshot: reset occurred (new reset time, low usage)
 	snap2 := &api.ZaiSnapshot{
@@ -973,7 +973,7 @@ func TestIntegration_Zai_ResetDetection(t *testing.T) {
 		TimeCurrentValue:    5,
 	}
 	db.InsertZaiSnapshot(snap2, 0)
-	zaiTr.Process(snap2)
+	zaiTr.Process(snap2, 0)
 
 	// Verify completed cycle exists
 	cycles, err := db.QueryZaiCycleHistory("tokens", 0)
@@ -1400,7 +1400,7 @@ func TestIntegration_CrossProvider_IndependentResets(t *testing.T) {
 		TimeCurrentValue:    500,
 	}
 	db.InsertZaiSnapshot(zaiSnap1, 0)
-	zaiTr.Process(zaiSnap1)
+	zaiTr.Process(zaiSnap1, 0)
 
 	// Reset Synthetic (renewsAt changes)
 	synSnap2 := &api.Snapshot{
@@ -2412,20 +2412,6 @@ func TestIntegration_API_LoginPageRenders(t *testing.T) {
 	body := w.Body.String()
 	if !strings.Contains(body, "Login") {
 		t.Error("Login page missing 'Login'")
-	}
-}
-
-// TestIntegration_API_CheckUpdateWithoutUpdater verifies check-update returns
-// 503 when updater is not configured.
-func TestIntegration_API_CheckUpdateWithoutUpdater(t *testing.T) {
-	h, _ := testutil.TestHandler(t)
-
-	req := httptest.NewRequest("GET", "/api/update/check", nil)
-	w := httptest.NewRecorder()
-	h.CheckUpdate(w, req)
-
-	if w.Code != http.StatusServiceUnavailable {
-		t.Errorf("Expected 503, got %d: %s", w.Code, w.Body.String())
 	}
 }
 

@@ -15,7 +15,6 @@ import (
 
 	"github.com/onllm-dev/onwatch/v2/internal/config"
 	"github.com/onllm-dev/onwatch/v2/internal/service"
-	"github.com/onllm-dev/onwatch/v2/internal/update"
 )
 
 // Auto-start (launchd) plumbing, indirected so tests never shell out to
@@ -141,7 +140,7 @@ func runService() error {
 		switch action {
 		case "status":
 			fmt.Println("Auto-start management is macOS-only.")
-			fmt.Println("On Linux, install.sh creates a systemd unit: systemctl --user status onwatch")
+			fmt.Println("On Linux the daemon runs under whatever unit you created: systemctl --user status onwatch")
 			return nil
 		default:
 			return fmt.Errorf("onwatch service: auto-start management is macOS-only (Linux uses systemd)")
@@ -328,76 +327,10 @@ func waitForExit(pid int, timeout time.Duration) {
 
 // systemctlRestart asks systemd to restart the detected onWatch unit.
 var systemctlRestart = func() error {
-	return exec.Command("systemctl", "restart", update.DetectServiceName()).Run()
+	return exec.Command("systemctl", "restart", service.DetectServiceName()).Run()
 }
 
 // inContainer reports whether this process runs inside Docker or Kubernetes.
 var inContainer = func() bool {
 	return (&config.Config{}).IsDockerEnvironment()
-}
-
-// restartAfterUpdate leaves onWatch running the new binary, whether or not it
-// was running before. An update that silently leaves the daemon stopped is the
-// bug this exists to prevent.
-func restartAfterUpdate() {
-	// When launchd owns the process, let it do the restart so the job stays
-	// supervised and keeps its auto-start behaviour.
-	if autostartSupported() && autostartInstalled() && autostartLoaded() {
-		fmt.Println("Restarting via launchd...")
-		if err := autostartRestart(); err == nil {
-			fmt.Printf("onWatch restarted (launchd agent %s)\n", service.Label)
-			return
-		}
-		fmt.Fprintln(os.Stderr, "Warning: launchctl kickstart failed, falling back to a direct restart")
-	}
-
-	// systemd owns the lifecycle on Linux: spawning here would create an
-	// unsupervised daemon beside the unit, and would restart a service the
-	// operator had deliberately stopped.
-	if update.IsSystemd() {
-		fmt.Println("Running under systemd - restarting the service...")
-		if err := systemctlRestart(); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: systemctl restart failed: %v\n", err)
-			fmt.Println("Restart manually with: systemctl restart onwatch")
-		}
-		return
-	}
-
-	// In a container onWatch is PID 1 and runs in the foreground; there is
-	// nothing to background and no PID file to read. Restarting the container
-	// is the operator's call.
-	if inContainer() {
-		fmt.Println("Running in a container - restart the container to pick up the new binary.")
-		return
-	}
-
-	if pid, running := runningDaemonPID(); running {
-		fmt.Println("Restarting daemon...")
-		if proc, err := os.FindProcess(pid); err == nil {
-			_ = proc.Signal(syscall.SIGTERM)
-			waitForExit(pid, 5*time.Second)
-		}
-	} else {
-		fmt.Println("onWatch was not running - starting the updated daemon...")
-	}
-
-	exePath, err := os.Executable()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: could not locate the updated binary: %v\n", err)
-		fmt.Println("Please start onwatch manually.")
-		return
-	}
-	if resolved, err := filepath.EvalSymlinks(exePath); err == nil {
-		exePath = resolved
-	}
-
-	newPID, err := startDaemonProcess(exePath)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: restart failed: %v\n", err)
-		fmt.Println("Please start onwatch manually.")
-		return
-	}
-	if newPID > 0 {
-		fmt.Printf("onWatch is running (PID %d)\n", newPID)
-	}
 }

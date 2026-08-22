@@ -83,8 +83,6 @@ func NewServer(port int, handler *Handler, logger *slog.Logger, username, passwo
 	mux.HandleFunc(p("/api/password"), handler.ChangePassword)
 	mux.HandleFunc(p("/api/cycle-overview"), handler.CycleOverview)
 	mux.HandleFunc(p("/api/logging-history"), handler.LoggingHistory)
-	mux.HandleFunc(p("/api/update/check"), handler.CheckUpdate)
-	mux.HandleFunc(p("/api/update/apply"), handler.ApplyUpdate)
 	mux.HandleFunc(p("/api/push/vapid"), handler.PushVAPIDKey)
 	mux.HandleFunc(p("/api/push/subscribe"), handler.PushSubscribe)
 	mux.HandleFunc(p("/api/push/test"), handler.PushTest)

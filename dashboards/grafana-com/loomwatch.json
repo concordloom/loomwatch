@@ -1,5 +1,53 @@
 {
-  "uid": "loomwatch-quotas",
+  "__inputs": [
+    {
+      "name": "DS_PROMETHEUS",
+      "label": "Prometheus",
+      "description": "The Prometheus that scrapes loomwatch.",
+      "type": "datasource",
+      "pluginId": "prometheus",
+      "pluginName": "Prometheus"
+    }
+  ],
+  "__requires": [
+    {
+      "type": "grafana",
+      "id": "grafana",
+      "name": "Grafana",
+      "version": "10.0.0"
+    },
+    {
+      "type": "datasource",
+      "id": "prometheus",
+      "name": "Prometheus",
+      "version": "1.0.0"
+    },
+    {
+      "type": "panel",
+      "id": "bargauge",
+      "name": "Bar gauge",
+      "version": ""
+    },
+    {
+      "type": "panel",
+      "id": "stat",
+      "name": "Stat",
+      "version": ""
+    },
+    {
+      "type": "panel",
+      "id": "table",
+      "name": "Table",
+      "version": ""
+    },
+    {
+      "type": "panel",
+      "id": "timeseries",
+      "name": "Time series",
+      "version": ""
+    }
+  ],
+  "id": null,
   "title": "loomwatch - LLM quotas",
   "description": "Remaining LLM subscription quota per provider, quota window and account. Utilisation is a share of each plan's own limit, so 100 is the quota itself.",
   "tags": [
@@ -17,19 +65,12 @@
   "templating": {
     "list": [
       {
-        "name": "datasource",
-        "label": "Data source",
-        "type": "datasource",
-        "query": "prometheus",
-        "current": {}
-      },
-      {
         "name": "provider",
         "label": "Provider",
         "type": "query",
         "datasource": {
           "type": "prometheus",
-          "uid": "${datasource}"
+          "uid": "${DS_PROMETHEUS}"
         },
         "query": "label_values(loomwatch_agent_healthy, provider)",
         "refresh": 1,
@@ -53,7 +94,7 @@
         "type": "query",
         "datasource": {
           "type": "prometheus",
-          "uid": "${datasource}"
+          "uid": "${DS_PROMETHEUS}"
         },
         "query": {
           "qryType": 5,
@@ -82,7 +123,7 @@
         "type": "query",
         "datasource": {
           "type": "prometheus",
-          "uid": "${datasource}"
+          "uid": "${DS_PROMETHEUS}"
         },
         "query": "label_values(loomwatch_quota_utilization_percent{provider=~\"$provider\"}, quota_type)",
         "refresh": 1,
@@ -110,7 +151,7 @@
       "description": "Every quota, ordered by how full it is. The title says fullest rather than soonest on purpose: a quota at 0% whose window resets in an hour is the safest thing on the board, so ordering by time would put it on top. Fullness is what needs an answer; the reset time beside it is what tells you how long you have.\n\nUtilisation is a share of each plan's own limit, so 100 is the quota itself - and for the same reason two rows at 100% are not comparable quantities and none of these numbers can be summed.\n\nAt reset is a forecast from the last 24 hours, the same window the burn alert uses. It is blank where the provider publishes no reset time, because there is then no moment to forecast to.",
       "datasource": {
         "type": "prometheus",
-        "uid": "${datasource}"
+        "uid": "${DS_PROMETHEUS}"
       },
       "gridPos": {
         "h": 15,
@@ -123,7 +164,7 @@
           "refId": "A",
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "${DS_PROMETHEUS}"
           },
           "expr": "max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"})",
           "instant": true,
@@ -134,7 +175,7 @@
           "refId": "B",
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "${DS_PROMETHEUS}"
           },
           "expr": "max by (provider, quota_type, account_id) (loomwatch_quota_reset_timestamp_seconds{provider=~\"$provider\",quota_type=~\"$quota_type\"} - time())",
           "instant": true,
@@ -145,7 +186,7 @@
           "refId": "C",
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "${DS_PROMETHEUS}"
           },
           "expr": "clamp_max( max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}) + deriv((max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}))[24h:5m]) * max by (provider, quota_type, account_id) (loomwatch_quota_reset_timestamp_seconds{provider=~\"$provider\",quota_type=~\"$quota_type\"} - time()) , 100)",
           "instant": true,
@@ -156,7 +197,7 @@
           "refId": "D",
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "${DS_PROMETHEUS}"
           },
           "expr": "max by (provider, quota_type, account_id, team) ( loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"} * on (provider, account_id) group_left(team) loomwatch:account_team ) * 0",
           "instant": true,
@@ -167,7 +208,7 @@
           "refId": "E",
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "${DS_PROMETHEUS}"
           },
           "expr": "max by (provider, account_id, account_name) ( loomwatch_account_info or label_replace( loomwatch_agent_healthy unless on (provider, account_id) loomwatch_account_info, \"account_name\", \"$1\", \"account_id\", \"(.*)\") )",
           "instant": true,
@@ -402,7 +443,7 @@
       "description": "One bar per account and quota window, labelled. Bars rather than lines because the question here is how full, not how it got there.",
       "datasource": {
         "type": "prometheus",
-        "uid": "${datasource}"
+        "uid": "${DS_PROMETHEUS}"
       },
       "gridPos": {
         "h": 9,
@@ -415,7 +456,7 @@
           "refId": "A",
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "${DS_PROMETHEUS}"
           },
           "expr": "max by (quota_type) (loomwatch_quota_utilization_percent{provider=~\"$provider\",account_id=~\"$account\",quota_type=~\"$quota_type\"})",
           "legendFormat": "{{quota_type}}"
@@ -471,7 +512,7 @@
       "description": "Lines, not fills: sixteen filled areas are mud. The legend is a sorted table on the right so a series can be found by name rather than by colour.",
       "datasource": {
         "type": "prometheus",
-        "uid": "${datasource}"
+        "uid": "${DS_PROMETHEUS}"
       },
       "gridPos": {
         "h": 9,
@@ -484,7 +525,7 @@
           "refId": "A",
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "${DS_PROMETHEUS}"
           },
           "expr": "max by (quota_type) (loomwatch_quota_utilization_percent{provider=~\"$provider\",account_id=~\"$account\",quota_type=~\"$quota_type\"})",
           "legendFormat": "{{quota_type}}"
@@ -543,7 +584,7 @@
       "description": "Two readings, because one of them cannot see the failure the other alerts on. agent_healthy is the collector's own verdict about this account. Age of last poll is what LoomwatchCollectorNotPolling is built on, and that rule exists precisely for the case where the collector stalls while its own health flag stays at 1 - so a panel showing only the flag reports fresh at the exact moment the alert fires.\n\nWhile this is stale every quota beside it is old, and their calm stops meaning anything.",
       "datasource": {
         "type": "prometheus",
-        "uid": "${datasource}"
+        "uid": "${DS_PROMETHEUS}"
       },
       "gridPos": {
         "h": 9,
@@ -556,7 +597,7 @@
           "refId": "A",
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "${DS_PROMETHEUS}"
           },
           "expr": "max by (account_id) (loomwatch_agent_healthy{provider=~\"$provider\",account_id=~\"$account\"})",
           "legendFormat": "health"
@@ -565,7 +606,7 @@
           "refId": "B",
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "${DS_PROMETHEUS}"
           },
           "expr": "max by (account_id) (loomwatch_agent_last_cycle_age_seconds{provider=~\"$provider\",account_id=~\"$account\"})",
           "legendFormat": "last poll"

@@ -542,6 +542,51 @@ func TestMiniMaxAccounts_CreateAndList(t *testing.T) {
 	}
 }
 
+// The same create-path defect as Z.ai, fixed the same way.
+// CreateOrRestoreProviderAccount returns the existing row on a name collision
+// and this handler replaced metadata wholesale, so a POST naming a live account
+// destroyed its api_key and answered 201. The dashboard's add form is
+// create-only and already shows the error, and its restore button uses PUT
+// {"restore":true}, so nothing relied on POST behaving as an upsert.
+//
+// The metadata assertion is the load-bearing one: a status-code check alone
+// would test manners, not whether the credential survived.
+func TestMiniMaxAccountCreateRefusesAnExistingNameAndKeepsItsMetadata(t *testing.T) {
+	t.Parallel()
+	s, err := store.New(":memory:")
+	if err != nil {
+		t.Fatalf("store.New: %v", err)
+	}
+	defer s.Close()
+	h := NewHandler(s, nil, nil, nil, nil)
+
+	acc, err := s.CreateOrRestoreProviderAccount("minimax", "live-account")
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	const stored = `{"api_key":"sk_live","region":"global"}`
+	if err := s.UpdateProviderAccountMetadata(acc.ID, stored); err != nil {
+		t.Fatalf("seed metadata: %v", err)
+	}
+
+	req := httptest.NewRequest("POST", "/api/minimax/accounts",
+		strings.NewReader(`{"name":"live-account","region":"cn"}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	h.MiniMaxAccounts(w, req)
+
+	after, err := s.GetProviderAccountByID(acc.ID)
+	if err != nil || after == nil {
+		t.Fatalf("reload account: %v", err)
+	}
+	if after.Metadata != stored {
+		t.Fatalf("metadata changed on a refused create:\n  was %q\n  now %q", stored, after.Metadata)
+	}
+	if w.Code != http.StatusConflict {
+		t.Fatalf("status %d, want 409 - a POST onto a name in use is not a create", w.Code)
+	}
+}
+
 func TestMiniMaxAccounts_Update(t *testing.T) {
 	t.Parallel()
 	s, err := store.New(":memory:")

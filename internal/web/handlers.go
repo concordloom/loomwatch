@@ -9333,6 +9333,26 @@ func (h *Handler) minimaxAccountsList(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, map[string]interface{}{"accounts": result})
 }
 
+// providerAccountByName returns the account carrying this exact name,
+// soft-deleted ones included, or nil when the name is free.
+//
+// The create handlers need it because CreateOrRestoreProviderAccount does not
+// fail on a name collision: it returns the *existing* row, undeleting it on the
+// way. A create that then writes metadata over what came back is writing over a
+// live account's credential and answering 201 while it does so.
+func (h *Handler) providerAccountByName(provider, name string) (*store.ProviderAccount, error) {
+	accounts, err := h.store.QueryProviderAccounts(provider)
+	if err != nil {
+		return nil, err
+	}
+	for i := range accounts {
+		if accounts[i].Name == name {
+			return &accounts[i], nil
+		}
+	}
+	return nil, nil
+}
+
 func (h *Handler) minimaxAccountCreate(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Name   string `json:"name"`
@@ -9353,6 +9373,30 @@ func (h *Handler) minimaxAccountCreate(w http.ResponseWriter, r *http.Request) {
 	}
 	if h.store == nil {
 		respondError(w, http.StatusInternalServerError, "store not available")
+		return
+	}
+
+	// Same refusal as the Z.ai create path, for the same reason: this handler
+	// replaces metadata wholesale, and CreateOrRestoreProviderAccount hands back
+	// the existing row on a name collision, so a POST naming a live account used
+	// to overwrite its api_key and answer 201. The dashboard's "add account" form
+	// is create-only and already surfaces the error, and its restore button goes
+	// through PUT with {"restore": true}, so nothing here relied on POST as an
+	// upsert.
+	existing, err := h.providerAccountByName("minimax", req.Name)
+	if err != nil {
+		h.logger.Error("failed to look up MiniMax account", "error", err)
+		respondError(w, http.StatusInternalServerError, "failed to create account")
+		return
+	}
+	if existing != nil {
+		if existing.DeletedAt != nil {
+			respondError(w, http.StatusConflict,
+				"account "+req.Name+" already exists and is deleted; restore it with PUT /api/minimax/accounts?id="+strconv.FormatInt(existing.ID, 10)+" and a body of {\"restore\":true}")
+			return
+		}
+		respondError(w, http.StatusConflict,
+			"account "+req.Name+" already exists; update it with PUT /api/minimax/accounts?id="+strconv.FormatInt(existing.ID, 10))
 		return
 	}
 

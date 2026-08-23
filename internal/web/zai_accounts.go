@@ -47,19 +47,42 @@ func (h *Handler) zaiAccountsList(w http.ResponseWriter, r *http.Request) {
 	}
 	result := make([]map[string]interface{}, 0, len(accounts))
 	for _, acc := range accounts {
+		// hasKey answers "is this account going to be polled", so it is computed
+		// from a key that was actually decoded out of the blob. It used to be
+		// strings.Contains(acc.Metadata, "api_key"), which is true of any text
+		// carrying that substring - including a damaged blob out of which the
+		// agent manager can read nothing. An account in that state reported
+		// itself as configured while sitting out of the polling rotation.
+		hasKey := false
+		baseURL := ""
+		haveBaseURL := false
+		var meta map[string]interface{}
+		if acc.Metadata != "" {
+			if err := json.Unmarshal([]byte(acc.Metadata), &meta); err != nil {
+				// The parse stays non-fatal here. This is a read that decorates
+				// one entry, so an unreadable row costs a display field; failing
+				// the listing would instead hide every account because a single
+				// row is damaged. The warning is what makes the row findable,
+				// since the update path now refuses to merge it.
+				h.logger.Warn("Z.ai account metadata is not readable",
+					"account", acc.Name, "id", acc.ID, "error", err)
+			} else {
+				if k, ok := meta["api_key"].(string); ok && k != "" {
+					hasKey = true
+				}
+				if b, ok := meta["base_url"].(string); ok {
+					baseURL, haveBaseURL = b, true
+				}
+			}
+		}
 		entry := map[string]interface{}{
 			"id":        acc.ID,
 			"name":      acc.Name,
 			"createdAt": acc.CreatedAt.Format(time.RFC3339),
-			"hasKey":    strings.Contains(acc.Metadata, "api_key"),
+			"hasKey":    hasKey,
 		}
-		var meta map[string]interface{}
-		if acc.Metadata != "" {
-			if json.Unmarshal([]byte(acc.Metadata), &meta) == nil {
-				if b, ok := meta["base_url"].(string); ok {
-					entry["baseUrl"] = b
-				}
-			}
+		if haveBaseURL {
+			entry["baseUrl"] = baseURL
 		}
 		if acc.DeletedAt != nil {
 			entry["deletedAt"] = acc.DeletedAt.Format(time.RFC3339)
@@ -89,6 +112,38 @@ func (h *Handler) zaiAccountCreate(w http.ResponseWriter, r *http.Request) {
 	}
 	if h.store == nil {
 		respondError(w, http.StatusInternalServerError, "store not available")
+		return
+	}
+
+	// A POST that lands on a name already in use is not a create, and it must
+	// not be allowed to behave like one. CreateOrRestoreProviderAccount returns
+	// the existing row rather than failing, and the metadata write below replaces
+	// the blob wholesale - so a POST carrying a base_url and no api_key used to
+	// destroy a live account's credential and answer 201, telling the caller it
+	// had created something. Nothing reported the loss, and unlike the merge
+	// defect this needed no damaged metadata to trigger.
+	//
+	// Merging instead of refusing was the alternative, and it is worse: it makes
+	// POST a second PUT with different semantics, and leaves the caller no way to
+	// say "create this only if it does not exist". 409 is also what this codebase
+	// already answers in exactly this situation - see "profile already exists"
+	// above. Restoring a deleted account has its own route, PUT with
+	// {"restore": true}, which is what the dashboard uses, so refusing here takes
+	// no capability away.
+	existing, err := h.providerAccountByName("zai", req.Name)
+	if err != nil {
+		h.logger.Error("failed to look up Z.ai account", "error", err)
+		respondError(w, http.StatusInternalServerError, "failed to create account")
+		return
+	}
+	if existing != nil {
+		if existing.DeletedAt != nil {
+			respondError(w, http.StatusConflict,
+				"account "+req.Name+" already exists and is deleted; restore it with PUT /api/zai/accounts?id="+strconv.FormatInt(existing.ID, 10)+" and a body of {\"restore\":true}")
+			return
+		}
+		respondError(w, http.StatusConflict,
+			"account "+req.Name+" already exists; update it with PUT /api/zai/accounts?id="+strconv.FormatInt(existing.ID, 10))
 		return
 	}
 
@@ -124,6 +179,14 @@ func (h *Handler) zaiAccountCreate(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// jsonStringValue renders s as a JSON string so it can be stored in a metadata
+// map whose values are kept as raw JSON. Marshalling a string is infallible, so
+// the dropped error here is genuinely dead rather than ignored.
+func jsonStringValue(s string) json.RawMessage {
+	b, _ := json.Marshal(s)
+	return json.RawMessage(b)
+}
+
 func (h *Handler) zaiAccountUpdate(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(r.URL.Query().Get("id"), 10, 64)
 	if err != nil || id <= 0 {
@@ -152,6 +215,54 @@ func (h *Handler) zaiAccountUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// The stored metadata is read before the restore and the rename below touch
+	// anything, so a request that turns out to be unmergeable leaves the account
+	// exactly as it was rather than half-updated.
+	//
+	// Issue #21: the parse error here used to be dropped. An unreadable blob
+	// then merged as if it were empty, and an update carrying only base_url
+	// wrote back metadata with no api_key. What that destroys is the last copy
+	// of the credential, not the polling: the agent manager decodes this blob
+	// too and had already stopped polling the account the moment it stopped
+	// parsing. Before the overwrite the key is still there as text and can be
+	// recovered from the row; afterwards there is nothing left to recover.
+	//
+	// Values are held as RawMessage rather than string. The agent manager reads
+	// this same blob into a struct and ignores fields it does not know, so a
+	// metadata object with any non-string value in it feeds a perfectly healthy
+	// account; decoding into map[string]string would report an error for that
+	// account and flatten every such value it did manage to read.
+	var existing map[string]json.RawMessage
+	if req.APIKey != nil || req.BaseURL != nil {
+		existing = map[string]json.RawMessage{}
+		if acc.Metadata != "" {
+			if err := json.Unmarshal([]byte(acc.Metadata), &existing); err != nil {
+				// Refusing is the point: the blob is the only copy of the key,
+				// and merging into an empty map would drop it. The exception is
+				// a request that supplies a key itself - there is then nothing
+				// left to lose, and it is the only way an operator can repair
+				// an account whose metadata has already been damaged.
+				if req.APIKey == nil || *req.APIKey == "" {
+					// The decoder reports the offending character or type, never
+					// the payload, so nothing here can carry key material.
+					h.logger.Error("refusing to merge unreadable Z.ai account metadata",
+						"account", acc.Name, "id", id, "error", err)
+					respondError(w, http.StatusConflict,
+						"stored account metadata is not readable, so this update would drop the saved API key; re-send it with an api_key to discard the damaged metadata and start over, which also clears base_url and any other stored field")
+					return
+				}
+				h.logger.Warn("replacing unreadable Z.ai account metadata: the request carries a new API key",
+					"account", acc.Name, "id", id, "error", err)
+				existing = map[string]json.RawMessage{}
+			}
+			if existing == nil {
+				// Metadata was the JSON literal null, which decodes into a nil
+				// map. Nothing to preserve, but the merge still needs a map.
+				existing = map[string]json.RawMessage{}
+			}
+		}
+	}
+
 	if req.Restore != nil && *req.Restore {
 		if err := h.store.UndeleteProviderAccountByID(id); err != nil {
 			h.logger.Error("failed to restore Z.ai account", "error", err)
@@ -174,23 +285,26 @@ func (h *Handler) zaiAccountUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Metadata is merged, not replaced: an update that only carries a key must
-	// not silently drop a custom base_url.
+	// not silently drop a custom base_url, and a field this handler has never
+	// heard of must come back out the way it went in. The same condition as the
+	// parse above, which is what guarantees existing is non-nil here.
 	if req.APIKey != nil || req.BaseURL != nil {
-		existing := map[string]string{}
-		if acc.Metadata != "" {
-			json.Unmarshal([]byte(acc.Metadata), &existing)
-		}
 		if req.APIKey != nil && *req.APIKey != "" {
-			existing["api_key"] = *req.APIKey
+			existing["api_key"] = jsonStringValue(*req.APIKey)
 		}
 		if req.BaseURL != nil {
 			if *req.BaseURL == "" {
 				delete(existing, "base_url")
 			} else {
-				existing["base_url"] = *req.BaseURL
+				existing["base_url"] = jsonStringValue(*req.BaseURL)
 			}
 		}
-		metaJSON, _ := json.Marshal(existing)
+		metaJSON, err := json.Marshal(existing)
+		if err != nil {
+			h.logger.Error("failed to encode Z.ai account metadata", "account", acc.Name, "id", id, "error", err)
+			respondError(w, http.StatusInternalServerError, "failed to update account")
+			return
+		}
 		if err := h.store.UpdateProviderAccountMetadata(id, string(metaJSON)); err != nil {
 			h.logger.Error("failed to update Z.ai account metadata", "error", err)
 			respondError(w, http.StatusInternalServerError, "failed to update account")

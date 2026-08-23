@@ -87,12 +87,21 @@ type zaiAccountMeta struct {
 	BaseURL string `json:"base_url,omitempty"`
 }
 
-func parseZaiAccountMeta(raw string) zaiAccountMeta {
+// parseZaiAccountMeta decodes the metadata blob stored on a provider account.
+//
+// The error is returned rather than dropped. A blob that does not parse yields
+// the same empty struct as an account that was never configured, and the caller
+// cannot tell the two apart - so damage reads as "no key set" and the account
+// drops out of the polling rotation looking like it was never in it.
+func parseZaiAccountMeta(raw string) (zaiAccountMeta, error) {
 	var meta zaiAccountMeta
-	if raw != "" {
-		json.Unmarshal([]byte(raw), &meta)
+	if raw == "" {
+		return meta, nil
 	}
-	return meta
+	if err := json.Unmarshal([]byte(raw), &meta); err != nil {
+		return zaiAccountMeta{}, err
+	}
+	return meta, nil
 }
 
 // Run starts the manager, loads all accounts, and starts agents.
@@ -136,9 +145,32 @@ func (m *ZaiAgentManager) loadAndStartAccounts() error {
 	}
 
 	for _, acc := range accounts {
-		meta := parseZaiAccountMeta(acc.Metadata)
+		meta, err := parseZaiAccountMeta(acc.Metadata)
+		if err != nil {
+			// An account that has silently stopped being polled is not a debug
+			// event. The decoder reports the offending character or type and
+			// never the payload, so this cannot carry key material.
+			m.logger.Warn("Z.ai account metadata is not readable, so the account will not be polled",
+				"account", acc.Name, "id", acc.ID, "error", err)
+			continue
+		}
 		if meta.APIKey == "" {
-			m.logger.Debug("skipping Z.ai account without API key", "account", acc.Name, "id", acc.ID)
+			if acc.Metadata == "" || acc.Metadata == "{}" {
+				// Never configured. This is the expected state of the default
+				// account the migration creates on a fresh install, so it stays
+				// quiet rather than warning on every reload. Empty and "{}" are
+				// the same pair main.go treats as "not configured yet" when it
+				// decides whether to seed a legacy ZAI_API_KEY, and "{}" is
+				// reachable: clearing base_url on an account with no key writes
+				// exactly that.
+				m.logger.Debug("skipping Z.ai account without API key", "account", acc.Name, "id", acc.ID)
+			} else {
+				// Configured at some point, and the key is not there now -
+				// which is the state a metadata overwrite leaves behind. Audible
+				// on purpose.
+				m.logger.Warn("Z.ai account has metadata but no API key, so the account will not be polled",
+					"account", acc.Name, "id", acc.ID)
+			}
 			continue
 		}
 		if err := m.startAgentForAccount(acc.ID, acc.Name, meta); err != nil {

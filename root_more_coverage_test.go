@@ -41,22 +41,6 @@ func TestRun_CommandDispatchDeterministic(t *testing.T) {
 			t.Fatalf("expected version output, got: %s", out)
 		}
 	})
-
-	t.Run("update command dev mode", func(t *testing.T) {
-		origVersion := version
-		version = "dev"
-		t.Cleanup(func() { version = origVersion })
-
-		setTestArgs(t, []string{"onwatch", "update"})
-		out := captureStdout(t, func() {
-			if err := run(); err != nil {
-				t.Fatalf("run update error: %v", err)
-			}
-		})
-		if !strings.Contains(out, "Already at the latest version") {
-			t.Fatalf("expected no-update output, got: %s", out)
-		}
-	})
 }
 
 func TestStopPreviousInstance_SelfPIDFileIsSafeAndRemoved(t *testing.T) {
@@ -225,5 +209,38 @@ func TestMain_ErrorPath(t *testing.T) {
 		!strings.Contains(err.Error(), "failed to setup logging") &&
 		!strings.Contains(err.Error(), "server error") {
 		t.Fatalf("expected startup error, got: %v", err)
+	}
+}
+
+// TestRun_UpdateIsARecognisedRemovedVerb guards the trapdoor that leaked a live
+// daemon out of every test run before 1.8.0: an argument `run()` does not
+// recognise falls through the whole dispatch chain and starts the daemon. When
+// `update` stopped being a command, the test that exercised it kept passing
+// while spawning a real server that never exited. `update` therefore stays
+// recognised, and this asserts that it is - if the dispatch arm is ever removed
+// as dead code, run() reaches daemon startup here and this test hangs or fails
+// rather than passing quietly.
+func TestRun_UpdateIsARecognisedRemovedVerb(t *testing.T) {
+	for _, arg := range []string{"update", "--update"} {
+		t.Run(arg, func(t *testing.T) {
+			// If the dispatch arm is ever deleted, run() reaches daemon startup
+			// from here. The daemon it spawns is sandboxed by
+			// testDaemonIsolationEnv, but daemonize writes the PID file before
+			// that, and in a developer's real HOME that clobbers the pointer to
+			// their running daemon. The guard has to fail safely as well as
+			// loudly.
+			oldPIDFile := pidFile
+			pidFile = filepath.Join(t.TempDir(), "onwatch.pid")
+			t.Cleanup(func() { pidFile = oldPIDFile })
+
+			setTestArgs(t, []string{"onwatch", arg})
+			err := run()
+			if err == nil {
+				t.Fatalf("run(%q) returned nil; the verb fell through to daemon startup", arg)
+			}
+			if !strings.Contains(err.Error(), "self-update was removed") {
+				t.Fatalf("run(%q) error = %v, want the removal message", arg, err)
+			}
+		})
 	}
 }

@@ -2,9 +2,7 @@ package main
 
 import (
 	"bufio"
-	"errors"
 	"fmt"
-	"log/slog"
 	"net"
 	"os"
 	"path/filepath"
@@ -12,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/onllm-dev/onwatch/v2/internal/service"
-	"github.com/onllm-dev/onwatch/v2/internal/update"
 )
 
 // autostartHarness swaps every auto-start/daemon indirection for a recorder and
@@ -37,8 +34,8 @@ func newAutostartHarness(t *testing.T) *autostartHarness {
 	h := &autostartHarness{}
 
 	prevSupported, prevInstalled, prevLoaded := autostartSupported, autostartInstalled, autostartLoaded
-	prevInstall, prevUninstall, prevRestart := autostartInstall, autostartUninstall, autostartRestart
-	prevSpawn, prevTerm := startDaemonProcess, stdinIsTerminal
+	prevInstall, prevUninstall := autostartInstall, autostartUninstall
+	prevTerm := stdinIsTerminal
 
 	autostartSupported = func() bool { return h.supported }
 	autostartInstalled = func() bool { return h.installed }
@@ -52,20 +49,12 @@ func newAutostartHarness(t *testing.T) *autostartHarness {
 		return "/tmp/fake/dev.onllm.onwatch.plist", nil
 	}
 	autostartUninstall = func() error { h.uninstall++; h.installed = false; return nil }
-	autostartRestart = func() error {
-		h.restarts++
-		return h.restartErr
-	}
-	startDaemonProcess = func(path string) (int, error) {
-		h.spawns = append(h.spawns, path)
-		return h.spawnPID, h.spawnErr
-	}
 	stdinIsTerminal = func() bool { return h.terminal }
 
 	t.Cleanup(func() {
 		autostartSupported, autostartInstalled, autostartLoaded = prevSupported, prevInstalled, prevLoaded
-		autostartInstall, autostartUninstall, autostartRestart = prevInstall, prevUninstall, prevRestart
-		startDaemonProcess, stdinIsTerminal = prevSpawn, prevTerm
+		autostartInstall, autostartUninstall = prevInstall, prevUninstall
+		stdinIsTerminal = prevTerm
 	})
 	return h
 }
@@ -95,96 +84,6 @@ func TestParsePIDContent(t *testing.T) {
 		if got := parsePIDContent(in); got != want {
 			t.Errorf("parsePIDContent(%q) = %d, want %d", in, got, want)
 		}
-	}
-}
-
-func TestRunningDaemonPID(t *testing.T) {
-	isolateHome(t)
-
-	if _, ok := runningDaemonPID(); ok {
-		t.Error("no PID file should report not running")
-	}
-
-	// A PID file left behind by a reboot points at a process that is gone.
-	if err := os.WriteFile(pidFile, []byte("999998:9211"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if _, ok := runningDaemonPID(); ok {
-		t.Error("stale PID file should report not running")
-	}
-
-	// Our own PID means we are the updater, not the daemon.
-	if err := os.WriteFile(pidFile, []byte(fmt.Sprintf("%d:9211", os.Getpid())), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if _, ok := runningDaemonPID(); ok {
-		t.Error("own PID should report not running")
-	}
-}
-
-// The reported bug: after a reboot nothing is running, and `onwatch update`
-// used to exit leaving onWatch stopped.
-func TestRestartAfterUpdateStartsDaemonWhenNotRunning(t *testing.T) {
-	isolateHome(t)
-	h := newAutostartHarness(t)
-	h.spawnPID = 4242
-
-	out := captureStdout(t, restartAfterUpdate)
-
-	if len(h.spawns) != 1 {
-		t.Fatalf("expected exactly one daemon spawn, got %d", len(h.spawns))
-	}
-	if !strings.Contains(out, "was not running") {
-		t.Errorf("expected a 'was not running' notice, got: %s", out)
-	}
-	if !strings.Contains(out, "4242") {
-		t.Errorf("expected the new PID in the output, got: %s", out)
-	}
-}
-
-func TestRestartAfterUpdatePrefersLaunchd(t *testing.T) {
-	isolateHome(t)
-	h := newAutostartHarness(t)
-	h.supported, h.installed, h.loaded = true, true, true
-
-	out := captureStdout(t, restartAfterUpdate)
-
-	if h.restarts != 1 {
-		t.Errorf("expected launchctl kickstart, restarts=%d", h.restarts)
-	}
-	if len(h.spawns) != 0 {
-		t.Errorf("launchd owns the process - must not spawn a second daemon, got %v", h.spawns)
-	}
-	if !strings.Contains(out, "launchd") {
-		t.Errorf("expected launchd mentioned in output, got: %s", out)
-	}
-}
-
-func TestRestartAfterUpdateFallsBackWhenLaunchdFails(t *testing.T) {
-	isolateHome(t)
-	h := newAutostartHarness(t)
-	h.supported, h.installed, h.loaded = true, true, true
-	h.restartErr = errors.New("kickstart: no such service")
-
-	captureStdout(t, restartAfterUpdate)
-
-	if h.restarts != 1 {
-		t.Errorf("expected one kickstart attempt, got %d", h.restarts)
-	}
-	if len(h.spawns) != 1 {
-		t.Errorf("expected fallback spawn after kickstart failure, got %v", h.spawns)
-	}
-}
-
-func TestRestartAfterUpdateReportsSpawnFailure(t *testing.T) {
-	isolateHome(t)
-	h := newAutostartHarness(t)
-	h.spawnErr = errors.New("permission denied")
-
-	out := captureStdout(t, restartAfterUpdate)
-
-	if !strings.Contains(out, "start onwatch manually") {
-		t.Errorf("expected manual-start guidance on failure, got: %s", out)
 	}
 }
 
@@ -417,39 +316,6 @@ func TestRunServiceUnknownActionPrintsHelp(t *testing.T) {
 	}
 }
 
-// End-to-end for the reported bug: `onwatch update` on a machine where the
-// daemon is not running must leave onWatch running, not merely updated.
-func TestRunUpdateStartsDaemonWhenNoneRunning(t *testing.T) {
-	isolateHome(t)
-	h := newAutostartHarness(t)
-	h.spawnPID = 777
-
-	oldVersion, oldFactory := version, newCLIUpdater
-	version = "1.2.3"
-	newCLIUpdater = func(string, *slog.Logger) cliUpdater {
-		return &stubCLIUpdater{checkInfo: update.UpdateInfo{
-			Available:      true,
-			CurrentVersion: "1.2.3",
-			LatestVersion:  "1.2.4",
-			DownloadURL:    "https://example.com/onwatch",
-		}}
-	}
-	t.Cleanup(func() { version, newCLIUpdater = oldVersion, oldFactory })
-
-	out := captureStdout(t, func() {
-		if err := runUpdate(); err != nil {
-			t.Fatalf("runUpdate: %v", err)
-		}
-	})
-
-	if !strings.Contains(out, "Updated successfully to v1.2.4") {
-		t.Errorf("missing update confirmation: %s", out)
-	}
-	if len(h.spawns) != 1 {
-		t.Fatalf("update must leave onWatch running; spawns=%v output=%s", h.spawns, out)
-	}
-}
-
 // A launchd job must stay in the foreground and write its own PID file: launchd
 // tracks the PID it started, so forking would look like a crash (relaunch loop)
 // and no parent exists to record the PID.
@@ -491,7 +357,7 @@ func TestShouldWriteOwnPIDFile(t *testing.T) {
 }
 
 // /dev/null is a character device, so a ModeCharDevice check would call it a
-// terminal and `onwatch update < /dev/null` would take the prompt's default -
+// terminal and `onwatch setup < /dev/null` would take the prompt's default -
 // silently installing a login item nobody asked for.
 func TestStdinIsTerminalRejectsDevNull(t *testing.T) {
 	devnull, err := os.Open(os.DevNull)
@@ -565,57 +431,6 @@ func TestOfferAutostartEmptyLineAcceptsDefault(t *testing.T) {
 
 	if h.installCall != 1 {
 		t.Errorf("empty line should accept the (Y/n) default, installCall=%d", h.installCall)
-	}
-}
-
-func TestRestartArgs(t *testing.T) {
-	cases := []struct {
-		in, want []string
-	}{
-		{[]string{"update"}, nil},
-		{[]string{"--update"}, nil},
-		{[]string{"update", "--port", "8080"}, []string{"--port", "8080"}},
-		{[]string{"--db", "/tmp/x.db", "update"}, []string{"--db", "/tmp/x.db"}},
-		// The restart must background itself, so foreground flags are dropped.
-		{[]string{"update", "--debug"}, nil},
-		{[]string{"update", "--debugstdout", "--port", "9000"}, []string{"--port", "9000"}},
-	}
-	for _, c := range cases {
-		got := restartArgs(c.in)
-		if len(got) != len(c.want) {
-			t.Errorf("restartArgs(%v) = %v, want %v", c.in, got, c.want)
-			continue
-		}
-		for i := range got {
-			if got[i] != c.want[i] {
-				t.Errorf("restartArgs(%v) = %v, want %v", c.in, got, c.want)
-				break
-			}
-		}
-	}
-}
-
-// Inheriting either marker would tell the new process it is already the daemon,
-// so it would stay in the foreground instead of backgrounding itself.
-func TestDaemonEnvStripsDaemonMarkers(t *testing.T) {
-	in := []string{"HOME=/Users/x", "_ONWATCH_DAEMON=1", "PATH=/bin", "_ONWATCH_LAUNCHD=1", "ONWATCH_PORT=9211"}
-	got := daemonEnv(in)
-
-	for _, kv := range got {
-		if strings.HasPrefix(kv, "_ONWATCH_DAEMON=") || strings.HasPrefix(kv, "_ONWATCH_LAUNCHD=") {
-			t.Errorf("daemonEnv kept %q", kv)
-		}
-	}
-	for _, want := range []string{"HOME=/Users/x", "PATH=/bin", "ONWATCH_PORT=9211"} {
-		found := false
-		for _, kv := range got {
-			if kv == want {
-				found = true
-			}
-		}
-		if !found {
-			t.Errorf("daemonEnv dropped %q", want)
-		}
 	}
 }
 
@@ -706,53 +521,6 @@ func TestRemovePIDFileOnlyRemovesOwnEntry(t *testing.T) {
 
 	// Missing file is a no-op, not a panic.
 	removePIDFile()
-}
-
-// systemd owns the lifecycle on Linux: spawning an unsupervised daemon beside
-// the unit is wrong, and would restart a service an operator deliberately
-// stopped.
-func TestRestartAfterUpdateDefersToSystemd(t *testing.T) {
-	isolateHome(t)
-	h := newAutostartHarness(t)
-
-	t.Setenv("INVOCATION_ID", "abc123") // what update.IsSystemd() looks for
-	calls := 0
-	prev := systemctlRestart
-	systemctlRestart = func() error { calls++; return nil }
-	t.Cleanup(func() { systemctlRestart = prev })
-
-	out := captureStdout(t, restartAfterUpdate)
-
-	if calls != 1 {
-		t.Errorf("expected one systemctl restart, got %d", calls)
-	}
-	if len(h.spawns) != 0 {
-		t.Errorf("systemd owns the process - must not spawn, got %v", h.spawns)
-	}
-	if !strings.Contains(out, "systemd") {
-		t.Errorf("expected systemd mentioned, got: %s", out)
-	}
-}
-
-// In a container onWatch is PID 1 in the foreground: there is nothing to
-// background, and the spawn would stall the wait on a process that never
-// writes a PID file.
-func TestRestartAfterUpdateDoesNotSpawnInContainer(t *testing.T) {
-	isolateHome(t)
-	h := newAutostartHarness(t)
-
-	prev := inContainer
-	inContainer = func() bool { return true }
-	t.Cleanup(func() { inContainer = prev })
-
-	out := captureStdout(t, restartAfterUpdate)
-
-	if len(h.spawns) != 0 {
-		t.Errorf("must not spawn inside a container, got %v", h.spawns)
-	}
-	if !strings.Contains(out, "container") {
-		t.Errorf("expected container guidance, got: %s", out)
-	}
 }
 
 // The default-port fallback SIGTERMs whatever onwatch listens on 9211 - which

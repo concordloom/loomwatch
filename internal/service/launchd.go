@@ -2,8 +2,8 @@
 //
 // On macOS this is a per-user launchd agent (~/Library/LaunchAgents), which is
 // what makes onWatch come back after a reboot or logout. Linux uses systemd
-// units created by install.sh (see internal/update for unit migration), so the
-// helpers here are macOS-only and report Supported() == false elsewhere.
+// units, whose restart policy systemd.go keeps current, so the helpers here
+// are macOS-only and report Supported() == false elsewhere.
 package service
 
 import (

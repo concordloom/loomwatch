@@ -442,9 +442,9 @@ integration point in most cases, and it is what the alerts use.
   gated on usage, which hid the series exactly while the account was healthy and
   hid it permanently for plans reporting a percentage with zero usage
   ([upstream #112](https://github.com/onllm-dev/onWatch/issues/112)).
-- **Self-update points at this fork**, so the service cannot offer to replace
-  itself with a build that lacks the above. Self-update is unsupported in a
-  container regardless: the unit of delivery is the image.
+- **No self-update.** It could not work here - the releases carry no assets and
+  the container is read-only and distroless - so the dashboard no longer offers
+  it. The unit of delivery is the image.
 - **This chart**, with alerting rules and a dashboard.
 
 ## Troubleshooting

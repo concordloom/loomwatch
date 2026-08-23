@@ -605,78 +605,6 @@ func TestFindOnwatchOnPort_WindowsReturnsNil(t *testing.T) {
 // runUpdate() - error path from Check() (via bad version / network error)
 // ---------------------------------------------------------------------------
 
-func TestRunUpdate_CheckFailsOnNetworkError(t *testing.T) {
-	// Use a non-dev version so it tries to hit GitHub
-	origVersion := version
-	version = "2.0.0"
-	t.Cleanup(func() { version = origVersion })
-
-	// Set an invalid PID file path so it doesn't interfere
-	oldPIDFile := pidFile
-	pidFile = filepath.Join(t.TempDir(), "onwatch.pid")
-	t.Cleanup(func() { pidFile = oldPIDFile })
-
-	setTestArgs(t, []string{"onwatch", "update"})
-
-	// We can't easily inject a failure in Check() from outside the package,
-	// but we can test the "dev version" case which succeeds immediately.
-	version = "dev"
-	out := captureStdout(t, func() {
-		if err := run(); err != nil {
-			t.Fatalf("run update (dev) error: %v", err)
-		}
-	})
-	if !strings.Contains(out, "Already at the latest version") {
-		t.Fatalf("expected 'Already at the latest version', got: %s", out)
-	}
-}
-
-func TestRunUpdate_AlreadyLatest(t *testing.T) {
-	origVersion := version
-	version = "dev"
-	t.Cleanup(func() { version = origVersion })
-
-	oldPIDFile := pidFile
-	pidFile = filepath.Join(t.TempDir(), "onwatch.pid")
-	t.Cleanup(func() { pidFile = oldPIDFile })
-
-	out := captureStdout(t, func() {
-		if err := runUpdate(); err != nil {
-			t.Fatalf("runUpdate error: %v", err)
-		}
-	})
-	if !strings.Contains(out, "Already at the latest version") {
-		t.Fatalf("expected 'Already at the latest version', got: %s", out)
-	}
-}
-
-func TestRunUpdate_WithStalePIDFile(t *testing.T) {
-	origVersion := version
-	version = "dev"
-	t.Cleanup(func() { version = origVersion })
-
-	oldPIDFile := pidFile
-	tmpDir := t.TempDir()
-	pidFile = filepath.Join(tmpDir, "onwatch.pid")
-	t.Cleanup(func() { pidFile = oldPIDFile })
-
-	// Write a stale PID to the PID file so the restart branch is exercised
-	stalePID := 999999
-	if err := os.WriteFile(pidFile, []byte(fmt.Sprintf("%d:9211", stalePID)), 0o644); err != nil {
-		t.Fatalf("write pid file: %v", err)
-	}
-
-	// dev version -> no update available, but PID file restart path still runs
-	out := captureStdout(t, func() {
-		if err := runUpdate(); err != nil {
-			t.Fatalf("runUpdate error: %v", err)
-		}
-	})
-	if !strings.Contains(out, "Already at the latest version") {
-		t.Fatalf("expected 'Already at the latest version', got: %s", out)
-	}
-}
-
 // ---------------------------------------------------------------------------
 // runStop() / runStatus() - non-test mode no PID file path
 // ---------------------------------------------------------------------------
@@ -1331,17 +1259,6 @@ func TestDaemonChildRun_HelperProcess(t *testing.T) {
 		os.Args = []string{"onwatch", "--debug", "--test"}
 		main()
 		os.Exit(0)
-	case "run_update_check":
-		// Run update with an old version string so GitHub returns "update available"
-		// Apply() will likely fail (binary not writable in test env) -> covers error path
-		os.Args = []string{"onwatch", "update"}
-		main() // This will try to apply update and likely fail
-		os.Exit(0)
-	case "run_update_error":
-		// Run update command that will fail (non-dev version + bad network)
-		os.Args = []string{"onwatch", "update"}
-		main()
-		os.Exit(0)
 	case "debug_default_password":
 		// Run with default password to trigger the warning branch
 		os.Args = []string{"onwatch", "--debug", "--test"}
@@ -1871,40 +1788,6 @@ func TestDaemonChildRun_DebugModeLogLevels(t *testing.T) {
 				"ONWATCH_LOG_LEVEL="+logLevel,
 			), 400)
 		})
-	}
-}
-
-// TestRunUpdate_CheckAvailableViaSubprocess tests the "update available" path
-// by running with an old version (0.0.1) so GitHub returns a newer version.
-// Apply() will likely fail because the test binary isn't in a writable location,
-// which covers the "update failed" error return path.
-func TestRunUpdate_CheckAvailableViaSubprocess(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping update subprocess test in short mode")
-	}
-
-	cmd := exec.Command(os.Args[0], "-test.run=TestDaemonChildRun_HelperProcess", "-test.v")
-	cmd.Env = append(os.Environ(),
-		"GO_DAEMON_HELPER=1",
-		"DAEMON_HELPER_MODE=run_update_check",
-		// Override version to trigger "update available"
-		// Note: version var can't be set via env, so this relies on the actual version
-		// being old enough that GitHub has a newer release
-	)
-
-	// Run with timeout
-	done := make(chan error, 1)
-	if err := cmd.Start(); err != nil {
-		t.Fatalf("start subprocess: %v", err)
-	}
-	go func() { done <- cmd.Wait() }()
-
-	select {
-	case <-done:
-		// Subprocess completed (either updated or failed)
-	case <-time.After(15 * time.Second):
-		cmd.Process.Kill()
-		<-done
 	}
 }
 
@@ -2444,32 +2327,6 @@ func TestMigrateDBLocation_RenameFails(t *testing.T) {
 // runUpdate() - covers the "with stale PID in legacy format" restart path
 // ---------------------------------------------------------------------------
 
-func TestRunUpdate_WithLegacyPIDFormat(t *testing.T) {
-	origVersion := version
-	version = "dev"
-	t.Cleanup(func() { version = origVersion })
-
-	oldPIDFile := pidFile
-	tmpDir := t.TempDir()
-	pidFile = filepath.Join(tmpDir, "onwatch.pid")
-	t.Cleanup(func() { pidFile = oldPIDFile })
-
-	// Write legacy PID-only format (no port) with stale PID
-	stalePID := 999998
-	if err := os.WriteFile(pidFile, []byte(strconv.Itoa(stalePID)), 0o644); err != nil {
-		t.Fatalf("write pid file: %v", err)
-	}
-
-	out := captureStdout(t, func() {
-		if err := runUpdate(); err != nil {
-			t.Fatalf("runUpdate error: %v", err)
-		}
-	})
-	if !strings.Contains(out, "Already at the latest version") {
-		t.Fatalf("expected 'Already at the latest version', got: %s", out)
-	}
-}
-
 // ---------------------------------------------------------------------------
 // generatePassword() - validate it returns a hex string
 // ---------------------------------------------------------------------------
@@ -2982,205 +2839,9 @@ func TestStopPreviousInstance_NoPIDFile(t *testing.T) {
 // runUpdate() - test with high version (already latest via GitHub API)
 // ---------------------------------------------------------------------------
 
-func TestRunUpdate_HighVersionAlreadyLatest(t *testing.T) {
-	origVersion := version
-	// Set a very high version so GitHub API returns "no update"
-	version = "999.999.999"
-	t.Cleanup(func() { version = origVersion })
-
-	oldPIDFile := pidFile
-	pidFile = filepath.Join(t.TempDir(), "onwatch.pid")
-	t.Cleanup(func() { pidFile = oldPIDFile })
-
-	out := captureStdout(t, func() {
-		err := runUpdate()
-		if err != nil {
-			// Network errors are acceptable in CI/test environments
-			if strings.Contains(err.Error(), "update check failed") {
-				t.Logf("network error (expected in CI): %v", err)
-				return
-			}
-			t.Fatalf("runUpdate error: %v", err)
-		}
-	})
-	// If network succeeded, should say "Already at the latest version"
-	if out != "" && !strings.Contains(out, "Already at the latest version") && !strings.Contains(out, "checking for updates") {
-		t.Logf("output: %s", out)
-	}
-}
-
-// TestRunUpdate_UpdateAvailableApplyFails tests runUpdate when the GitHub API
-// returns an update (version 0.0.1 < latest), Check succeeds, and Apply either
-// succeeds or fails. No PID file means no daemon restart is attempted.
-// This test requires GitHub API to not be rate-limited.
-func TestRunUpdate_UpdateAvailableApplyFails(t *testing.T) {
-	origVersion := version
-	version = "0.0.1"
-	t.Cleanup(func() { version = origVersion })
-
-	oldPIDFile := pidFile
-	pidFile = filepath.Join(t.TempDir(), "nonexistent.pid")
-	t.Cleanup(func() { pidFile = oldPIDFile })
-
-	out := captureStdout(t, func() {
-		err := runUpdate()
-		if err != nil {
-			// Network errors (rate limit) or apply failures are both acceptable
-			if strings.Contains(err.Error(), "update check failed") ||
-				strings.Contains(err.Error(), "update failed") {
-				t.Logf("expected error: %v", err)
-				return
-			}
-			t.Fatalf("unexpected error: %v", err)
-		}
-		t.Logf("runUpdate succeeded (download happened)")
-	})
-	_ = out
-}
-
-func TestRunUpdate_UpdateAvailableWithSelfPID(t *testing.T) {
-	origVersion := version
-	version = "0.0.2"
-	t.Cleanup(func() { version = origVersion })
-
-	oldPIDFile := pidFile
-	tmpDir := t.TempDir()
-	pidFile = filepath.Join(tmpDir, "onwatch.pid")
-	t.Cleanup(func() { pidFile = oldPIDFile })
-
-	// Write self-PID so the restart branch sees pid == os.Getpid() and skips
-	// This exercises the PID file reading/parsing in runUpdate without spawning a daemon
-	self := os.Getpid()
-	if err := os.WriteFile(pidFile, []byte(fmt.Sprintf("%d:9211", self)), 0o644); err != nil {
-		t.Fatalf("write pid file: %v", err)
-	}
-
-	out := captureStdout(t, func() {
-		err := runUpdate()
-		if err != nil {
-			if strings.Contains(err.Error(), "update check failed") ||
-				strings.Contains(err.Error(), "update failed") {
-				t.Logf("expected error: %v", err)
-				return
-			}
-			t.Fatalf("unexpected runUpdate error: %v", err)
-		}
-	})
-	_ = out
-}
-
-func TestRunUpdate_UpdateAvailableLegacySelfPID(t *testing.T) {
-	origVersion := version
-	version = "0.0.3"
-	t.Cleanup(func() { version = origVersion })
-
-	oldPIDFile := pidFile
-	tmpDir := t.TempDir()
-	pidFile = filepath.Join(tmpDir, "onwatch.pid")
-	t.Cleanup(func() { pidFile = oldPIDFile })
-
-	// Write self-PID in legacy format (no port) so restart branch is skipped
-	self := os.Getpid()
-	if err := os.WriteFile(pidFile, []byte(strconv.Itoa(self)), 0o644); err != nil {
-		t.Fatalf("write pid file: %v", err)
-	}
-
-	out := captureStdout(t, func() {
-		err := runUpdate()
-		if err != nil {
-			if strings.Contains(err.Error(), "update check failed") ||
-				strings.Contains(err.Error(), "update failed") {
-				t.Logf("expected error: %v", err)
-				return
-			}
-			t.Fatalf("unexpected runUpdate error: %v", err)
-		}
-	})
-	_ = out
-}
-
-func TestRunUpdate_CheckErrorPath(t *testing.T) {
-	origVersion := version
-	// Non-dev version to trigger actual Check() call
-	version = "1.0.0"
-	t.Cleanup(func() { version = origVersion })
-
-	oldPIDFile := pidFile
-	pidFile = filepath.Join(t.TempDir(), "onwatch.pid")
-	t.Cleanup(func() { pidFile = oldPIDFile })
-
-	// Force a timeout by setting HTTP_PROXY to an invalid address
-	t.Setenv("HTTP_PROXY", "http://127.0.0.1:1")
-	t.Setenv("HTTPS_PROXY", "http://127.0.0.1:1")
-
-	out := captureStdout(t, func() {
-		err := runUpdate()
-		if err != nil {
-			// Network behavior can vary by environment (proxy ignored, API throttled, etc.).
-			// Accept both runUpdate error surfaces as long as update fails deterministically.
-			if !strings.Contains(err.Error(), "update check failed") &&
-				!strings.Contains(err.Error(), "update failed") {
-				t.Fatalf("expected update failure, got: %v", err)
-			}
-			return
-		}
-	})
-	// The checking message should appear before the error
-	if !strings.Contains(out, "checking for updates") {
-		t.Logf("output: %s", out)
-	}
-}
-
 // ---------------------------------------------------------------------------
 // run() - via setTestArgs for update command with real version
 // ---------------------------------------------------------------------------
-
-func TestRun_UpdateCommand(t *testing.T) {
-	origVersion := version
-	version = "999.999.996"
-	t.Cleanup(func() { version = origVersion })
-
-	oldPIDFile := pidFile
-	pidFile = filepath.Join(t.TempDir(), "onwatch.pid")
-	t.Cleanup(func() { pidFile = oldPIDFile })
-
-	setTestArgs(t, []string{"onwatch", "update"})
-
-	out := captureStdout(t, func() {
-		err := run()
-		if err != nil {
-			if strings.Contains(err.Error(), "update check failed") {
-				t.Logf("network error (expected): %v", err)
-				return
-			}
-			t.Fatalf("run update error: %v", err)
-		}
-	})
-	if !strings.Contains(out, "checking for updates") {
-		t.Logf("output: %s", out)
-	}
-}
-
-func TestRun_UpdateCommandDashDash(t *testing.T) {
-	origVersion := version
-	version = "dev"
-	t.Cleanup(func() { version = origVersion })
-
-	oldPIDFile := pidFile
-	pidFile = filepath.Join(t.TempDir(), "onwatch.pid")
-	t.Cleanup(func() { pidFile = oldPIDFile })
-
-	setTestArgs(t, []string{"onwatch", "--update"})
-
-	out := captureStdout(t, func() {
-		if err := run(); err != nil {
-			t.Fatalf("run --update error: %v", err)
-		}
-	})
-	if !strings.Contains(out, "Already at the latest version") {
-		t.Fatalf("expected 'Already at the latest version', got: %s", out)
-	}
-}
 
 // ---------------------------------------------------------------------------
 // runStop() - test mode with running parent PID (exercises SIGTERM path)

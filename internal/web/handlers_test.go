@@ -4979,64 +4979,6 @@ func TestHandler_LoggingHistory_UnknownProviderReturnsError(t *testing.T) {
 // ── Update Handler Tests ──
 // ═══════════════════════════════════════════════════════════════════
 
-func TestHandler_CheckUpdate_NoUpdater(t *testing.T) {
-	t.Parallel()
-	cfg := createTestConfigWithSynthetic()
-	h := NewHandler(nil, nil, nil, nil, cfg)
-	// No updater set
-
-	req := httptest.NewRequest(http.MethodGet, "/api/update/check", nil)
-	rr := httptest.NewRecorder()
-	h.CheckUpdate(rr, req)
-
-	if rr.Code != http.StatusServiceUnavailable {
-		t.Errorf("expected status 503, got %d", rr.Code)
-	}
-}
-
-func TestHandler_CheckUpdate_MethodNotAllowed(t *testing.T) {
-	t.Parallel()
-	cfg := createTestConfigWithSynthetic()
-	h := NewHandler(nil, nil, nil, nil, cfg)
-
-	req := httptest.NewRequest(http.MethodPost, "/api/update/check", nil)
-	rr := httptest.NewRecorder()
-	h.CheckUpdate(rr, req)
-
-	if rr.Code != http.StatusMethodNotAllowed {
-		t.Errorf("expected status 405, got %d", rr.Code)
-	}
-}
-
-func TestHandler_ApplyUpdate_NoUpdater(t *testing.T) {
-	t.Parallel()
-	cfg := createTestConfigWithSynthetic()
-	h := NewHandler(nil, nil, nil, nil, cfg)
-	// No updater set
-
-	req := httptest.NewRequest(http.MethodPost, "/api/update/apply", nil)
-	rr := httptest.NewRecorder()
-	h.ApplyUpdate(rr, req)
-
-	if rr.Code != http.StatusServiceUnavailable {
-		t.Errorf("expected status 503, got %d", rr.Code)
-	}
-}
-
-func TestHandler_ApplyUpdate_MethodNotAllowed(t *testing.T) {
-	t.Parallel()
-	cfg := createTestConfigWithSynthetic()
-	h := NewHandler(nil, nil, nil, nil, cfg)
-
-	req := httptest.NewRequest(http.MethodGet, "/api/update/apply", nil)
-	rr := httptest.NewRecorder()
-	h.ApplyUpdate(rr, req)
-
-	if rr.Code != http.StatusMethodNotAllowed {
-		t.Errorf("expected status 405, got %d", rr.Code)
-	}
-}
-
 // ═══════════════════════════════════════════════════════════════════
 // ── Anthropic Handler Tests ──
 // ═══════════════════════════════════════════════════════════════════
@@ -5559,37 +5501,6 @@ func TestHandler_MaxBytesReader_RejectsLargeBody(t *testing.T) {
 	}
 }
 
-func TestHandler_ApplyUpdate_SanitizesErrors(t *testing.T) {
-	t.Parallel()
-	// Create a mock updater that will return an error
-	cfg := createTestConfigWithSynthetic()
-	h := NewHandler(nil, nil, nil, nil, cfg)
-
-	// The handler should sanitize internal errors
-	// We'll test that the ApplyUpdate endpoint doesn't leak internal error details
-
-	// Since we can't easily mock the updater, we test the 503 case (no updater configured)
-	// which already returns a generic message
-	req := httptest.NewRequest(http.MethodPost, "/api/update/apply", nil)
-	rr := httptest.NewRecorder()
-
-	h.ApplyUpdate(rr, req)
-
-	if rr.Code != http.StatusServiceUnavailable {
-		t.Errorf("expected status 503, got %d", rr.Code)
-	}
-
-	// Verify the error message is generic
-	var response map[string]string
-	if err := json.Unmarshal(rr.Body.Bytes(), &response); err != nil {
-		t.Fatalf("failed to parse JSON: %v", err)
-	}
-
-	if response["error"] != "updater not configured" {
-		t.Errorf("expected generic error message, got %q", response["error"])
-	}
-}
-
 // ═══════════════════════════════════════════════════════════════════
 // ── Security Tests: Login Error Whitelist ──
 // ═══════════════════════════════════════════════════════════════════
@@ -5741,16 +5652,6 @@ func TestHandler_SetAntigravityTracker(t *testing.T) {
 
 	if h.antigravityTracker == nil {
 		t.Error("expected antigravityTracker to be set")
-	}
-}
-
-func TestHandler_SetUpdater(t *testing.T) {
-	t.Parallel()
-	h := NewHandler(nil, nil, nil, nil, createTestConfigWithSynthetic())
-	// SetUpdater with nil should not panic
-	h.SetUpdater(nil)
-	if h.updater != nil {
-		t.Error("expected updater to be nil")
 	}
 }
 
@@ -10088,38 +9989,7 @@ func TestSessionAuthMiddleware_SessionCookie(t *testing.T) {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// ── CheckUpdate and ApplyUpdate ──
 // ═══════════════════════════════════════════════════════════════════
-
-func TestHandler_CheckUpdate_MethodNotAllowed_Coverage(t *testing.T) {
-	t.Parallel()
-	cfg := createTestConfigWithSynthetic()
-	h := NewHandler(nil, nil, nil, nil, cfg)
-
-	req := httptest.NewRequest(http.MethodPost, "/api/update/check", nil)
-	w := httptest.NewRecorder()
-
-	h.CheckUpdate(w, req)
-
-	if w.Code != http.StatusMethodNotAllowed {
-		t.Errorf("expected 405, got %d", w.Code)
-	}
-}
-
-func TestHandler_ApplyUpdate_MethodNotAllowed_Coverage(t *testing.T) {
-	t.Parallel()
-	cfg := createTestConfigWithSynthetic()
-	h := NewHandler(nil, nil, nil, nil, cfg)
-
-	req := httptest.NewRequest(http.MethodGet, "/api/update/apply", nil)
-	w := httptest.NewRecorder()
-
-	h.ApplyUpdate(w, req)
-
-	if w.Code != http.StatusMethodNotAllowed {
-		t.Errorf("expected 405, got %d", w.Code)
-	}
-}
 
 // ═══════════════════════════════════════════════════════════════════
 // ── CycleOverview endpoints ──

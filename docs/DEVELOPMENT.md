@@ -77,7 +77,7 @@ go build -ldflags="-s -w" -o onwatch.exe .
 ./app.sh --build --run    # Build + run in debug mode (or: make run)
 ./app.sh --clean          # Remove binary, coverage, dist/ (or: make clean)
 ./app.sh --smoke          # Quick validation: vet + build + short tests
-./app.sh --release        # Cross-compile all 5 platforms (or: make release-local)
+# ./app.sh --release      # Cross-compiles 5 platforms this fork does not ship - see Release Pipeline
 ./app.sh --deps           # Install Go + git for your platform
 make dev                  # go run . --debug --interval 10
 make lint                 # go fmt + go vet
@@ -94,7 +94,7 @@ The `VERSION` file at the project root is the single source of truth. The Makefi
 VERSION := $(shell cat VERSION)
 ```
 
-To bump the version, edit `VERSION` and rebuild. The GitHub Actions workflow and `make release-local` both read from this file.
+To bump the version, use `scripts/set-version.sh`, which keeps `VERSION` and both chart fields in step. The release workflow verifies that they agree.
 
 ---
 
@@ -105,6 +105,11 @@ onWatch uses pure Go SQLite (`modernc.org/sqlite`), so cross-compilation works w
 ```bash
 make release-local
 ```
+
+`make release-local` is an alias for `./app.sh --release`, which `CLAUDE.md`
+says not to run locally, and this section is a description of the Makefile
+rather than a recommendation. This fork publishes no binaries at all - a
+release comes out of the pipeline, as described under Release Pipeline below.
 
 This produces binaries in `dist/`:
 
@@ -225,34 +230,24 @@ Binary sizes: ~15 MB per platform.
 
 ## Release Pipeline
 
-### Local
+This fork releases itself, and `CLAUDE.md` holds the authoritative steps. In
+short: bump `VERSION` and `charts/loomwatch/Chart.yaml` together with
+`scripts/set-version.sh`, land it on `main` through a pull request, then tag the
+merge commit `loom-v<version>` and push the tag.
 
-```bash
-./app.sh --release    # or: make release-local
-ls -lh dist/
-```
+Pushing that tag is the whole trigger. `.github/workflows/fork-release.yml`
+checks that the tag, `VERSION` and the chart agree, lints and unit-tests the
+chart, then publishes the container image and the chart to `ghcr.io` and creates
+the GitHub release.
 
-### GitHub Actions
+Two things this pipeline deliberately does not do. It ships **no binaries**: the
+unit of delivery is the image. And it never uses the `v*` tag namespace, which
+belongs to the upstream tags this repository inherited - a sync must not be able
+to trigger a release here.
 
-The workflow at `.github/workflows/release.yml` triggers on:
-
-- **Tag push** (`v*`): Builds all platforms and creates a GitHub Release
-- **Manual dispatch**: Optionally creates a release with the `publish` input
-
-To release:
-
-```bash
-# Update VERSION file
-echo "2.10.4" > VERSION
-
-# Commit, tag, push
-git add VERSION
-git commit -m "chore: bump version to 2.10.4"
-git tag v2.10.4
-git push && git push --tags
-```
-
-The workflow builds, tests, and publishes binaries automatically.
+Do not run `./app.sh --release` locally. It cross-compiles five platforms' worth
+of binaries this fork does not ship, and a release has to come out of the
+pipeline rather than off a workstation.
 
 ---
 
@@ -438,30 +433,19 @@ Measured with the built-in `tools/perf-monitor` while provider agents ran in par
 
 ---
 
-## Self-Update Mechanism
-
-onWatch includes a self-update system that downloads new releases from GitHub and replaces the running binary. The update can be triggered from the dashboard (update badge in footer) or via `onwatch update`.
-
-### Update Flow
-
-1. **Check**: Queries `https://api.github.com/repos/onllm-dev/onwatch/releases/latest` (cached for 1 hour)
-2. **Apply**: Downloads the platform-specific binary, validates magic bytes (ELF/Mach-O/PE), replaces the current binary using remove+rename (Unix) or backup-rename (Windows)
-3. **Migrate**: Fixes the systemd unit file if running under systemd (`Restart=always`, `RestartSec=5`)
-4. **Restart**: `systemctl restart` under systemd, `launchctl kickstart -k` under launchd, or a fresh spawn in standalone mode
-
-`runUpdate()` always ends with onWatch running. A PID file naming a dead process (the normal state after a reboot) counts as "not running", and the updater starts the new binary instead of exiting silently.
+## Service Lifecycle
 
 ### systemd Integration
 
-Under systemd, onWatch auto-detects its service name from `/proc/self/cgroup` and uses `systemctl restart` for proper lifecycle management. Three layers ensure reliability:
+`MigrateSystemdUnit()` runs once at daemon startup and brings an existing unit
+up to `Restart=always` and `RestartSec=5`. It detects the service name from
+`/proc/self/cgroup` rather than guessing it. Nothing else calls into systemd:
+`onwatch service` manages the macOS LaunchAgent and says so on Linux.
 
-| Layer | When | Purpose |
-|-------|------|---------|
-| `Apply()` | After binary replacement | Fixes unit file before any restart attempt |
-| `Restart()` | After apply | Runs `systemctl restart <service>` |
-| Startup | Every boot | Safety net — re-checks unit file settings |
-
-The startup migration runs before `stopPreviousInstance()`. This is critical for upgrades from older versions: when an old binary spawns the new binary as a post-update child, the child fixes the unit file while the parent is still alive, then kills the parent. systemd sees the main PID die, and `Restart=always` triggers an automatic restart with the new binary.
+Those units were written by an installer this fork no longer ships, so the
+migration only finds work on a host installed before that. In a container there
+is no systemd and it is a no-op, which is the deployment this fork supports.
+All of it lives in `internal/service/systemd.go`.
 
 ### launchd Integration (macOS)
 
@@ -476,17 +460,16 @@ macOS has no systemd equivalent, so onWatch manages a per-user LaunchAgent at `~
 
 `_ONWATCH_LAUNCHD=1` changes two things in `run()`: the process stays in the foreground (forking would make launchd think the job died and relaunch it in a loop), and it writes its own PID file, since there is no daemonize parent to write one.
 
-Auto-start is opt-in. `install.sh`, `onwatch setup`, and `onwatch update` each offer it once when the agent is missing; declining writes `~/.onwatch/.autostart-declined` so the offer is not repeated. `ONWATCH_AUTOSTART=yes|no` answers the installer prompt non-interactively.
+Auto-start is opt-in. `onwatch setup` offers it once when the agent is missing; declining writes `~/.onwatch/.autostart-declined` so the offer is not repeated. `ONWATCH_AUTOSTART=yes|no` answers the prompt non-interactively.
 
 ### Key Source Files
 
 | File | Purpose |
 |------|---------|
-| `internal/update/update.go` | Version check, download, binary replacement, systemd migration |
+| `internal/service/systemd.go` | systemd detection, service-name discovery, unit migration |
 | `internal/service/launchd.go` | macOS LaunchAgent plist rendering, install/uninstall/kickstart |
-| `internal/web/handlers.go` | `/api/update/check` and `/api/update/apply` endpoints |
-| `main.go` | `MigrateSystemdUnit()` call on startup, `runUpdate()` CLI handler |
-| `service_cmd.go` | `onwatch service` subcommand, auto-start offer, post-update restart |
+| `main.go` | `MigrateSystemdUnit()` call on startup |
+| `service_cmd.go` | `onwatch service` subcommand and the auto-start offer |
 
 ---
 

@@ -24,7 +24,9 @@ A fork of [onllm-dev/onWatch](https://github.com/onllm-dev/onWatch), which is a
 genuinely good tool aimed at a developer's laptop: a menubar app, a local
 dashboard, SQLite, self-update. Almost all of the code here is theirs, and the
 provider integrations — ten-plus of them — are entirely their work. The full
-feature list lives in [README.upstream.md](README.upstream.md).
+feature list lives in [README.upstream.md](README.upstream.md), preserved
+verbatim - it describes upstream's laptop product, and not all of it is present
+here.
 
 This fork points the same collector at a different target: a cluster, where the
 interface that matters is `/metrics` and the consumer is Prometheus rather than
@@ -45,14 +47,29 @@ permanently for plans that report a percentage while leaving usage at zero
 utilisation is now a real reading; an absent series means the plan has no such
 quota.
 
-**Self-update points at this repository**, so the service cannot offer to
-replace itself with a build that lacks the above. Self-update is unsupported in
-a container regardless: there the unit of delivery is the image.
+**The laptop product's surfaces are gone.** Self-update, the installers and
+the marketing page came with the fork and could not work here: releases carry
+no assets, the container is read-only and distroless, and the installers
+downloaded upstream's binary. The dashboard no longer offers an update it
+cannot apply. The unit of delivery is the image.
 
 **A Helm chart** with alerting rules, a Grafana dashboard and a values schema
 that refuses configurations which come up and then quietly fail to do their job.
 
 That is the whole delta. Everything else is upstream's.
+
+## Upstream surfaces that are still here
+
+Two of upstream's laptop interfaces remain in the tree, deliberately: deleting
+upstream files costs a conflict on every sync, and these cost nothing where
+they sit.
+
+The **menubar HTTP surface ships in the image**. `/menubar` and the
+`/api/menubar/*` endpoints are served by the ordinary build - no tags involved -
+and the GNOME extension under `gnome-extension/` is a real consumer of them,
+against a daemon on loopback. What is *not* built is the macOS tray
+application: those files are behind `menubar && darwin` and never enter the
+image.
 
 ## Alerting
 

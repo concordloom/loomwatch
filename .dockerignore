@@ -25,7 +25,6 @@ onwatch.exe
 # Screenshots, design, and docs (embedded assets are in internal/)
 docs/screenshots/
 design-system/
-landing/
 
 # Tools
 tools/

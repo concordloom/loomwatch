@@ -22,7 +22,7 @@ annotations:
       email: noreply@concordloom.invalid
   artifacthub.io/images: |
     - name: loomwatch
-      image: ghcr.io/concordloom/loomwatch:1.13.0
+      image: ghcr.io/concordloom/loomwatch:1.14.0
 apiVersion: v2
 appVersion: 1.14.0
 description: Prometheus exporter for prepaid LLM subscription quotas - per account, per team, with alerts that name an owner. Exports how much of each plan is left so exhaustion is alerted on days early rather than discovered when a job fails.

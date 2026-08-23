@@ -212,3 +212,45 @@ func scrapeInto(t *testing.T, s *store.Store) []*dto.MetricFamily {
 func accountLabel(id int64) string {
 	return strconv.FormatInt(id, 10)
 }
+
+// TestMetrics_UnconfiguredProviderHasNoAccountInfo closes the hole the previous
+// round opened.
+//
+// The multi-account scrapes invent an account in memory when the store has no
+// rows for the provider, so that a fresh install still reports something. That
+// fallback used to be harmless because only three providers ran it; once every
+// provider had a scrape path, a stand configured for two of them published
+// account_info for five, each claiming id 1 - which provider_accounts.id, a
+// single autoincrement across all providers, cannot be for more than one of
+// them.
+//
+// The entry belongs to an account that reported, not to one that was imagined
+// to make a loop terminate.
+func TestMetrics_UnconfiguredProviderHasNoAccountInfo(t *testing.T) {
+	s, err := store.New(":memory:")
+	if err != nil {
+		t.Fatalf("store.New: %v", err)
+	}
+	defer s.Close()
+
+	// One provider with data. Everything else is unconfigured.
+	if _, err := s.InsertZaiSnapshot(&api.ZaiSnapshot{
+		CapturedAt: time.Now().UTC(), TokensLimit: 6, TokensPercentage: 40,
+	}, 0); err != nil {
+		t.Fatalf("InsertZaiSnapshot: %v", err)
+	}
+
+	m := New()
+	m.Scrape(s, time.Minute)
+	families, err := m.Gather().Gather()
+	if err != nil {
+		t.Fatalf("Gather: %v", err)
+	}
+
+	for _, mm := range metricsOf(families, "loomwatch_account_info") {
+		if p := labelsOf(mm)["provider"]; p != "zai" {
+			t.Errorf("provider %q has an account_info series without ever reporting; "+
+				"an account nothing polls is not an account", p)
+		}
+	}
+}

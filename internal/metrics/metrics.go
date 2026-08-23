@@ -358,10 +358,6 @@ func (m *Metrics) scrapeCodex(s *store.Store, staleThreshold time.Duration) {
 
 	for _, acct := range accounts {
 		accountID := strconv.FormatInt(acct.ID, 10)
-		if acct.Name != "" {
-			m.accountInfo.WithLabelValues(method, accountID, acct.Name).Set(1)
-		}
-
 		snap, err := s.QueryLatestCodex(acct.ID)
 		if err != nil {
 			m.scrapeErrorsTotal.WithLabelValues(method, "query_failed").Inc()
@@ -369,6 +365,10 @@ func (m *Metrics) scrapeCodex(s *store.Store, staleThreshold time.Duration) {
 		}
 		if snap == nil {
 			continue
+		}
+
+		if acct.Name != "" {
+			m.accountInfo.WithLabelValues(method, accountID, acct.Name).Set(1)
 		}
 
 		m.recordLastCycleAge(method, accountID, snap.CapturedAt, staleThreshold)
@@ -441,10 +441,6 @@ func (m *Metrics) scrapeZai(s *store.Store, staleThreshold time.Duration) {
 
 	for _, acct := range accounts {
 		accountID := strconv.FormatInt(acct.ID, 10)
-		if acct.Name != "" {
-			m.accountInfo.WithLabelValues(method, accountID, acct.Name).Set(1)
-		}
-
 		snap, err := s.QueryLatestZai(acct.ID)
 		if err != nil {
 			m.scrapeErrorsTotal.WithLabelValues(method, "query_failed").Inc()
@@ -452,6 +448,10 @@ func (m *Metrics) scrapeZai(s *store.Store, staleThreshold time.Duration) {
 		}
 		if snap == nil {
 			continue
+		}
+
+		if acct.Name != "" {
+			m.accountInfo.WithLabelValues(method, accountID, acct.Name).Set(1)
 		}
 
 		m.recordLastCycleAge(method, accountID, snap.CapturedAt, staleThreshold)
@@ -519,10 +519,6 @@ func (m *Metrics) scrapeMiniMax(s *store.Store, staleThreshold time.Duration) {
 
 	for _, acct := range accounts {
 		accountID := strconv.FormatInt(acct.ID, 10)
-		if acct.Name != "" {
-			m.accountInfo.WithLabelValues(method, accountID, acct.Name).Set(1)
-		}
-
 		vals, err := s.QueryLatestMiniMax(acct.ID)
 		if err != nil {
 			m.scrapeErrorsTotal.WithLabelValues(method, "query_failed").Inc()
@@ -530,6 +526,10 @@ func (m *Metrics) scrapeMiniMax(s *store.Store, staleThreshold time.Duration) {
 		}
 		if vals == nil {
 			continue
+		}
+
+		if acct.Name != "" {
+			m.accountInfo.WithLabelValues(method, accountID, acct.Name).Set(1)
 		}
 
 		m.recordLastCycleAge(method, accountID, vals.CapturedAt, staleThreshold)
@@ -912,10 +912,6 @@ func (m *Metrics) scrapeKimi(s *store.Store, staleThreshold time.Duration) {
 
 	for _, acct := range accounts {
 		accountID := strconv.FormatInt(acct.ID, 10)
-		if acct.Name != "" {
-			m.accountInfo.WithLabelValues(method, accountID, acct.Name).Set(1)
-		}
-
 		snap, err := s.QueryLatestKimi(acct.ID)
 		if err != nil {
 			m.scrapeErrorsTotal.WithLabelValues(method, "query_failed").Inc()
@@ -923,6 +919,10 @@ func (m *Metrics) scrapeKimi(s *store.Store, staleThreshold time.Duration) {
 		}
 		if snap == nil {
 			continue
+		}
+
+		if acct.Name != "" {
+			m.accountInfo.WithLabelValues(method, accountID, acct.Name).Set(1)
 		}
 
 		m.recordLastCycleAge(method, accountID, snap.CapturedAt, staleThreshold)
@@ -955,10 +955,6 @@ func (m *Metrics) scrapeGrok(s *store.Store, staleThreshold time.Duration) {
 
 	for _, acct := range accounts {
 		accountID := strconv.FormatInt(acct.ID, 10)
-		if acct.Name != "" {
-			m.accountInfo.WithLabelValues(method, accountID, acct.Name).Set(1)
-		}
-
 		snap, err := s.QueryLatestGrok(acct.ID)
 		if err != nil {
 			m.scrapeErrorsTotal.WithLabelValues(method, "query_failed").Inc()
@@ -966,6 +962,10 @@ func (m *Metrics) scrapeGrok(s *store.Store, staleThreshold time.Duration) {
 		}
 		if snap == nil {
 			continue
+		}
+
+		if acct.Name != "" {
+			m.accountInfo.WithLabelValues(method, accountID, acct.Name).Set(1)
 		}
 
 		m.recordLastCycleAge(method, accountID, snap.CapturedAt, staleThreshold)

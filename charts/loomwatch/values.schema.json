@@ -63,6 +63,21 @@
       "properties": {
         "adminPassword": { "type": "string" },
         "metricsToken": { "type": "string" },
+            "accounts": {
+              "type": "array",
+              "description": "Provider subscriptions declared in configuration. The credential is never written here: apiKeyEnv names the environment variable holding it, so the list can live in git while the secret stays where the deployment already keeps secrets.",
+              "items": {
+                "type": "object",
+                "required": ["provider", "name", "apiKeyEnv"],
+                "additionalProperties": false,
+                "properties": {
+                  "provider": { "type": "string", "enum": ["zai", "minimax"] },
+                  "name": { "type": "string", "minLength": 1, "pattern": "^[^\\s\"]+$" },
+                  "apiKeyEnv": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]*$" },
+                  "baseUrl": { "type": "string", "pattern": "^https?://[^\\s\"]+$" }
+                }
+              }
+            },
         "existingSecret": { "type": "string" },
         "providers": {
           "type": "object",

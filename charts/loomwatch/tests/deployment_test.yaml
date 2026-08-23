@@ -125,3 +125,28 @@ tests:
       - equal:
           path: spec.template.spec.automountServiceAccountToken
           value: false
+
+  # Subscriptions are declared in values rather than clicked into the dashboard.
+  # Only the name of the variable holding each credential travels in the
+  # manifest; the credential arrives through the same secret as every other key,
+  # so a rendered deployment stays printable.
+  - it: passes declared accounts to the container
+    set:
+      auth.accounts:
+        - provider: zai
+          name: spare-max
+          apiKeyEnv: ZAI_SPARE_MAX_API_KEY
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: LOOMWATCH_ACCOUNTS
+            value: '[{"apiKeyEnv":"ZAI_SPARE_MAX_API_KEY","name":"spare-max","provider":"zai"}]'
+
+  - it: leaves the variable out when nothing is declared
+    asserts:
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: LOOMWATCH_ACCOUNTS
+          any: true

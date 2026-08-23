@@ -134,6 +134,7 @@ extraEnvVarsSecret: ""
 ## @param auth.adminPassword Password for the built-in `admin` panel user. Generated randomly if empty and no existing secret is given
 ## @param auth.metricsToken Bearer token required on /metrics. Generated randomly if empty and no existing secret is given
 ## @param auth.providers [object] Map of provider credential environment variables to their values
+## @param auth.accounts [array] Provider subscriptions declared in configuration rather than created in the dashboard
 ## @param auth.existingSecret Name of an existing Secret holding all credentials. Takes precedence over the values above
 ## @param auth.secretKeys.adminPasswordKey Key in the existing Secret holding the admin password
 ## @param auth.secretKeys.metricsTokenKey Key in the existing Secret holding the metrics token
@@ -147,6 +148,38 @@ auth:
   ##   ZAI_API_KEY: "..."
   ##
   providers: {}
+  ## Subscriptions this deployment polls, declared rather than clicked in.
+  ##
+  ## Until this existed the first account of a provider came from an environment
+  ## variable and every further one had to be created by hand in the dashboard,
+  ## which made the set of subscriptions a property of one SQLite file: it could
+  ## not be reviewed, could not be recreated, and did not survive the volume
+  ## being replaced.
+  ##
+  ## The credential is not written here. apiKeyEnv names the environment
+  ## variable holding it, which arrives through providers above or through
+  ## existingSecret like every other key - so this list can live in git while
+  ## the secret stays wherever the deployment already keeps secrets.
+  ##
+  ## Only providers that keep credentials per account can appear: zai and
+  ## minimax. The rest take one key from the environment and have a single
+  ## account by construction.
+  ##
+  ## Accounts are created and updated, never removed. One that vanishes from
+  ## this list keeps polling and is logged as undeclared: deleting a
+  ## subscription because a line went missing would take its history with it,
+  ## and a typo should not be able to do that.
+  ##
+  ## accounts:
+  ##   - provider: zai
+  ##     name: spare-max
+  ##     apiKeyEnv: ZAI_SPARE_MAX_API_KEY
+  ##   - provider: minimax
+  ##     name: minimax-2
+  ##     apiKeyEnv: MINIMAX_SECOND_API_KEY
+  ##     baseUrl: https://api.minimax.io
+  ##
+  accounts: []
   existingSecret: ""
   secretKeys:
     adminPasswordKey: ONWATCH_ADMIN_PASS

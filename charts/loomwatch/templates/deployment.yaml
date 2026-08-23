@@ -119,6 +119,14 @@ spec:
               value: {{ .Values.logLevel | quote }}
             - name: ONWATCH_DB_PATH
               value: {{ .Values.databasePath | quote }}
+            {{- if .Values.auth.accounts }}
+            # Subscriptions declared in values. Only the name of the variable
+            # holding each credential travels here - the credential itself comes
+            # from the same secret as every other key, so this stays printable
+            # in a rendered manifest.
+            - name: LOOMWATCH_ACCOUNTS
+              value: {{ toJson .Values.auth.accounts | quote }}
+            {{- end }}
             {{- if .Values.extraEnvVars }}
             {{- include "loomwatch.tplvalues.render" (dict "value" .Values.extraEnvVars "context" $) | nindent 12 }}
             {{- end }}

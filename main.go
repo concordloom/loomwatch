@@ -1047,6 +1047,17 @@ func run() error {
 		zaiTr = tracker.NewZaiTracker(db, logger)
 	}
 
+	// Fork change: subscriptions named in configuration are applied before any
+	// agent starts, so a deployment describes the accounts it polls instead of
+	// inheriting them from whatever was clicked into its database.
+	if declared, err := config.ParseDeclaredAccounts(os.Getenv("LOOMWATCH_ACCOUNTS")); err != nil {
+		logger.Error("LOOMWATCH_ACCOUNTS is not usable; no declared account was applied", "error", err)
+		os.Exit(1)
+	} else if err := applyDeclaredAccounts(db, declared, logger); err != nil {
+		logger.Error("failed to apply declared accounts", "error", err)
+		os.Exit(1)
+	}
+
 	// Fork change: Z.ai agent manager for multi-account support.
 	// A legacy ZAI_API_KEY seeds the default account, so an existing install
 	// keeps polling exactly as before; further subscriptions are added through

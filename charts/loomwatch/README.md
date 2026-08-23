@@ -121,6 +121,7 @@ kubectl delete pvc my-release-loomwatch-data
 | `auth.adminPassword` | Password for the built-in `admin` panel user. Generated randomly if empty and no existing secret is given | `""` |
 | `auth.metricsToken` | Bearer token required on /metrics. Generated randomly if empty and no existing secret is given | `""` |
 | `auth.providers` | Map of provider credential environment variables to their values | `{}` |
+| `auth.accounts` | Provider subscriptions declared in configuration rather than created in the dashboard | `[]` |
 | `auth.existingSecret` | Name of an existing Secret holding all credentials. Takes precedence over the values above | `""` |
 | `auth.secretKeys.adminPasswordKey` | Key in the existing Secret holding the admin password | `ONWATCH_ADMIN_PASS` |
 | `auth.secretKeys.metricsTokenKey` | Key in the existing Secret holding the metrics token | `ONWATCH_METRICS_TOKEN` |

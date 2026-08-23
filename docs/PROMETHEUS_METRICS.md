@@ -68,7 +68,9 @@ Counters live outside the per-scrape reset path, so `rate()` / `increase()` quer
 | `loomwatch_cycles_failed_total` | `provider`, `account_id`, `reason` | Failed poll cycles, labelled by reason. |
 | `loomwatch_scrape_errors_total` | `provider`, `error_type` | Errors while refreshing `/metrics` from the local store. Alert on `rate(...)` to detect broken metric collection itself. |
 
-> Note: in 2.11.40 only the built-in `synthetic` agent emits `cycles_completed_total` / `cycles_failed_total`. Per-provider wiring for the remaining 8 agents is a follow-up; alerts that depend on these counters should gate on `absent_over_time(loomwatch_cycles_completed_total{provider="..."}[1h])`.
+> Note: only the built-in `synthetic` agent emits `cycles_completed_total` / `cycles_failed_total`. Per-provider wiring for the remaining agents is a follow-up; alerts that depend on these counters should gate on `absent_over_time(loomwatch_cycles_completed_total{provider="..."}[1h])`.
+>
+> This is separate from the quota series, which every provider publishes: the counters are about polling cycles, not about quotas.
 
 ### Label semantics
 
@@ -96,10 +98,14 @@ loomwatch_quota_utilization_percent * on(provider, account_id) group_left(accoun
 > Join on **both** labels. `account_id` is unique per provider, not globally:
 > every single-account provider reports `account_id="default"`, so joining on
 > `account_id` alone aborts the whole query with a many-to-one error rather
-> than returning partial data. Note also that `loomwatch_account_info` exists
-> only for providers that keep account rows (codex, zai, minimax); joining
-> against it silently drops every other provider, because an unmatched series
-> is removed rather than reported.
+> than returning partial data.
+>
+> `loomwatch_account_info` covers every provider that reports a quota. It used
+> to exist only for the three that keep account rows, which made this join
+> answer for a subset and say nothing about the rest - an unmatched series is
+> removed, not reported. Providers with no account rows appear with
+> `account_name="default"`. `api_integrations` has no entry: it is the
+> collector's own ingestion path, not a subscription anybody owns.
 
 **Attribute a quota to the team that owns it:**
 ```promql

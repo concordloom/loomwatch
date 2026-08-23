@@ -68,19 +68,16 @@ Everything else is upstream's, including every provider integration.
 
 ## Which providers reach `/metrics`
 
-Upstream's dashboard tracks fifteen providers. Ten of them have a metrics export
-path, and those are the ones this chart can alert on:
+All fifteen:
 
-> Anthropic, Codex, Copilot, Z.ai, MiniMax, Antigravity, Gemini, OpenRouter,
-> Moonshot, DeepSeek.
+> Anthropic, Synthetic, Z.ai, Copilot, Codex, MiniMax, Antigravity, Gemini,
+> Cursor, Kimi Code, Grok, Moonshot, DeepSeek, OpenRouter, OpenCode Go.
 
-**Synthetic, Cursor, Kimi, Grok and OpenCode Go are collected and shown in the
-dashboard, but export no metrics at all.** They have agents and trackers and no
-`scrape` path, so no rule here can see them. This is upstream's shape rather
-than something the fork removed, and it is written down here because a
-monitoring tool that is vague about what it does not monitor is worse than one
-that monitors less. Tracked as
-[#19](https://github.com/concordloom/loomwatch/issues/19).
+Five of them - Synthetic, Cursor, Kimi, Grok and OpenCode Go - were collected
+and shown on the dashboard while exporting nothing at all, so no rule here could
+see them. That was upstream's shape rather than something this fork removed, and
+it is fixed here rather than documented as a limitation
+([#19](https://github.com/concordloom/loomwatch/issues/19)).
 
 ## Upstream surfaces that are still here
 

@@ -14,10 +14,24 @@ on:
     paths:
       - "charts/**"
       - ".github/workflows/fork-chart.yml"
+      # The checks themselves and what they check against. Without these a pull
+      # request that edits only the gate does not run the gate, and one that
+      # renames a runbook heading breaks every runbook_url silently.
+      - "scripts/check-chart-rules.sh"
+      - "scripts/check-runbook-links.py"
+      - "scripts/check-dashboard-queries.py"
+      - "docs/runbooks/**"
   pull_request:
     paths:
       - "charts/**"
       - ".github/workflows/fork-chart.yml"
+      # The checks themselves and what they check against. Without these a pull
+      # request that edits only the gate does not run the gate, and one that
+      # renames a runbook heading breaks every runbook_url silently.
+      - "scripts/check-chart-rules.sh"
+      - "scripts/check-runbook-links.py"
+      - "scripts/check-dashboard-queries.py"
+      - "docs/runbooks/**"
   workflow_dispatch:
 
 permissions:

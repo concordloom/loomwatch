@@ -737,6 +737,18 @@ metrics:
     ## @param metrics.prometheusRule.nonAccountProviders Regex of providers excluded from team ownership
     ##
     nonAccountProviders: "api_integrations"
+    ## Base URL the runbook_url annotation on every alert points at. Each alert
+    ## appends its own lowercased name as an anchor, so a fork that keeps the
+    ## section headings can repoint this at its own copy and every link follows.
+    ##
+    ## An alert without a runbook is an alert whose reader has to invent the
+    ## response at the moment they are least able to - and a quota alert is not
+    ## fixed by restarting anything, which is the assumption most on-call
+    ## instincts start from.
+    ##
+    ## @param metrics.prometheusRule.runbookUrlBase Base URL for the runbook_url annotation on each alert
+    ##
+    runbookUrlBase: "https://github.com/concordloom/loomwatch/blob/main/docs/runbooks/README.md"
     ## @param metrics.prometheusRule.highThreshold Utilisation percentage above which LoomwatchQuotaHigh fires
     ##
     highThreshold: 80

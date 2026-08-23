@@ -238,3 +238,27 @@ tests:
       - matchRegex:
           path: spec.groups[0].rules[1].expr
           pattern: 'loomwatch_agent_healthy\{provider!~"api_integrations"\}'
+
+  # A quota alert is not fixed by restarting anything, which is where most
+  # on-call instincts start. Every alert therefore carries a runbook, and
+  # scripts/check-runbook-links.py fails the build if the anchor is not a real
+  # heading - a link that costs a click and returns nothing is worse than none.
+  - it: points every alert at a runbook
+    set:
+      metrics.prometheusRule.enabled: true
+    asserts:
+      - matchRegex:
+          path: spec.groups[0].rules[0].annotations.runbook_url
+          pattern: '#loomwatchquotahigh$'
+      - matchRegex:
+          path: spec.groups[0].rules[4].annotations.runbook_url
+          pattern: '#loomwatchcollectorstale$'
+
+  - it: lets a downstream fork repoint the runbooks
+    set:
+      metrics.prometheusRule.enabled: true
+      metrics.prometheusRule.runbookUrlBase: https://example.invalid/rb.md
+    asserts:
+      - equal:
+          path: spec.groups[0].rules[0].annotations.runbook_url
+          value: https://example.invalid/rb.md#loomwatchquotahigh

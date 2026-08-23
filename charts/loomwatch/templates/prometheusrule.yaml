@@ -1,6 +1,7 @@
 {{- if .Values.metrics.prometheusRule.enabled }}
 {{- $sel := printf "provider=~\"%s\",quota_type!~\"%s\"" .Values.metrics.prometheusRule.providers .Values.metrics.prometheusRule.ignoredQuotaTypes }}
 {{- $by := "max by (provider, quota_type, account_id)" }}
+{{- $rb := .Values.metrics.prometheusRule.runbookUrlBase }}
 {{- $remaining := printf "%s (loomwatch_quota_reset_timestamp_seconds{%s} - time())" $by $sel }}
 apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
@@ -78,6 +79,7 @@ spec:
             severity: warning
             subsystem: llm-quota
           annotations:
+            runbook_url: {{ printf "%s#%s" $rb "loomwatchaccountwithoutteam" }}
             summary: >-
               Account {{ "{{ $labels.account_id }}" }} on {{ "{{ $labels.provider }}" }} has no owning team
             description: >-
@@ -100,6 +102,7 @@ spec:
             severity: warning
             subsystem: llm-quota
           annotations:
+            runbook_url: {{ printf "%s#%s" $rb "loomwatchquotahigh" }}
             summary: >-
               Quota {{ "{{ $labels.quota_type }}" }} of {{ "{{ $labels.provider }}" }} (account {{ "{{ $labels.account_id }}" }}) is over {{ .Values.metrics.prometheusRule.highThreshold }}% used
             description: >-
@@ -115,6 +118,7 @@ spec:
             severity: critical
             subsystem: llm-quota
           annotations:
+            runbook_url: {{ printf "%s#%s" $rb "loomwatchquotacritical" }}
             summary: >-
               Quota {{ "{{ $labels.quota_type }}" }} of {{ "{{ $labels.provider }}" }} (account {{ "{{ $labels.account_id }}" }}) is over {{ .Values.metrics.prometheusRule.criticalThreshold }}% used
             description: >-
@@ -146,6 +150,7 @@ spec:
             severity: warning
             subsystem: llm-quota
           annotations:
+            runbook_url: {{ printf "%s#%s" $rb "loomwatchquotaburnsbeforereset" }}
             summary: >-
               Quota {{ "{{ $labels.quota_type }}" }} of {{ "{{ $labels.provider }}" }} (account {{ "{{ $labels.account_id }}" }}) is on track to run out before it resets
             description: >-
@@ -164,6 +169,7 @@ spec:
             severity: warning
             subsystem: llm-quota
           annotations:
+            runbook_url: {{ printf "%s#%s" $rb "loomwatchcollectornotpolling" }}
             summary: Quota collector stopped polling {{ "{{ $labels.provider }}" }}
             description: >-
               Distinct from LoomwatchCollectorStale: this catches the collector
@@ -183,6 +189,7 @@ spec:
             severity: warning
             subsystem: llm-quota
           annotations:
+            runbook_url: {{ printf "%s#%s" $rb "loomwatchcollectorstale" }}
             summary: Quota collector is not receiving data from {{ "{{ $labels.provider }}" }}
             description: >-
               Remaining quota stopped updating, which means every other quota

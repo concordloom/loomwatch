@@ -231,6 +231,61 @@ func min(a, b int) int {
 	return b
 }
 
+// hasKey answers "will this account be polled", so it has to be computed from a
+// key that actually decoded. It used to be strings.Contains(acc.Metadata,
+// "api_key"), which is true of any text carrying that substring - a damaged
+// blob included. Such an account reported itself as configured in the API while
+// the agent manager could read nothing out of it and left it out of the
+// rotation.
+func TestZaiAccountsListReportsHasKeyFromTheDecodedValue(t *testing.T) {
+	h, s := newZaiTestHandler(t)
+
+	seed := func(name, metadata string) {
+		t.Helper()
+		acc, err := s.CreateOrRestoreProviderAccount("zai", name)
+		if err != nil {
+			t.Fatalf("create %s: %v", name, err)
+		}
+		if err := s.UpdateProviderAccountMetadata(acc.ID, metadata); err != nil {
+			t.Fatalf("seed %s: %v", name, err)
+		}
+	}
+	seed("good", `{"api_key":"zai-secret-key"}`)
+	seed("broken", `{"api_key":"zai-secret-key"`)
+	seed("keyless", `{"base_url":"https://x"}`)
+	seed("blankkey", `{"api_key":""}`)
+
+	req := httptest.NewRequest("GET", "/api/zai/accounts", nil)
+	w := httptest.NewRecorder()
+	h.ZaiAccounts(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status %d, want 200", w.Code)
+	}
+
+	var resp struct {
+		Accounts []struct {
+			Name   string `json:"name"`
+			HasKey bool   `json:"hasKey"`
+		} `json:"accounts"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	got := map[string]bool{}
+	for _, acc := range resp.Accounts {
+		got[acc.Name] = acc.HasKey
+	}
+
+	if !got["good"] {
+		t.Fatalf("hasKey false for an account whose key decodes fine")
+	}
+	for _, name := range []string{"broken", "keyless", "blankkey"} {
+		if got[name] {
+			t.Fatalf("hasKey true for %q, an account no key can be read out of - it is not being polled", name)
+		}
+	}
+}
+
 // Issue #21: account metadata is the credential store, and it is updated
 // read-modify-write. The merge used to start from an empty map whenever the
 // stored blob failed to parse, so an update carrying only base_url wrote back

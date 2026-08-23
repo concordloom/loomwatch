@@ -47,29 +47,42 @@ func (h *Handler) zaiAccountsList(w http.ResponseWriter, r *http.Request) {
 	}
 	result := make([]map[string]interface{}, 0, len(accounts))
 	for _, acc := range accounts {
+		// hasKey answers "is this account going to be polled", so it is computed
+		// from a key that was actually decoded out of the blob. It used to be
+		// strings.Contains(acc.Metadata, "api_key"), which is true of any text
+		// carrying that substring - including a damaged blob out of which the
+		// agent manager can read nothing. An account in that state reported
+		// itself as configured while sitting out of the polling rotation.
+		hasKey := false
+		baseURL := ""
+		haveBaseURL := false
+		var meta map[string]interface{}
+		if acc.Metadata != "" {
+			if err := json.Unmarshal([]byte(acc.Metadata), &meta); err != nil {
+				// The parse stays non-fatal here. This is a read that decorates
+				// one entry, so an unreadable row costs a display field; failing
+				// the listing would instead hide every account because a single
+				// row is damaged. The warning is what makes the row findable,
+				// since the update path now refuses to merge it.
+				h.logger.Warn("Z.ai account metadata is not readable",
+					"account", acc.Name, "id", acc.ID, "error", err)
+			} else {
+				if k, ok := meta["api_key"].(string); ok && k != "" {
+					hasKey = true
+				}
+				if b, ok := meta["base_url"].(string); ok {
+					baseURL, haveBaseURL = b, true
+				}
+			}
+		}
 		entry := map[string]interface{}{
 			"id":        acc.ID,
 			"name":      acc.Name,
 			"createdAt": acc.CreatedAt.Format(time.RFC3339),
-			"hasKey":    strings.Contains(acc.Metadata, "api_key"),
+			"hasKey":    hasKey,
 		}
-		var meta map[string]interface{}
-		if acc.Metadata != "" {
-			if err := json.Unmarshal([]byte(acc.Metadata), &meta); err != nil {
-				// This one stays non-fatal on purpose. It is a read that only
-				// decorates the entry with base_url, so an unreadable row costs
-				// a display field; failing the listing would instead hide every
-				// account because one row is damaged. Note that hasKey above is
-				// a substring test over the raw text, so it goes on reporting
-				// true for a row like this even though nothing can read a key
-				// out of it - which is exactly why the warning is logged: the
-				// update path now refuses to merge such a row, and the listing
-				// gives the operator no hint as to why.
-				h.logger.Warn("Z.ai account metadata is not readable",
-					"account", acc.Name, "id", acc.ID, "error", err)
-			} else if b, ok := meta["base_url"].(string); ok {
-				entry["baseUrl"] = b
-			}
+		if haveBaseURL {
+			entry["baseUrl"] = baseURL
 		}
 		if acc.DeletedAt != nil {
 			entry["deletedAt"] = acc.DeletedAt.Format(time.RFC3339)

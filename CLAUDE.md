@@ -89,10 +89,13 @@ outside those slots, whenever a change carries a claim - "the cause is X",
 `gopnik` will prove the change works and will not touch the diagnosis it was
 built on.
 
-Stage 2 talks to the deployed instance, and its address and credentials are
-machine-local: they live in `gopnik.local.env`, which `.gitignore` keeps out of
-commits. Create one from the variables `scripts/check-deployed-ui.py` documents.
-Nothing about a particular deployment belongs in this repository.
+Stage 2 talks to the deployed instance through a port-forward, not a public
+address: `scripts/check-deployed.sh` opens one, proves the deployed revision
+from the login page and from `onwatch_build_info`, runs the browser check with
+its own negative case, and tears it down. Its address and credentials are
+machine-local - they live in `gopnik.local.env`, which `.gitignore` keeps out of
+commits. Create one from the variables that script documents. Nothing about a
+particular deployment belongs in this repository.
 
 ## Guardrails
 

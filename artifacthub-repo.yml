@@ -1,0 +1,18 @@
+# Artifact Hub repository metadata.
+#
+# This file is not read from the repository. For an OCI-based chart repository
+# Artifact Hub looks for it in the registry, stored as an artifact under the
+# reserved `artifacthub.io` tag next to the chart itself. What puts it there is
+# .github/workflows/fork-artifacthub-metadata.yml, because pushing needs a
+# package-write credential and no workstation should be holding one.
+#
+# It lives in git anyway so the value is reviewable and reproducible: if the
+# artifact is ever lost, re-running that workflow restores it from here.
+#
+# repositoryID is what turns on the Verified Publisher badge. It is not a
+# secret. It names a repository, and only someone who can already push to this
+# registry can do anything with it.
+#
+# `owners` is deliberately absent: that field exists to claim a repository
+# somebody else registered, and this one was registered by its own publisher.
+repositoryID: b13d9bbf-d205-4a14-a086-76c0af9b5f55

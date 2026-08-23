@@ -18,10 +18,18 @@ at all, so the category is empty rather than crowded.
    OCI repositories are listed per chart rather than per registry, because an
    OCI registry has no `index.yaml` to enumerate.
 3. Artifact Hub returns a **repository ID**. Put it in `artifacthub-repo.yml`
-   at the repository root and push that artifact to the registry to claim
-   ownership - that is what turns on the verified-publisher badge. The exact
-   media type for OCI has changed more than once; take it from Artifact Hub's
-   own documentation at the time you do this rather than from here.
+   and run the **Artifact Hub metadata** workflow; that pushes the file to the
+   registry under the reserved `artifacthub.io` tag, which is where Artifact Hub
+   looks for it, and the Verified Publisher badge follows on its next scan.
+
+   The metadata is published by a workflow rather than by hand because the push
+   needs a package-write credential. Ours is the job-scoped token Actions issues
+   and revokes; a personal token with `write:packages` sitting in a shell
+   history is the alternative, and it is a worse one.
+
+Done once already: the repository is registered under the `concordloom`
+organisation rather than a personal account, so ownership and the badge belong
+to the organisation and survive any one person's account.
 
 What the page will show is already in `Chart.yaml`: category, license, links to
 the chart README, the runbooks and the metrics reference, and the image list it

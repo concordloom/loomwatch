@@ -1,12 +1,31 @@
 annotations:
-  category: Monitoring
-  licenses: GPL-3.0-only
-  images: |
+  # Artifact Hub reads the artifacthub.io/* keys and ignores everything else.
+  # The bare category/licenses/images keys below them are Bitnami's convention
+  # and were doing nothing here; the images one had also been pinned at 1.0.4
+  # since that release, which is what Artifact Hub would have security-scanned.
+  # The generated tag is checked against appVersion by fork-chart.yml.
+  artifacthub.io/category: monitoring-logging
+  artifacthub.io/license: GPL-3.0-only
+  artifacthub.io/prerelease: "false"
+  artifacthub.io/containsSecurityUpdates: "false"
+  artifacthub.io/links: |
+    - name: source
+      url: https://github.com/concordloom/loomwatch
+    - name: chart documentation
+      url: https://github.com/concordloom/loomwatch/blob/main/charts/loomwatch/README.md
+    - name: alert runbooks
+      url: https://github.com/concordloom/loomwatch/blob/main/docs/runbooks/README.md
+    - name: exported metrics
+      url: https://github.com/concordloom/loomwatch/blob/main/docs/PROMETHEUS_METRICS.md
+  artifacthub.io/maintainers: |
+    - name: concordloom
+      email: noreply@concordloom.invalid
+  artifacthub.io/images: |
     - name: loomwatch
-      image: ghcr.io/concordloom/loomwatch:1.0.4
+      image: ghcr.io/concordloom/loomwatch:1.8.0
 apiVersion: v2
 appVersion: 1.8.0
-description: LLM subscription quota tracker with a Prometheus-first interface. Exports remaining quota per provider and account so exhaustion can be alerted on before it stops your workloads.
+description: Prometheus exporter for prepaid LLM subscription quotas - per account, per team, with alerts that name an owner. Exports how much of each plan is left so exhaustion is alerted on days early rather than discovered when a job fails.
 home: https://github.com/concordloom/loomwatch
 icon: https://raw.githubusercontent.com/concordloom/loomwatch/main/charts/loomwatch/logo.png
 keywords:
@@ -18,6 +37,8 @@ keywords:
   - quota
   - minimax
   - zai
+  - finops
+  - alerting
 maintainers:
   - name: concordloom
     url: https://github.com/concordloom

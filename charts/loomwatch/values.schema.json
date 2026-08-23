@@ -126,6 +126,7 @@
               "description": "PromQL label matchers are fully anchored, so a bare `video` does NOT exclude `weekly_video`."
             },
             "nonAccountProviders": { "type": "string", "minLength": 1 },
+            "runbookUrlBase": { "type": "string", "pattern": "^https?://[^\\s\"]+$" },
             "teams": {
               "type": "array",
               "description": "Maps a provider account to the team that owns it. accountId is a string and must be quoted: YAML reads a bare 1000000 as a number, which Helm renders as 1e+06 and which would map a phantom account while leaving the real one unassigned. team is restricted to a positive character class rather than an exclusion list, because an exclusion list passes newlines and control characters that break rendering, and passes zero-width characters that produce two teams nobody can tell apart.",

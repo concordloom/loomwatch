@@ -42,6 +42,16 @@ PY
 echo "--- promtool check rules"
 "$PROMTOOL" check rules "$work/rules.yaml"
 
+echo "--- dashboard queries parse"
+helm template rules-check "$CHART_DIR" --set dashboard.enabled=true \
+  -s templates/dashboard-configmap.yaml \
+  | python3 -c 'import sys,yaml,json; d=yaml.safe_load(sys.stdin); print(list(d["data"].values())[0])' \
+  > "$work/dashboard.json"
+python3 scripts/check-dashboard-queries.py "$work/dashboard.json" "$PROMTOOL"
+
+echo "--- runbook anchors resolve"
+python3 scripts/check-runbook-links.py "$work/rendered.yaml" docs/runbooks/README.md
+
 echo "--- promtool test rules"
 for t in "$TEST_DIR"/*_test.yaml; do
   [ -e "$t" ] || continue

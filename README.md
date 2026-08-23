@@ -64,12 +64,16 @@ Two of upstream's laptop interfaces remain in the tree, deliberately: deleting
 upstream files costs a conflict on every sync, and these cost nothing where
 they sit.
 
-The **menubar HTTP surface ships in the image**. `/menubar` and the
-`/api/menubar/*` endpoints are served by the ordinary build - no tags involved -
-and the GNOME extension under `gnome-extension/` is a real consumer of them,
-against a daemon on loopback. What is *not* built is the macOS tray
-application: those files are behind `menubar && darwin` and never enter the
-image.
+The **menubar HTTP surface is compiled into the image, and answers only on
+loopback**. `/menubar` and the `/api/menubar/*` routes are registered by the
+ordinary build - no tags involved - but their handlers call `isLoopbackRequest`
+and return 404 to anything else, so a deployment behind an ingress exposes none
+of it. That is what makes it harmless here and useful on a laptop: the GNOME
+extension under `gnome-extension/` is a real consumer, talking to a daemon on
+localhost.
+
+What is *not* built is the macOS tray application: those files are behind
+`menubar && darwin` and never enter the image.
 
 ## Alerting
 

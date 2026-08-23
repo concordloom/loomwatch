@@ -160,7 +160,34 @@ func New(dbPath string) (*Store, error) {
 		return nil, err
 	}
 
-	db, err := sql.Open("sqlite", dbPath)
+	// The pragmas travel in the DSN rather than being executed after opening.
+	//
+	// database/sql hands out connections from a pool, and a PRAGMA run through
+	// db.Exec configures whichever connection happened to serve it. With two
+	// connections that leaves the second one without busy_timeout, so it fails a
+	// contended write immediately instead of waiting - and without foreign_keys,
+	// so constraints depend on which connection a statement lands on. Observed as
+	// SQLITE_BUSY on a deployment the moment five agents polled at once on
+	// startup, losing a snapshot per restart. The driver applies _pragma to every
+	// connection it opens.
+	pragmas := []string{
+		"_pragma=journal_mode(WAL)",
+		"_pragma=synchronous(NORMAL)",
+		"_pragma=cache_size(-500)",
+		"_pragma=foreign_keys(ON)",
+		"_pragma=busy_timeout(5000)",
+	}
+	// The path may already carry a query string - a caller is free to pass
+	// "file:/path?cache=shared" - so the separator depends on what is there.
+	// Appending a second "?" produces a DSN the driver reads as nonsense, and it
+	// fails as "out of memory" rather than as a malformed URI.
+	sep := "?"
+	if strings.Contains(dbPath, "?") {
+		sep = "&"
+	}
+	dsn := dbPath + sep + strings.Join(pragmas, "&")
+
+	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
@@ -175,21 +202,6 @@ func New(dbPath string) (*Store, error) {
 		db.SetMaxOpenConns(2)
 	}
 	db.SetMaxIdleConns(1)
-
-	// Configure SQLite for RAM efficiency
-	pragmas := []string{
-		"PRAGMA journal_mode=WAL;",
-		"PRAGMA synchronous=NORMAL;",
-		"PRAGMA cache_size=-500;",
-		"PRAGMA foreign_keys=ON;",
-		"PRAGMA busy_timeout=5000;",
-	}
-
-	for _, pragma := range pragmas {
-		if _, err := db.Exec(pragma); err != nil {
-			return nil, fmt.Errorf("failed to set pragma: %w", err)
-		}
-	}
 
 	s := &Store{db: db}
 	if err := s.createTables(); err != nil {

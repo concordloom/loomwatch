@@ -17,6 +17,26 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
+// staleIntervals is how many poll intervals a provider may go without a fresh
+// snapshot before its agent is reported unhealthy.
+//
+// It has to be the same number the chart's LoomwatchCollectorNotPolling rule
+// uses, and it was not: the flag fell after two intervals while the rule fires
+// after five. The health series - and every panel drawn from it - therefore
+// went red three intervals before the alert had an opinion, and usually
+// recovered on its own before anyone could look.
+//
+// Two is also too few on its own merits. It makes one missed poll a sick
+// collector, and these agents talk to third-party APIs that refuse a request
+// now and then. Measured against a stand polling Z.ai, its accounts reported
+// healthy for 80% of the day and stale for the rest with nothing wrong - and an
+// alert that cries wolf daily teaches its reader to close it unread.
+//
+// Changing it here means changing it in charts/loomwatch/templates/
+// prometheusrule.yaml too. TestStaleIntervalsMatchesTheChartRule fails if only
+// one side moves.
+const staleIntervals = 5
+
 // defaultAccountID is emitted for single-account providers so the account_id
 // label is always non-empty (PromQL-friendly).
 const defaultAccountID = "default"
@@ -217,7 +237,7 @@ func (m *Metrics) Scrape(s *store.Store, pollInterval time.Duration) {
 	m.scrapeMu.Lock()
 	defer m.scrapeMu.Unlock()
 
-	staleThreshold := pollInterval * 2
+	staleThreshold := pollInterval * staleIntervals
 
 	m.quotaUtilization.Reset()
 	m.quotaResetTimestamp.Reset()

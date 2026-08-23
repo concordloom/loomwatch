@@ -291,6 +291,8 @@ kubectl delete pvc my-release-loomwatch-data
 | `metrics.prometheusRule.annotations` | Additional annotations for the PrometheusRule | `{}` |
 | `metrics.prometheusRule.providers` | Regex of providers the default rules observe | `.+` |
 | `metrics.prometheusRule.ignoredQuotaTypes` | Regex of quota types excluded from the default rules | `.*video` |
+| `metrics.prometheusRule.teams` | Map provider accounts to the team that owns them | `[]` |
+| `metrics.prometheusRule.nonAccountProviders` | Regex of providers excluded from team ownership | `api_integrations` |
 | `metrics.prometheusRule.highThreshold` | Utilisation percentage above which LoomwatchQuotaHigh fires | `80` |
 | `metrics.prometheusRule.criticalThreshold` | Utilisation percentage above which LoomwatchQuotaCritical fires | `95` |
 | `metrics.prometheusRule.burn.trendWindow` | Range over which the burn slope is measured | `24h` |
@@ -300,6 +302,7 @@ kubectl delete pvc my-release-loomwatch-data
 | `metrics.prometheusRule.defaultRules.burnRate` | Enable the LoomwatchQuotaBurnsBeforeReset rule | `true` |
 | `metrics.prometheusRule.defaultRules.collectorNotPolling` | Enable the LoomwatchCollectorNotPolling rule | `true` |
 | `metrics.prometheusRule.defaultRules.collectorStale` | Enable the LoomwatchCollectorStale rule | `true` |
+| `metrics.prometheusRule.defaultRules.accountWithoutTeam` | Enable the LoomwatchAccountWithoutTeam rule (only rendered when teams are configured) | `true` |
 | `metrics.prometheusRule.extraRules` | Additional rules appended to the generated group | `[]` |
 | `dashboard.enabled` | Ship the quota dashboard as a ConfigMap for the Grafana sidecar to import | `false` |
 | `dashboard.namespace` | Namespace in which the dashboard ConfigMap will be created | `""` |

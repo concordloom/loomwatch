@@ -94,3 +94,147 @@ tests:
       - equal:
           path: spec.groups[0].rules[0].alert
           value: LoomwatchQuotaCritical
+
+  # Ownership mapping. The default is off, and off must mean the rendered
+  # output is exactly what it was before this feature existed - the quota group
+  # stays at index 0 and nothing else appears.
+  - it: renders no team group unless teams are configured
+    set:
+      metrics.prometheusRule.enabled: true
+    asserts:
+      - equal:
+          path: spec.groups[0].name
+          value: loomwatch.quotas
+      - lengthEqual:
+          path: spec.groups
+          count: 1
+
+  - it: publishes the mapping as one rule covering every listed account
+    set:
+      metrics.prometheusRule.enabled: true
+      metrics.prometheusRule.teams:
+        - provider: zai
+          accountId: "1"
+          team: platform
+        - provider: anthropic
+          accountId: "default"
+          team: research
+    asserts:
+      - equal:
+          path: spec.groups[0].name
+          value: loomwatch.teams
+      # One rule, not one per entry: separate rules recording the same series
+      # name are rejected by promtool's linter as duplicates.
+      - equal:
+          path: spec.groups[0].rules[0].record
+          value: loomwatch:account_team_map
+      - matchRegex:
+          path: spec.groups[0].rules[0].expr
+          pattern: 'team", "platform".*or.*team", "research"'
+
+  # account_id is unique per provider, not globally - several providers report
+  # "default". Joining on account_id alone aborts the whole query with a
+  # many-to-one error instead of returning partial data, so the join key is
+  # pinned by a test rather than left to whoever edits the template next.
+  - it: joins on provider and account_id together
+    set:
+      metrics.prometheusRule.enabled: true
+      metrics.prometheusRule.teams:
+        - provider: zai
+          accountId: "1"
+          team: platform
+    asserts:
+      - matchRegex:
+          path: spec.groups[0].rules[1].expr
+          pattern: 'unless on \(provider, account_id\)'
+
+  # Without this rule the feature is a regression: an account nobody assigned
+  # would simply be absent from every per-team query, and nothing would say so.
+  - it: alerts on accounts that have no owning team
+    set:
+      metrics.prometheusRule.enabled: true
+      metrics.prometheusRule.teams:
+        - provider: zai
+          accountId: "1"
+          team: platform
+    asserts:
+      - equal:
+          path: spec.groups[0].rules[2].alert
+          value: LoomwatchAccountWithoutTeam
+      - equal:
+          path: spec.groups[0].rules[2].expr
+          value: 'loomwatch:account_team{team="unassigned"}'
+
+  - it: can drop the unassigned-account rule without dropping the mapping
+    set:
+      metrics.prometheusRule.enabled: true
+      metrics.prometheusRule.defaultRules.accountWithoutTeam: false
+      metrics.prometheusRule.teams:
+        - provider: zai
+          accountId: "1"
+          team: platform
+    asserts:
+      - lengthEqual:
+          path: spec.groups[0].rules
+          count: 2
+
+  # Regression: an unquoted 1000000 is a YAML number, which Helm renders as
+  # "1e+06". The mapping then names an account that does not exist while the
+  # real one stays unassigned - and the alert fires against an account the
+  # operator did assign. Rejecting it at the schema is the only loud failure
+  # available, since nothing downstream can tell 1e+06 from a real id.
+  - it: refuses an accountId that is not a string
+    set:
+      metrics.prometheusRule.enabled: true
+      metrics.prometheusRule.teams:
+        - provider: minimax
+          accountId: 1000000
+          team: big
+    asserts:
+      - failedTemplate: {}
+
+  # Regression: two entries for one pair publish two series for one match group,
+  # and every consumer join then fails with many-to-one - including for accounts
+  # unrelated to the duplicate. JSON Schema cannot express uniqueness over a
+  # subset of fields, so the template is where this has to be caught.
+  - it: refuses two entries for the same provider and account
+    set:
+      metrics.prometheusRule.enabled: true
+      metrics.prometheusRule.teams:
+        - provider: zai
+          accountId: "1"
+          team: platform
+        - provider: zai
+          accountId: "1"
+          team: research
+    asserts:
+      - failedTemplate:
+          errorPattern: "listed twice"
+
+  # Regression: an exclusion class such as [^$"\\] passes newlines and C0
+  # control characters, which break rendering, and passes zero-width characters,
+  # which produce two teams no dashboard can tell apart.
+  - it: refuses a team name containing a newline
+    set:
+      metrics.prometheusRule.enabled: true
+      metrics.prometheusRule.teams:
+        - provider: zai
+          accountId: "1"
+          team: "plat\nform"
+    asserts:
+      - failedTemplate: {}
+
+  # Regression: api_integrations reports a provider/account_id pair but is the
+  # collector's own ingestion path, not a subscription. Left in the universe it
+  # fires LoomwatchAccountWithoutTeam forever against a complete mapping.
+  - it: keeps providers that are not accounts out of the ownership universe
+    set:
+      metrics.prometheusRule.enabled: true
+      metrics.prometheusRule.teams:
+        - provider: zai
+          accountId: "1"
+          team: platform
+    asserts:
+      - matchRegex:
+          path: spec.groups[0].rules[1].expr
+          pattern: 'loomwatch_agent_healthy\{provider!~"api_integrations"\}'

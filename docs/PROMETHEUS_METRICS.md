@@ -93,6 +93,38 @@ Counters live outside the per-scrape reset path, so `rate()` / `increase()` quer
 loomwatch_quota_utilization_percent * on(provider, account_id) group_left(account_name) loomwatch_account_info
 ```
 
+> Join on **both** labels. `account_id` is unique per provider, not globally:
+> every single-account provider reports `account_id="default"`, so joining on
+> `account_id` alone aborts the whole query with a many-to-one error rather
+> than returning partial data. Note also that `loomwatch_account_info` exists
+> only for providers that keep account rows (codex, zai, minimax); joining
+> against it silently drops every other provider, because an unmatched series
+> is removed rather than reported.
+
+**Attribute a quota to the team that owns it:**
+```promql
+max by (provider, quota_type, account_id, team) (
+  loomwatch_quota_utilization_percent
+  * on (provider, account_id) group_left(team) loomwatch:account_team
+)
+```
+
+`loomwatch:account_team` is a recording rule published by the Helm chart from
+`metrics.prometheusRule.teams`, not a series the collector exports. Unlike
+`loomwatch_account_info` it covers **every** account that reports at all: an
+account absent from the mapping is published with `team="unassigned"` rather
+than dropped, so the join above never loses a series and a forgotten account
+stays visible. `LoomwatchAccountWithoutTeam` alerts on exactly that value.
+
+Ownership lives in chart values rather than in the collector's database because
+account rows exist for three providers only; the rest report under
+`account_id="default"` and have no row for a column to live on. A mapping in
+values also survives a volume that does not persist, and is versioned in git.
+
+There is no meaningful `sum by (team)` here. Utilisation is a percentage of each
+plan's own limit, so two accounts at 50% do not make 100% of anything - use
+`max by (team)` or filter by team, not addition.
+
 **Scrape-error rate:**
 ```promql
 rate(loomwatch_scrape_errors_total[5m])

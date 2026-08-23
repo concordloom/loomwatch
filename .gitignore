@@ -99,3 +99,7 @@ onwatch-test
 
 # Gopnik: machine-local Stage 2 values (deployment address, credentials)
 /gopnik.local.env
+
+# Agent worktrees. Isolated checkouts created for parallel work; they are git
+# repositories of their own and must never be committed into this one.
+.claude/worktrees/

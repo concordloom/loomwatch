@@ -25,7 +25,15 @@ SOURCE = "charts/loomwatch/dashboards/loomwatch.json"
 TARGET = "dashboards/grafana-com/loomwatch.json"
 
 # Panel types the dashboard uses, named the way Grafana names them.
-PANEL_NAMES = {"timeseries": "Time series", "stat": "Stat"}
+PANEL_NAMES = {
+    "timeseries": "Time series",
+    "stat": "Stat",
+    "table": "Table",
+    "bargauge": "Bar gauge",
+}
+
+# A row is layout, not a plugin, and does not belong in __requires.
+LAYOUT_TYPES = {"row"}
 
 # The oldest Grafana this dashboard is known to import into. schemaVersion 39
 # corresponds to the 10.x line.
@@ -45,7 +53,7 @@ def derive(src):
         blob = blob.replace("${%s}" % name, "${DS_PROMETHEUS}")
     d = json.loads(blob)
 
-    panel_types = sorted({p["type"] for p in d["panels"]})
+    panel_types = sorted({p["type"] for p in d["panels"]} - LAYOUT_TYPES)
     unknown = [t for t in panel_types if t not in PANEL_NAMES]
     if unknown:
         raise SystemExit(

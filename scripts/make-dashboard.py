@@ -140,21 +140,32 @@ def triage_table():
     }
 
 
-def provider_row():
-    """A row that repeats over $provider: one block per subscription."""
+def account_row():
+    """A row that repeats over $account: one block per subscription.
+
+    Per account rather than per provider because an account is the thing
+    somebody pays for and adds one at a time; a provider is a category. Three
+    Z.ai accounts sharing one block are three accounts the reader has to
+    separate by squinting at bar labels.
+    """
     return {
         "id": 10,
         "type": "row",
-        "title": "$provider",
+        "title": "Account $account",
         "collapsed": False,
-        "repeat": "provider",
+        "repeat": "account",
         "gridPos": {"h": 1, "w": 24, "x": 0, "y": 15},
         "panels": [],
     }
 
 
-def per_provider_panels():
-    psel = 'provider=~"$provider",quota_type=~"$quota_type"'
+def per_account_panels():
+    # account_id alone is enough to name an account: provider_accounts.id is a
+    # single autoincrement shared by every provider, so an id belongs to exactly
+    # one of them. The exception is providers that keep no account rows at all -
+    # they all report "default" and therefore share one block, which is visible
+    # rather than silent.
+    psel = 'account_id=~"$account",quota_type=~"$quota_type"' 
     return [
         {
             "id": 11,
@@ -163,8 +174,8 @@ def per_provider_panels():
             "description": "One bar per account and quota window, labelled. Bars rather than lines because the question here is how full, not how it got there.",
             "datasource": DS,
             "gridPos": {"h": 9, "w": 9, "x": 0, "y": 16},
-            "targets": [target("A", f"max by (account_id, quota_type) (loomwatch_quota_utilization_percent{{{psel}}})",
-                               legend="acct {{account_id}} / {{quota_type}}")],
+            "targets": [target("A", f"max by (quota_type) (loomwatch_quota_utilization_percent{{{psel}}})",
+                               legend="{{quota_type}}")],
             "fieldConfig": {
                 "defaults": {
                     "unit": "percent", "min": 0, "max": 100,
@@ -175,6 +186,10 @@ def per_provider_panels():
             "options": {
                 "orientation": "horizontal",
                 "displayMode": "gradient",
+                # Fixed sizes: a bar gauge with three bars stretches its labels
+                # to headline size, and the same panel next to an account with
+                # eight bars then reads as a different kind of thing.
+                "text": {"titleSize": 14, "valueSize": 28},
                 "showUnfilled": True,
                 "valueMode": "text",
                 "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": False},
@@ -187,8 +202,8 @@ def per_provider_panels():
             "description": "Lines, not fills: sixteen filled areas are mud. The legend is a sorted table on the right so a series can be found by name rather than by colour.",
             "datasource": DS,
             "gridPos": {"h": 9, "w": 10, "x": 9, "y": 16},
-            "targets": [target("A", f"max by (account_id, quota_type) (loomwatch_quota_utilization_percent{{{psel}}})",
-                               legend="acct {{account_id}} / {{quota_type}}")],
+            "targets": [target("A", f"max by (quota_type) (loomwatch_quota_utilization_percent{{{psel}}})",
+                               legend="{{quota_type}}")],
             "fieldConfig": {
                 "defaults": {
                     "unit": "percent", "min": 0, "max": 100,
@@ -210,8 +225,8 @@ def per_provider_panels():
             "description": "Per account, not per provider: one stale account used to colour the whole provider red without saying which. While this is stale every quota above is old, and their calm means nothing.",
             "datasource": DS,
             "gridPos": {"h": 9, "w": 5, "x": 19, "y": 16},
-            "targets": [target("A", f'max by (account_id) (loomwatch_agent_healthy{{provider=~"$provider"}})',
-                               legend="acct {{account_id}}")],
+            "targets": [target("A", f'max by (provider, account_id) (loomwatch_agent_healthy{{account_id=~"$account"}})',
+                               legend="{{provider}} / acct {{account_id}}")],
             "fieldConfig": {
                 "defaults": {
                     "mappings": [{"type": "value", "options": {
@@ -247,7 +262,25 @@ def variables():
         {"name": "datasource", "label": "Data source", "type": "datasource",
          "query": "prometheus", "current": {}},
         query("provider", "Provider", "label_values(loomwatch_agent_healthy, provider)",
-              "Also drives the repeated rows below: one block per provider."),
+              "Filters the table above and which accounts get a block below."),
+        # The blocks repeat over this one.
+        #
+        # An id is enough on its own: provider_accounts.id is a single
+        # autoincrement shared by every provider, so an id belongs to exactly
+        # one account. The exception is providers that keep no account rows -
+        # they all report "default" and therefore share a block, which is
+        # visible rather than silent.
+        #
+        # The title is the bare id rather than "zai / 13" because a composite
+        # needs label_join, and a variable built on it never resolves:
+        # label_values goes through /api/v1/series, which takes a selector and
+        # rejects a function outright. query_result accepts one, but neither the
+        # classic string form nor an explicit query type made Grafana route the
+        # variable through it - it kept issuing the series call and coming back
+        # empty. The provider is one glance away in the Collector panel instead.
+        query("account", "Account",
+              'label_values(loomwatch_agent_healthy{provider=~"$provider"}, account_id)',
+              "One block per account. An account is what somebody pays for and adds one at a time; a provider is a category."),
         query("quota_type", "Quota window", f'label_values(loomwatch_quota_utilization_percent{{provider=~"$provider"}}, quota_type)',
               "Rolling five-hour windows sit at zero most of the time; hide them here rather than dropping them from the data."),
         query("team", "Team", "label_values(loomwatch:account_team, team)",
@@ -256,7 +289,7 @@ def variables():
 
 
 def main():
-    row = provider_row()
+    row = account_row()
     dashboard = {
         "uid": "loomwatch-quotas",
         "title": "loomwatch - LLM quotas",
@@ -271,7 +304,7 @@ def main():
         "refresh": "1m",
         "time": {"from": "now-24h", "to": "now"},
         "templating": {"list": variables()},
-        "panels": [triage_table(), row] + per_provider_panels(),
+        "panels": [triage_table(), row] + per_account_panels(),
     }
     out = "charts/loomwatch/dashboards/loomwatch.json"
     with open(out, "w") as fh:

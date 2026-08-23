@@ -37,7 +37,31 @@
         "multi": true,
         "allValue": ".+",
         "sort": 1,
-        "description": "Also drives the repeated rows below: one block per provider.",
+        "description": "Filters the table above and which accounts get a block below.",
+        "current": {
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        }
+      },
+      {
+        "name": "account",
+        "label": "Account",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "query": "label_values(loomwatch_agent_healthy{provider=~\"$provider\"}, account_id)",
+        "refresh": 1,
+        "includeAll": true,
+        "multi": true,
+        "allValue": ".+",
+        "sort": 1,
+        "description": "One block per account. An account is what somebody pays for and adds one at a time; a provider is a category.",
         "current": {
           "text": [
             "All"
@@ -358,9 +382,9 @@
     {
       "id": 10,
       "type": "row",
-      "title": "$provider",
+      "title": "Account $account",
       "collapsed": false,
-      "repeat": "provider",
+      "repeat": "account",
       "gridPos": {
         "h": 1,
         "w": 24,
@@ -391,8 +415,8 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "max by (account_id, quota_type) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"})",
-          "legendFormat": "acct {{account_id}} / {{quota_type}}"
+          "expr": "max by (quota_type) (loomwatch_quota_utilization_percent{account_id=~\"$account\",quota_type=~\"$quota_type\"})",
+          "legendFormat": "{{quota_type}}"
         }
       ],
       "fieldConfig": {
@@ -423,6 +447,10 @@
       "options": {
         "orientation": "horizontal",
         "displayMode": "gradient",
+        "text": {
+          "titleSize": 14,
+          "valueSize": 28
+        },
         "showUnfilled": true,
         "valueMode": "text",
         "reduceOptions": {
@@ -456,8 +484,8 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "max by (account_id, quota_type) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"})",
-          "legendFormat": "acct {{account_id}} / {{quota_type}}"
+          "expr": "max by (quota_type) (loomwatch_quota_utilization_percent{account_id=~\"$account\",quota_type=~\"$quota_type\"})",
+          "legendFormat": "{{quota_type}}"
         }
       ],
       "fieldConfig": {
@@ -528,8 +556,8 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "max by (account_id) (loomwatch_agent_healthy{provider=~\"$provider\"})",
-          "legendFormat": "acct {{account_id}}"
+          "expr": "max by (provider, account_id) (loomwatch_agent_healthy{account_id=~\"$account\"})",
+          "legendFormat": "{{provider}} / acct {{account_id}}"
         }
       ],
       "fieldConfig": {

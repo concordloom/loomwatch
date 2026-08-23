@@ -613,7 +613,7 @@ func TestCodexCredentials_CompositeExternalID(t *testing.T) {
 			want: "", // user_id missing -> ambiguous identity, caller must dedupe at account level
 		},
 		{
-			name: "neither present",
+			name:  "neither present",
 			creds: CodexCredentials{},
 			want:  "",
 		},

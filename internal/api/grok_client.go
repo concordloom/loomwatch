@@ -580,8 +580,8 @@ type ProtobufScanGo struct {
 		order int
 	}
 	varints []struct {
-		path  []uint64
-		val   uint64
+		path []uint64
+		val  uint64
 	}
 }
 
@@ -611,8 +611,8 @@ func scanProtobufGo(data []byte, depth int, path []uint64, order int) (ProtobufS
 		case 0:
 			if v, ok := readVarintGo(b, &idx); ok {
 				scan.varints = append(scan.varints, struct {
-					path  []uint64
-					val   uint64
+					path []uint64
+					val  uint64
 				}{fpath, v})
 			} else {
 				idx = start + 1

@@ -72,8 +72,75 @@ func NewZaiClient(apiKey string, logger *slog.Logger, opts ...ZaiOption) *ZaiCli
 	return client
 }
 
+// zaiFetchAttempts is how many times a poll tries before giving up on the
+// cycle.
+//
+// One transient network failure used to cost a whole polling interval. That was
+// tolerable while a deployment had one Z.ai account; with three, all of them
+// tick at the same instant, each opens its own TLS connection to the same host,
+// and the handshakes contend - three failures inside the same second, observed
+// on a live deployment, all of them "TLS handshake timeout".
+//
+// A lost cycle is not just a gap in a graph: the collector's own health flag is
+// derived from how long ago a poll last succeeded, so failing a fetch also makes
+// the account look stale.
+//
+// Two attempts rather than more. This runs every couple of minutes and the next
+// cycle is a retry of its own; the point is to survive a blip, not to hammer a
+// provider that is genuinely refusing.
+const zaiFetchAttempts = 2
+
+// zaiRetryDelay separates the attempts. Long enough that a contended handshake
+// is not simply repeated into the same contention, short enough to stay far
+// inside the polling interval.
+var zaiRetryDelay = 2 * time.Second
+
+// retryDelay is the pause between attempts, never longer than the client's own
+// timeout.
+//
+// A fixed pause is wrong for a client configured to give up in a fraction of a
+// second: it would make a fast failure slow, which is the opposite of what a
+// short timeout asks for. In production the timeout is thirty seconds and this
+// is the constant.
+func (c *ZaiClient) retryDelay() time.Duration {
+	d := zaiRetryDelay
+	if t := c.httpClient.Timeout; t > 0 && t < d {
+		return t
+	}
+	return d
+}
+
 // FetchQuotas retrieves the current quota information from the Z.ai API.
+//
+// A transient network failure is retried once; anything the server actually
+// answered - an auth failure, a malformed body - is returned as it is. Retrying
+// a refusal would turn one wrong answer into two.
 func (c *ZaiClient) FetchQuotas(ctx context.Context) (*ZaiQuotaResponse, error) {
+	var lastErr error
+	for attempt := 1; attempt <= zaiFetchAttempts; attempt++ {
+		resp, err := c.fetchQuotasOnce(ctx)
+		if err == nil {
+			return resp, nil
+		}
+		lastErr = err
+
+		// Only a network failure is worth repeating, and only if there is time.
+		if !errors.Is(err, ErrZaiNetworkError) || attempt == zaiFetchAttempts {
+			return nil, err
+		}
+		c.logger.Debug("retrying Z.ai quota fetch after a network error",
+			"attempt", attempt, "error", err)
+
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(c.retryDelay()):
+		}
+	}
+	return nil, lastErr
+}
+
+func (c *ZaiClient) fetchQuotasOnce(ctx context.Context) (*ZaiQuotaResponse, error) {
 	reqCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 

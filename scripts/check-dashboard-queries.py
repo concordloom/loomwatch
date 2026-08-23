@@ -5,9 +5,14 @@ The dashboard's queries have the same problem the alerting rules had: nothing
 ever parsed them. A typo in a panel expression produces an empty panel, and an
 empty panel is indistinguishable from a quiet system.
 
-Grafana template variables are not PromQL, so each `$var` is replaced with a
-permissive matcher before parsing. That checks the shape of the query, which is
-what breaks; it cannot check what the variable will expand to.
+Grafana template variables are not PromQL, so each `$var` is replaced before
+parsing. That checks the shape of the query, which is what breaks; it cannot
+check what the variable will expand to.
+
+Two kinds of substitution, because one does not fit both. Grafana's duration
+macros - $__range and friends - sit inside a range selector, where a label
+matcher is a syntax error; they become a literal duration. Everything else is a
+label value and becomes a permissive matcher.
 
 Usage: check-dashboard-queries.py <dashboard.json> <promtool>
 """
@@ -16,6 +21,18 @@ import re
 import subprocess
 import sys
 import tempfile
+
+
+# Grafana duration macros. Any valid duration will do: this checks syntax, not
+# what the dashboard's time range happens to be when someone opens it.
+DURATION_MACROS = ("$__range_s", "$__range_ms", "$__range", "$__rate_interval",
+                   "$__interval_ms", "$__interval")
+
+
+def normalise(expr):
+    for macro in DURATION_MACROS:
+        expr = expr.replace(macro, "5m")
+    return re.sub(r"\$\w+", ".+", expr)
 
 
 def main(dashboard, promtool):
@@ -36,7 +53,7 @@ def main(dashboard, promtool):
     rules = {"groups": [{"name": "dashboard", "rules": []}]}
     for i, (title, expr) in enumerate(queries):
         rules["groups"][0]["rules"].append(
-            {"record": f"dashboard:q{i}", "expr": re.sub(r"\$\w+", ".+", expr)}
+            {"record": f"dashboard:q{i}", "expr": normalise(expr)}
         )
 
     with tempfile.NamedTemporaryFile("w", suffix=".yaml", delete=False) as fh:

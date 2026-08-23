@@ -20,11 +20,25 @@ metadata:
   {{- end }}
 data:
   {{/*
-    Shipped verbatim rather than templated. The dashboard picks its data source
-    through a Grafana variable, so it needs no values from Helm - and a
-    dashboard rendered through the template engine breaks the moment a panel
-    legend contains {{ }}, which Grafana's own legend syntax does constantly.
+    Not run through the template engine. A dashboard rendered that way breaks
+    the moment a panel legend contains {{ }}, which Grafana's own legend syntax
+    does constantly.
+
+    But it does need three values from Helm, and shipping it truly verbatim was
+    a quiet lie: the colour thresholds are baked into the JSON while the alerts
+    take theirs from values. Lower highThreshold to 60 and every rule moves
+    while the dashboard keeps colouring at 80, so a quota at 65% pages you and
+    shows green. The three replacements below are plain string substitution, not
+    templating, so the legend syntax is untouched.
+
+    Grafana applies a threshold step as >=, the rules as >. Exactly on the
+    threshold the cell is already coloured and the alert is still silent; the
+    gap is one sample wide and not worth a second set of numbers.
   */}}
+  {{- $dash := .Files.Get "dashboards/loomwatch.json" }}
+  {{- $dash = replace "\"value\": 80" (printf "\"value\": %v" .Values.metrics.prometheusRule.highThreshold) $dash }}
+  {{- $dash = replace "\"value\": 95" (printf "\"value\": %v" .Values.metrics.prometheusRule.criticalThreshold) $dash }}
+  {{- $dash = replace "\"value\": 300" (printf "\"value\": %v" (mul .Values.pollInterval 5)) $dash }}
   loomwatch.json: |
-{{ .Files.Get "dashboards/loomwatch.json" | indent 4 }}
+{{ $dash | indent 4 }}
 {{- end }}

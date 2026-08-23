@@ -20,6 +20,8 @@ on:
       - "scripts/check-chart-rules.sh"
       - "scripts/check-runbook-links.py"
       - "scripts/check-dashboard-queries.py"
+      - "scripts/make-grafana-com-dashboard.py"
+      - "dashboards/**"
       - "docs/runbooks/**"
   pull_request:
     paths:
@@ -31,6 +33,8 @@ on:
       - "scripts/check-chart-rules.sh"
       - "scripts/check-runbook-links.py"
       - "scripts/check-dashboard-queries.py"
+      - "scripts/make-grafana-com-dashboard.py"
+      - "dashboards/**"
       - "docs/runbooks/**"
   workflow_dispatch:
 
@@ -127,6 +131,16 @@ jobs:
 
       - name: Check alerting rules against a real PromQL engine
         run: ./scripts/check-chart-rules.sh
+
+      # The catalogue wants the "export for sharing externally" envelope and the
+      # chart cannot use it: a provisioned dashboard with ${DS_PROMETHEUS} has
+      # nothing to substitute it. So the catalogue file is derived, and drift
+      # between the two is a build failure rather than a surprise at upload time.
+      - name: grafana.com dashboard is in sync
+        run: |
+          python3 scripts/make-grafana-com-dashboard.py --check
+          python3 scripts/check-dashboard-queries.py \
+            dashboards/grafana-com/loomwatch.json "$(command -v promtool)"
 
       # Rendering with everything switched on is what catches a template that
       # only breaks in a configuration the unit tests do not exercise.

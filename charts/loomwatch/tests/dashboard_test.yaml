@@ -1,0 +1,53 @@
+suite: dashboard
+templates:
+  - dashboard-configmap.yaml
+tests:
+  - it: is not installed unless asked for
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  # The dashboard's colours used to be baked in while the alerts took their
+  # thresholds from values. Lowering highThreshold moved every rule and left the
+  # dashboard colouring at 80, so a quota could page at 65% and show green. The
+  # substitution is plain string replacement rather than templating, because a
+  # dashboard run through the template engine breaks on Grafana's own {{ }}
+  # legend syntax.
+  - it: colours at the same threshold the alerts fire at
+    set:
+      dashboard.enabled: true
+      metrics.prometheusRule.highThreshold: 60
+      metrics.prometheusRule.criticalThreshold: 70
+    asserts:
+      - matchRegex:
+          path: data["loomwatch.json"]
+          pattern: '"value": 60'
+      - matchRegex:
+          path: data["loomwatch.json"]
+          pattern: '"value": 70'
+      - notMatchRegex:
+          path: data["loomwatch.json"]
+          pattern: '"value": 80'
+      - notMatchRegex:
+          path: data["loomwatch.json"]
+          pattern: '"value": 95'
+
+  # The collector panel's staleness colour is the same five poll intervals the
+  # LoomwatchCollectorNotPolling rule uses, so the panel cannot show green at
+  # the moment that rule fires.
+  - it: marks a stale collector at the same age the rule does
+    set:
+      dashboard.enabled: true
+      pollInterval: 120
+    asserts:
+      - matchRegex:
+          path: data["loomwatch.json"]
+          pattern: '"value": 600'
+
+  - it: leaves Grafana legend syntax alone
+    set:
+      dashboard.enabled: true
+    asserts:
+      - matchRegex:
+          path: data["loomwatch.json"]
+          pattern: '\{\{quota_type\}\}'

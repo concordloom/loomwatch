@@ -68,7 +68,9 @@ Counters live outside the per-scrape reset path, so `rate()` / `increase()` quer
 | `loomwatch_cycles_failed_total` | `provider`, `account_id`, `reason` | Failed poll cycles, labelled by reason. |
 | `loomwatch_scrape_errors_total` | `provider`, `error_type` | Errors while refreshing `/metrics` from the local store. Alert on `rate(...)` to detect broken metric collection itself. |
 
-> Note: in 2.11.40 only the built-in `synthetic` agent emits `cycles_completed_total` / `cycles_failed_total`. Per-provider wiring for the remaining 8 agents is a follow-up; alerts that depend on these counters should gate on `absent_over_time(loomwatch_cycles_completed_total{provider="..."}[1h])`.
+> Note: only the built-in `synthetic` agent emits `cycles_completed_total` / `cycles_failed_total`. Per-provider wiring for the remaining agents is a follow-up; alerts that depend on these counters should gate on `absent_over_time(loomwatch_cycles_completed_total{provider="..."}[1h])`.
+>
+> This is separate from the quota series, which every provider publishes: the counters are about polling cycles, not about quotas.
 
 ### Label semantics
 

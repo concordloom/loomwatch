@@ -238,6 +238,11 @@ func (m *Metrics) Scrape(s *store.Store, pollInterval time.Duration) {
 	m.scrapeOpenRouter(s, staleThreshold)
 	m.scrapeMoonshot(s, staleThreshold)
 	m.scrapeDeepSeek(s, staleThreshold)
+	m.scrapeSynthetic(s, staleThreshold)
+	m.scrapeCursor(s, staleThreshold)
+	m.scrapeOpenCode(s, staleThreshold)
+	m.scrapeKimi(s, staleThreshold)
+	m.scrapeGrok(s, staleThreshold)
 	m.scrapeAPIIntegrations(s, staleThreshold)
 }
 
@@ -770,6 +775,195 @@ func (m *Metrics) RecordScrapeError(provider, errorType string) {
 // own ingestion path rather than a subscription anybody owns - giving it an
 // account_info entry would make it look like an account to everything that
 // reads one.
+// scrapeSynthetic exports the provider this project started as.
+//
+// It predates the per-provider stores and still lives in the original
+// quota_snapshots table, where the three quotas are columns rather than rows.
+// That shape is why it was the last one without an export path, not a decision
+// that it did not need one.
+func (m *Metrics) scrapeSynthetic(s *store.Store, staleThreshold time.Duration) {
+	method := "synthetic"
+
+	snap, err := s.QueryLatest()
+	if err != nil {
+		m.scrapeErrorsTotal.WithLabelValues(method, "query_failed").Inc()
+		return
+	}
+	if snap == nil {
+		return
+	}
+
+	m.recordDefaultAccountInfo(method)
+	m.recordLastCycleAge(method, defaultAccountID, snap.CapturedAt, staleThreshold)
+
+	for _, q := range []struct {
+		name string
+		info api.QuotaInfo
+	}{
+		{"sub", snap.Sub},
+		{"search", snap.Search},
+		{"tool", snap.ToolCall},
+	} {
+		// A quota with no limit is one the plan does not have, rather than one
+		// that is fully consumed. Dividing by it would publish either a
+		// division by zero or a confident wrong number.
+		if q.info.Limit <= 0 {
+			continue
+		}
+		labels := prometheus.Labels{
+			"provider":   method,
+			"quota_type": q.name,
+			"account_id": defaultAccountID,
+		}
+		m.quotaUtilization.With(labels).Set(q.info.Requests / q.info.Limit * 100)
+		if !q.info.RenewsAt.IsZero() {
+			m.quotaResetTimestamp.With(labels).Set(float64(q.info.RenewsAt.Unix()))
+		}
+	}
+}
+
+func (m *Metrics) scrapeCursor(s *store.Store, staleThreshold time.Duration) {
+	method := "cursor"
+
+	snap, err := s.QueryLatestCursor()
+	if err != nil {
+		m.scrapeErrorsTotal.WithLabelValues(method, "query_failed").Inc()
+		return
+	}
+	if snap == nil {
+		return
+	}
+
+	m.recordDefaultAccountInfo(method)
+	m.recordLastCycleAge(method, defaultAccountID, snap.CapturedAt, staleThreshold)
+
+	for _, q := range snap.Quotas {
+		labels := prometheus.Labels{
+			"provider":   method,
+			"quota_type": q.Name,
+			"account_id": defaultAccountID,
+		}
+		m.quotaUtilization.With(labels).Set(q.Utilization)
+		if q.ResetsAt != nil && !q.ResetsAt.IsZero() {
+			m.quotaResetTimestamp.With(labels).Set(float64(q.ResetsAt.Unix()))
+		}
+	}
+}
+
+func (m *Metrics) scrapeOpenCode(s *store.Store, staleThreshold time.Duration) {
+	method := "opencode"
+
+	snap, err := s.QueryLatestOpenCode()
+	if err != nil {
+		m.scrapeErrorsTotal.WithLabelValues(method, "query_failed").Inc()
+		return
+	}
+	if snap == nil {
+		return
+	}
+
+	m.recordDefaultAccountInfo(method)
+	m.recordLastCycleAge(method, defaultAccountID, snap.CapturedAt, staleThreshold)
+
+	for _, q := range snap.Quotas {
+		labels := prometheus.Labels{
+			"provider":   method,
+			"quota_type": q.Name,
+			"account_id": defaultAccountID,
+		}
+		m.quotaUtilization.With(labels).Set(q.Utilization)
+		if q.ResetsAt != nil && !q.ResetsAt.IsZero() {
+			m.quotaResetTimestamp.With(labels).Set(float64(q.ResetsAt.Unix()))
+		}
+	}
+}
+
+func (m *Metrics) scrapeKimi(s *store.Store, staleThreshold time.Duration) {
+	method := "kimi"
+
+	accounts, err := s.QueryActiveProviderAccounts(method)
+	if err != nil {
+		m.scrapeErrorsTotal.WithLabelValues(method, "query_failed").Inc()
+		return
+	}
+	if len(accounts) == 0 {
+		accounts = []store.ProviderAccount{{ID: 1, Name: "default"}}
+	}
+
+	for _, acct := range accounts {
+		accountID := strconv.FormatInt(acct.ID, 10)
+		if acct.Name != "" {
+			m.accountInfo.WithLabelValues(method, accountID, acct.Name).Set(1)
+		}
+
+		snap, err := s.QueryLatestKimi(acct.ID)
+		if err != nil {
+			m.scrapeErrorsTotal.WithLabelValues(method, "query_failed").Inc()
+			continue
+		}
+		if snap == nil {
+			continue
+		}
+
+		m.recordLastCycleAge(method, accountID, snap.CapturedAt, staleThreshold)
+
+		for _, q := range snap.Quotas {
+			labels := prometheus.Labels{
+				"provider":   method,
+				"quota_type": q.Name,
+				"account_id": accountID,
+			}
+			m.quotaUtilization.With(labels).Set(q.Utilization)
+			if q.ResetsAt != nil && !q.ResetsAt.IsZero() {
+				m.quotaResetTimestamp.With(labels).Set(float64(q.ResetsAt.Unix()))
+			}
+		}
+	}
+}
+
+func (m *Metrics) scrapeGrok(s *store.Store, staleThreshold time.Duration) {
+	method := "grok"
+
+	accounts, err := s.QueryActiveProviderAccounts(method)
+	if err != nil {
+		m.scrapeErrorsTotal.WithLabelValues(method, "query_failed").Inc()
+		return
+	}
+	if len(accounts) == 0 {
+		accounts = []store.ProviderAccount{{ID: 1, Name: "default"}}
+	}
+
+	for _, acct := range accounts {
+		accountID := strconv.FormatInt(acct.ID, 10)
+		if acct.Name != "" {
+			m.accountInfo.WithLabelValues(method, accountID, acct.Name).Set(1)
+		}
+
+		snap, err := s.QueryLatestGrok(acct.ID)
+		if err != nil {
+			m.scrapeErrorsTotal.WithLabelValues(method, "query_failed").Inc()
+			continue
+		}
+		if snap == nil {
+			continue
+		}
+
+		m.recordLastCycleAge(method, accountID, snap.CapturedAt, staleThreshold)
+
+		for _, q := range snap.Quotas {
+			labels := prometheus.Labels{
+				"provider":   method,
+				"quota_type": q.Name,
+				"account_id": accountID,
+			}
+			m.quotaUtilization.With(labels).Set(q.Utilization)
+			if q.ResetsAt != nil && !q.ResetsAt.IsZero() {
+				m.quotaResetTimestamp.With(labels).Set(float64(q.ResetsAt.Unix()))
+			}
+		}
+	}
+}
+
 func (m *Metrics) recordDefaultAccountInfo(provider string) {
 	m.accountInfo.WithLabelValues(provider, defaultAccountID, "default").Set(1)
 }

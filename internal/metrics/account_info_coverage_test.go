@@ -1,6 +1,7 @@
 package metrics
 
 import (
+	"strconv"
 	"testing"
 	"time"
 
@@ -194,4 +195,20 @@ func labelsOf(m *dto.Metric) map[string]string {
 		out[l.GetName()] = l.GetValue()
 	}
 	return out
+}
+
+// scrapeInto runs one scrape and returns what the registry holds afterwards.
+func scrapeInto(t *testing.T, s *store.Store) []*dto.MetricFamily {
+	t.Helper()
+	m := New()
+	m.Scrape(s, time.Minute)
+	families, err := m.Gather().Gather()
+	if err != nil {
+		t.Fatalf("Gather: %v", err)
+	}
+	return families
+}
+
+func accountLabel(id int64) string {
+	return strconv.FormatInt(id, 10)
 }

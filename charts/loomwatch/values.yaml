@@ -691,6 +691,37 @@ metrics:
     ## this mean "any video quota, in any window".
     ##
     ignoredQuotaTypes: ".*video"
+    ## Ownership of a provider account, published as the recording rule
+    ## `loomwatch:account_team` so that alerts and dashboards can be routed and
+    ## filtered by the team that pays for the plan.
+    ##
+    ## The mapping lives in values rather than in the collector's database on
+    ## purpose. Account rows exist for three providers only (codex, zai,
+    ## minimax); every other provider reports under account_id "default" and has
+    ## no row a column could hang on. Values describe all of them, are versioned
+    ## in git, and survive a volume that does not persist.
+    ##
+    ## An account that is not listed here is NOT dropped from the result: it is
+    ## published with team "unassigned", which is a value you can alert on. A
+    ## forgotten account vanishing from a per-team query is exactly the silent
+    ## failure this avoids.
+    ##
+    ## Join on BOTH labels - `on (provider, account_id)`. account_id is unique
+    ## per provider, not globally: several providers report "default", so
+    ## joining on account_id alone aborts the entire query with a many-to-one
+    ## error instead of returning partial data.
+    ##
+    ## teams:
+    ##   - provider: zai
+    ##     accountId: "1"
+    ##     team: platform
+    ##   - provider: anthropic
+    ##     accountId: "default"
+    ##     team: research
+    ##
+    ## @param metrics.prometheusRule.teams [array] Map provider accounts to the team that owns them
+    ##
+    teams: []
     ## @param metrics.prometheusRule.highThreshold Utilisation percentage above which LoomwatchQuotaHigh fires
     ##
     highThreshold: 80
@@ -725,6 +756,7 @@ metrics:
     ## @param metrics.prometheusRule.defaultRules.burnRate Enable the LoomwatchQuotaBurnsBeforeReset rule
     ## @param metrics.prometheusRule.defaultRules.collectorNotPolling Enable the LoomwatchCollectorNotPolling rule
     ## @param metrics.prometheusRule.defaultRules.collectorStale Enable the LoomwatchCollectorStale rule
+    ## @param metrics.prometheusRule.defaultRules.accountWithoutTeam Enable the LoomwatchAccountWithoutTeam rule (only rendered when teams are configured)
     ##
     defaultRules:
       quotaHigh: true
@@ -732,6 +764,7 @@ metrics:
       burnRate: true
       collectorNotPolling: true
       collectorStale: true
+      accountWithoutTeam: true
     ## @param metrics.prometheusRule.extraRules Additional rules appended to the generated group
     ##
     extraRules: []

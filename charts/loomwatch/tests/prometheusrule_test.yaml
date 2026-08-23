@@ -94,3 +94,86 @@ tests:
       - equal:
           path: spec.groups[0].rules[0].alert
           value: LoomwatchQuotaCritical
+
+  # Ownership mapping. The default is off, and off must mean the rendered
+  # output is exactly what it was before this feature existed - the quota group
+  # stays at index 0 and nothing else appears.
+  - it: renders no team group unless teams are configured
+    set:
+      metrics.prometheusRule.enabled: true
+    asserts:
+      - equal:
+          path: spec.groups[0].name
+          value: loomwatch.quotas
+      - lengthEqual:
+          path: spec.groups
+          count: 1
+
+  - it: publishes the mapping as one rule covering every listed account
+    set:
+      metrics.prometheusRule.enabled: true
+      metrics.prometheusRule.teams:
+        - provider: zai
+          accountId: "1"
+          team: platform
+        - provider: anthropic
+          accountId: "default"
+          team: research
+    asserts:
+      - equal:
+          path: spec.groups[0].name
+          value: loomwatch.teams
+      # One rule, not one per entry: separate rules recording the same series
+      # name are rejected by promtool's linter as duplicates.
+      - equal:
+          path: spec.groups[0].rules[0].record
+          value: loomwatch:account_team_map
+      - matchRegex:
+          path: spec.groups[0].rules[0].expr
+          pattern: 'team", "platform".*or.*team", "research"'
+
+  # account_id is unique per provider, not globally - several providers report
+  # "default". Joining on account_id alone aborts the whole query with a
+  # many-to-one error instead of returning partial data, so the join key is
+  # pinned by a test rather than left to whoever edits the template next.
+  - it: joins on provider and account_id together
+    set:
+      metrics.prometheusRule.enabled: true
+      metrics.prometheusRule.teams:
+        - provider: zai
+          accountId: "1"
+          team: platform
+    asserts:
+      - matchRegex:
+          path: spec.groups[0].rules[1].expr
+          pattern: 'unless on \(provider, account_id\)'
+
+  # Without this rule the feature is a regression: an account nobody assigned
+  # would simply be absent from every per-team query, and nothing would say so.
+  - it: alerts on accounts that have no owning team
+    set:
+      metrics.prometheusRule.enabled: true
+      metrics.prometheusRule.teams:
+        - provider: zai
+          accountId: "1"
+          team: platform
+    asserts:
+      - equal:
+          path: spec.groups[0].rules[2].alert
+          value: LoomwatchAccountWithoutTeam
+      - equal:
+          path: spec.groups[0].rules[2].expr
+          value: 'loomwatch:account_team{team="unassigned"}'
+
+  - it: can drop the unassigned-account rule without dropping the mapping
+    set:
+      metrics.prometheusRule.enabled: true
+      metrics.prometheusRule.defaultRules.accountWithoutTeam: false
+      metrics.prometheusRule.teams:
+        - provider: zai
+          accountId: "1"
+          team: platform
+    asserts:
+      - lengthEqual:
+          path: spec.groups[0].rules
+          count: 2

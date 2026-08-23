@@ -23,6 +23,58 @@ metadata:
   {{- end }}
 spec:
   groups:
+    {{- if .Values.metrics.prometheusRule.teams }}
+    # Account ownership. Published as a recording rule rather than stored in the
+    # collector, because account rows exist for three providers only and every
+    # other provider reports under account_id "default" - there is no row for a
+    # column to live on. See values.yaml for the full reasoning.
+    - name: loomwatch.teams
+      rules:
+        # One rule, not one per entry: two rules recording the same series name
+        # are a duplicate as far as promtool's linter is concerned, since it
+        # cannot see that label_replace gives them different labels.
+        - record: loomwatch:account_team_map
+          expr: >-
+            {{- range $i, $t := .Values.metrics.prometheusRule.teams }}
+            {{ if $i }}or{{ end }}
+            label_replace(label_replace(label_replace(vector(1), "provider", "{{ $t.provider }}", "", ""), "account_id", "{{ $t.accountId }}", "", ""), "team", "{{ $t.team }}", "", "")
+            {{- end }}
+        # Every account that reports at all gets a team, so a join against this
+        # series can never drop one. An account missing from the map above is
+        # published as "unassigned" - visible and alertable - instead of
+        # silently disappearing from every per-team query.
+        #
+        # loomwatch_agent_healthy is the universe on purpose: it carries exactly
+        # {provider, account_id} and is emitted for every scraped account,
+        # including balance-based providers that have no utilisation series.
+        - record: loomwatch:account_team
+          expr: >-
+            loomwatch:account_team_map
+            or
+            label_replace(
+              loomwatch_agent_healthy * 0 + 1
+              unless on (provider, account_id) loomwatch:account_team_map,
+              "team", "unassigned", "", ""
+            )
+        {{- if .Values.metrics.prometheusRule.defaultRules.accountWithoutTeam }}
+        # The inverse control. Without it this feature is a regression: an
+        # account nobody assigned would be absent from team dashboards and
+        # nothing would say so.
+        - alert: LoomwatchAccountWithoutTeam
+          expr: loomwatch:account_team{team="unassigned"}
+          for: 1h
+          labels:
+            severity: warning
+            subsystem: llm-quota
+          annotations:
+            summary: >-
+              Account {{ "{{ $labels.account_id }}" }} on {{ "{{ $labels.provider }}" }} has no owning team
+            description: >-
+              This account burns quota that no team dashboard shows and no
+              team-routed alert covers. Add it to metrics.prometheusRule.teams,
+              or record deliberately that it is shared.
+        {{- end }}
+    {{- end }}
     - name: loomwatch.quotas
       rules:
         {{- if .Values.metrics.prometheusRule.defaultRules.quotaHigh }}

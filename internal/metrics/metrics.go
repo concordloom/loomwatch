@@ -121,7 +121,7 @@ func New() *Metrics {
 		),
 		accountInfo: newDualGaugeVec(
 			"loomwatch_account_info", "onwatch_account_info",
-			"Join-metric (always 1) mapping numeric account_id to human-readable account_name. Use `{..} * on(account_id) group_left(account_name) loomwatch_account_info` in PromQL.",
+			"Join-metric (always 1) mapping numeric account_id to human-readable account_name. Use `{..} * on(provider, account_id) group_left(account_name) loomwatch_account_info` in PromQL: account_id is unique per provider, not globally, so joining on it alone aborts the query once two providers report the same id.",
 			[]string{"provider", "account_id", "account_name"},
 		),
 	}

@@ -71,7 +71,7 @@ tests:
     asserts:
       - matchRegex:
           path: spec.groups[0].rules[3].expr
-          pattern: "> 300$"
+          pattern: "> 300\\)$"
 
   - it: honours custom thresholds
     set:
@@ -81,10 +81,10 @@ tests:
     asserts:
       - matchRegex:
           path: spec.groups[0].rules[0].expr
-          pattern: "> 70$"
+          pattern: "> 70\\)$"
       - matchRegex:
           path: spec.groups[0].rules[1].expr
-          pattern: "> 90$"
+          pattern: "> 90\\)$"
 
   - it: lets individual rules be switched off
     set:
@@ -94,6 +94,93 @@ tests:
       - equal:
           path: spec.groups[0].rules[0].alert
           value: LoomwatchQuotaCritical
+
+  # The team join. Its absence is not cosmetic: loomwatch:account_team does not
+  # exist when no team is configured, and multiplying by a series that does not
+  # exist returns nothing - so an unconditional join would silently stop every
+  # rule here from ever firing. These two cases are the guard against that.
+  - it: leaves the alert expressions alone when no team is configured
+    set:
+      metrics.prometheusRule.enabled: true
+    asserts:
+      - notMatchRegex:
+          path: spec.groups[0].rules[0].expr
+          pattern: group_left
+      - notMatchRegex:
+          path: spec.groups[0].rules[4].expr
+          pattern: group_left
+
+  - it: joins the owning team onto every quota alert once teams are configured
+    set:
+      metrics.prometheusRule.enabled: true
+      metrics.prometheusRule.teams:
+        - provider: zai
+          accountId: "1"
+          team: platform
+    asserts:
+      - matchRegex:
+          path: spec.groups[1].rules[0].expr
+          pattern: '\* on \(provider, account_id\) group_left\(team\) loomwatch:account_team$'
+      - matchRegex:
+          path: spec.groups[1].rules[1].expr
+          pattern: 'group_left\(team\) loomwatch:account_team$'
+      - matchRegex:
+          path: spec.groups[1].rules[2].expr
+          pattern: 'group_left\(team\) loomwatch:account_team$'
+      - matchRegex:
+          path: spec.groups[1].rules[3].expr
+          pattern: 'group_left\(team\) loomwatch:account_team$'
+      - matchRegex:
+          path: spec.groups[1].rules[4].expr
+          pattern: 'group_left\(team\) loomwatch:account_team$'
+
+  # The join key needs account_id, and grouping by provider alone also hides one
+  # expired key behind its healthy siblings.
+  - it: groups the collector alerts by account, not only by provider
+    set:
+      metrics.prometheusRule.enabled: true
+    asserts:
+      - matchRegex:
+          path: spec.groups[0].rules[3].expr
+          pattern: 'max by \(provider, account_id\)'
+      - matchRegex:
+          path: spec.groups[0].rules[4].expr
+          pattern: 'min by \(provider, account_id\)'
+
+  # A group rendered with `rules: null` is accepted by the CRD and loaded by
+  # Prometheus without complaint, so nothing downstream reports it. It just sits
+  # in the cluster looking like coverage.
+  - it: omits the quota group entirely when every rule in it is switched off
+    set:
+      metrics.prometheusRule.enabled: true
+      metrics.prometheusRule.defaultRules.quotaHigh: false
+      metrics.prometheusRule.defaultRules.quotaCritical: false
+      metrics.prometheusRule.defaultRules.burnRate: false
+      metrics.prometheusRule.defaultRules.collectorNotPolling: false
+      metrics.prometheusRule.defaultRules.collectorStale: false
+      metrics.prometheusRule.teams:
+        - provider: zai
+          accountId: "1"
+          team: platform
+    asserts:
+      - lengthEqual:
+          path: spec.groups
+          count: 1
+      - equal:
+          path: spec.groups[0].name
+          value: loomwatch.teams
+
+  - it: renders nothing at all when there is neither a team nor a rule
+    set:
+      metrics.prometheusRule.enabled: true
+      metrics.prometheusRule.defaultRules.quotaHigh: false
+      metrics.prometheusRule.defaultRules.quotaCritical: false
+      metrics.prometheusRule.defaultRules.burnRate: false
+      metrics.prometheusRule.defaultRules.collectorNotPolling: false
+      metrics.prometheusRule.defaultRules.collectorStale: false
+    asserts:
+      - hasDocuments:
+          count: 0
 
   # Ownership mapping. The default is off, and off must mean the rendered
   # output is exactly what it was before this feature existed - the quota group

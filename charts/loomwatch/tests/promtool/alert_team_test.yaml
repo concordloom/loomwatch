@@ -1,0 +1,66 @@
+# The team label on the alerts themselves, checked against a real PromQL engine.
+#
+# account_team_test.yaml proves the mapping is correct. This file proves the
+# mapping reaches the place it exists for: an alert that arrives without an
+# owner is the problem the whole feature is meant to remove, and a rendered
+# `group_left(team)` in the template text is not evidence that it does.
+#
+# The collector alerts are grouped by account here, not only by provider. One
+# key of a provider can expire while its other keys keep polling; grouped by
+# provider alone the healthy accounts hold the aggregate down and the dead one
+# never surfaces.
+rule_files:
+  - rules.yaml
+evaluation_interval: 1m
+tests:
+  - interval: 1m
+    input_series:
+      # zai/1 is mapped to platform. Quota over the warning threshold, collector
+      # healthy: the quota alert should fire and the collector alert should not.
+      - series: 'loomwatch_agent_healthy{provider="zai",account_id="1"}'
+        values: "1x30"
+      - series: 'loomwatch_quota_utilization_percent{provider="zai",quota_type="tokens",account_id="1"}'
+        values: "92x30"
+      # anthropic/default is mapped to research. Quota well below the threshold,
+      # collector dead: the opposite pair, so neither alert can pass by matching
+      # the wrong account.
+      - series: 'loomwatch_agent_healthy{provider="anthropic",account_id="default"}'
+        values: "0x30"
+      - series: 'loomwatch_quota_utilization_percent{provider="anthropic",quota_type="tokens",account_id="default"}'
+        values: "40x30"
+    alert_rule_test:
+      - alertname: LoomwatchQuotaHigh
+        eval_time: 25m
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              subsystem: llm-quota
+              provider: zai
+              quota_type: tokens
+              account_id: "1"
+              team: platform
+            exp_annotations:
+              runbook_url: https://github.com/concordloom/loomwatch/blob/main/docs/runbooks/README.md#loomwatchquotahigh
+              summary: Quota tokens of zai (account 1) is over 80% used
+              description: There may not be enough left before the window resets. Check what is consuming it and consider pausing background workloads.
+
+      - alertname: LoomwatchCollectorStale
+        eval_time: 25m
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              subsystem: llm-quota
+              provider: anthropic
+              account_id: default
+              team: research
+            exp_annotations:
+              runbook_url: https://github.com/concordloom/loomwatch/blob/main/docs/runbooks/README.md#loomwatchcollectorstale
+              summary: Quota collector is not receiving data from anthropic (account default)
+              description: Remaining quota stopped updating, which means every other quota rule here is blind and its silence no longer means anything. The usual cause is an expired provider key or an unreachable API.
+
+      # The account whose quota is fine must not appear, and the account whose
+      # collector is fine must not appear. Stated as empty expectations so the
+      # two assertions above cannot pass by firing for everything.
+      - alertname: LoomwatchQuotaCritical
+        eval_time: 25m
+        exp_alerts: []

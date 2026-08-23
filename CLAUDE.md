@@ -131,9 +131,13 @@ tags in the `v*` namespace, and dispatches
 `.github/workflows/release.yml`, which is upstream's workflow, has no fork
 guard, and would publish upstream's code under this fork's name.
 
-1. Bump the version in both places, which must agree:
+1. Bump the version in all three places, which must agree:
    - `VERSION` (the single source of truth, e.g. `1.7.1`)
    - `charts/loomwatch/Chart.yaml`: `version` and `appVersion`
+   - `charts/loomwatch/Chart.yaml`: the tag inside the
+     `artifacthub.io/images` annotation. It is easy to miss because it sits
+     above `appVersion` in the file and repeats it in a different shape;
+     `.github/workflows/fork-chart.yml` fails the build when the two disagree.
 2. Land it on `main` through a pull request - `main` is protected.
 3. Tag the merge commit and push the tag:
    `git tag loom-v1.7.1 && git push origin loom-v1.7.1`

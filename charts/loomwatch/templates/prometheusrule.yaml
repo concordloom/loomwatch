@@ -3,6 +3,30 @@
 {{- $by := "max by (provider, quota_type, account_id)" }}
 {{- $rb := .Values.metrics.prometheusRule.runbookUrlBase }}
 {{- $remaining := printf "%s (loomwatch_quota_reset_timestamp_seconds{%s} - time())" $by $sel }}
+{{/*
+  The team join, or nothing at all when no team is configured.
+
+  It has to be conditional. loomwatch:account_team only exists when
+  metrics.prometheusRule.teams is set, and multiplying by a series that does not
+  exist yields an empty vector - so an unconditional join would silently stop
+  every alert here from ever firing, for everyone who does not use teams. Empty
+  is the one failure a threshold rule cannot report.
+
+  group_left is safe in the other direction too: loomwatch:account_team covers
+  every account that reports, "unassigned" included, so the join cannot drop a
+  row that the alert would otherwise have fired on.
+*/}}
+{{- $team := "" }}
+{{- if .Values.metrics.prometheusRule.teams }}
+{{- $team = " * on (provider, account_id) group_left(team) loomwatch:account_team" }}
+{{- end }}
+{{/*
+  Nothing is rendered when every rule is switched off. A PrometheusRule whose
+  only group carries `rules: null` is accepted by the CRD and loaded by
+  Prometheus, so it fails at neither - it just sits there looking like coverage.
+*/}}
+{{- $quotaRules := or .Values.metrics.prometheusRule.defaultRules.quotaHigh .Values.metrics.prometheusRule.defaultRules.quotaCritical .Values.metrics.prometheusRule.defaultRules.burnRate .Values.metrics.prometheusRule.defaultRules.collectorNotPolling .Values.metrics.prometheusRule.defaultRules.collectorStale .Values.metrics.prometheusRule.extraRules }}
+{{- if or .Values.metrics.prometheusRule.teams $quotaRules }}
 apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
 metadata:
@@ -88,6 +112,7 @@ spec:
               or record deliberately that it is shared.
         {{- end }}
     {{- end }}
+    {{- if $quotaRules }}
     - name: loomwatch.quotas
       rules:
         {{- if .Values.metrics.prometheusRule.defaultRules.quotaHigh }}
@@ -96,7 +121,7 @@ spec:
         # what counts as "a lot of tokens". 100 is the quota itself.
         - alert: LoomwatchQuotaHigh
           expr: >-
-            {{ $by }} (loomwatch_quota_utilization_percent{ {{- $sel -}} }) > {{ .Values.metrics.prometheusRule.highThreshold }}
+            ({{ $by }} (loomwatch_quota_utilization_percent{ {{- $sel -}} }) > {{ .Values.metrics.prometheusRule.highThreshold }}){{ $team }}
           for: 10m
           labels:
             severity: warning
@@ -112,7 +137,7 @@ spec:
         {{- if .Values.metrics.prometheusRule.defaultRules.quotaCritical }}
         - alert: LoomwatchQuotaCritical
           expr: >-
-            {{ $by }} (loomwatch_quota_utilization_percent{ {{- $sel -}} }) > {{ .Values.metrics.prometheusRule.criticalThreshold }}
+            ({{ $by }} (loomwatch_quota_utilization_percent{ {{- $sel -}} }) > {{ .Values.metrics.prometheusRule.criticalThreshold }}){{ $team }}
           for: 5m
           labels:
             severity: critical
@@ -138,6 +163,7 @@ spec:
           expr: >-
             (
             (
+            (
             {{ $by }} (loomwatch_quota_utilization_percent{ {{- $sel -}} })
             + {{ $by }} (deriv(loomwatch_quota_utilization_percent{ {{- $sel -}} }[{{ .Values.metrics.prometheusRule.burn.trendWindow }}]))
             * {{ $remaining }}
@@ -145,6 +171,7 @@ spec:
             )
             and
             {{ $remaining }} < {{ .Values.metrics.prometheusRule.burn.maxHorizonSeconds }}
+            ){{ $team }}
           for: 30m
           labels:
             severity: warning
@@ -161,16 +188,25 @@ spec:
         {{- if .Values.metrics.prometheusRule.defaultRules.collectorNotPolling }}
         # Threshold derived from pollInterval rather than hand-picked, so it
         # moves when the interval does instead of silently going stale.
+        #
+        # Grouped by account and not only by provider. One key of a provider can
+        # expire while its other keys keep polling, and `max by (provider)` hides
+        # exactly that: the healthy accounts hold the maximum down and the dead
+        # one is invisible. It is also what makes the account addressable - the
+        # team join below needs account_id, and an alert nobody owns is the
+        # problem this is here to solve.
         - alert: LoomwatchCollectorNotPolling
           expr: >-
-            max by (provider) (loomwatch_agent_last_cycle_age_seconds{provider=~"{{ .Values.metrics.prometheusRule.providers }}"}) > {{ mul .Values.pollInterval 5 }}
+            (max by (provider, account_id) (loomwatch_agent_last_cycle_age_seconds{provider=~"{{ .Values.metrics.prometheusRule.providers }}"}) > {{ mul .Values.pollInterval 5 }}){{ $team }}
           for: 10m
           labels:
             severity: warning
             subsystem: llm-quota
           annotations:
             runbook_url: {{ printf "%s#%s" $rb "loomwatchcollectornotpolling" }}
-            summary: Quota collector stopped polling {{ "{{ $labels.provider }}" }}
+            summary: >-
+              Quota collector stopped polling {{ "{{ $labels.provider }}" }}
+              (account {{ "{{ $labels.account_id }}" }})
             description: >-
               Distinct from LoomwatchCollectorStale: this catches the collector
               itself stalling, where its own health flag stays at 1 and reports
@@ -183,14 +219,16 @@ spec:
         # false alarms would become their source.
         - alert: LoomwatchCollectorStale
           expr: >-
-            min by (provider) (loomwatch_agent_healthy{provider=~"{{ .Values.metrics.prometheusRule.providers }}"}) < 1
+            (min by (provider, account_id) (loomwatch_agent_healthy{provider=~"{{ .Values.metrics.prometheusRule.providers }}"}) < 1){{ $team }}
           for: 15m
           labels:
             severity: warning
             subsystem: llm-quota
           annotations:
             runbook_url: {{ printf "%s#%s" $rb "loomwatchcollectorstale" }}
-            summary: Quota collector is not receiving data from {{ "{{ $labels.provider }}" }}
+            summary: >-
+              Quota collector is not receiving data from
+              {{ "{{ $labels.provider }}" }} (account {{ "{{ $labels.account_id }}" }})
             description: >-
               Remaining quota stopped updating, which means every other quota
               rule here is blind and its silence no longer means anything. The
@@ -199,4 +237,6 @@ spec:
         {{- if .Values.metrics.prometheusRule.extraRules }}
         {{- include "loomwatch.tplvalues.render" (dict "value" .Values.metrics.prometheusRule.extraRules "context" $) | nindent 8 }}
         {{- end }}
+    {{- end }}
+{{- end }}
 {{- end }}

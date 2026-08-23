@@ -86,6 +86,24 @@ jobs:
             exit 1
           fi
 
+      # Artifact Hub security-scans whatever artifacthub.io/images names, and
+      # nothing renders that annotation, so it drifts silently. It had been
+      # pinned at 1.0.4 for eight minor releases before anyone looked.
+      - name: Artifact Hub image annotation matches app version
+        run: |
+          a="$(awk '/^appVersion:/ {print $2; exit}' charts/loomwatch/Chart.yaml)"
+          ann="$(python3 -c "
+          import yaml
+          c = yaml.safe_load(open('charts/loomwatch/Chart.yaml'))
+          imgs = yaml.safe_load(c['annotations']['artifacthub.io/images'])
+          print(imgs[0]['image'])
+          ")"
+          if [ "$ann" != "ghcr.io/concordloom/loomwatch:$a" ]; then
+            echo "artifacthub.io/images names '$ann' but appVersion is '$a'"
+            exit 1
+          fi
+          echo "artifacthub.io/images: $ann"
+
       - name: Lint
         run: helm lint charts/loomwatch
 

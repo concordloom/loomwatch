@@ -262,3 +262,18 @@ tests:
       - equal:
           path: spec.groups[0].rules[0].annotations.runbook_url
           value: https://example.invalid/rb.md#loomwatchquotahigh
+
+  # The collector-liveness rule and the collector's own health flag have to use
+  # the same number of poll intervals. They did not: the flag fell after two
+  # while this rule fires after five, so the health series went red three
+  # intervals before the alert had an opinion and usually recovered before
+  # anyone could look. staleIntervals in internal/metrics/metrics.go is the
+  # other half of this pair.
+  - it: goes stale at the same age the collector's own health flag does
+    set:
+      metrics.prometheusRule.enabled: true
+      pollInterval: 120
+    asserts:
+      - matchRegex:
+          path: spec.groups[0].rules[3].expr
+          pattern: '> 600'

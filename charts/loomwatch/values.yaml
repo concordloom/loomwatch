@@ -832,7 +832,7 @@ metrics:
 ## Grafana dashboard
 ##
 dashboard:
-  ## @param dashboard.enabled Ship the quota dashboard as a ConfigMap for the Grafana sidecar to import
+  ## @param dashboard.enabled Ship the quota dashboard as a ConfigMap for Grafana to import, through a sidecar or through grafana-operator
   ##
   enabled: false
   ## @param dashboard.namespace Namespace in which the dashboard ConfigMap will be created

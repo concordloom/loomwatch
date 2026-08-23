@@ -306,7 +306,7 @@ kubectl delete pvc my-release-loomwatch-data
 | `metrics.prometheusRule.defaultRules.collectorStale` | Enable the LoomwatchCollectorStale rule | `true` |
 | `metrics.prometheusRule.defaultRules.accountWithoutTeam` | Enable the LoomwatchAccountWithoutTeam rule (only rendered when teams are configured) | `true` |
 | `metrics.prometheusRule.extraRules` | Additional rules appended to the generated group | `[]` |
-| `dashboard.enabled` | Ship the quota dashboard as a ConfigMap for the Grafana sidecar to import | `false` |
+| `dashboard.enabled` | Ship the quota dashboard as a ConfigMap for Grafana to import, through a sidecar or through grafana-operator | `false` |
 | `dashboard.namespace` | Namespace in which the dashboard ConfigMap will be created | `""` |
 | `dashboard.labels` | Labels the Grafana dashboard sidecar selects on | `{'grafana_dashboard': '1'}` |
 | `dashboard.annotations` | Additional annotations for the dashboard ConfigMap | `{}` |
@@ -330,6 +330,45 @@ Two properties are worth stating because alerts depend on them:
 - **`quota_type` is the window, and its length is not implied by its name.** A
   provider may reset `general` every five hours and `tokens` weekly. Group by
   the reset timestamp, never by the name.
+
+### Getting the dashboard into Grafana
+
+`dashboard.enabled=true` renders the quota dashboard into a ConfigMap named
+`<fullname>-dashboard`, under the key `loomwatch.json`. How Grafana picks it up
+depends on what is installed next to it, and the chart assumes neither.
+
+**A dashboard sidecar** watches ConfigMaps carrying a label - `grafana_dashboard:
+"1"` by default, which is what `dashboard.labels` already sets. Nothing further
+is needed.
+
+**grafana-operator** does not read labelled ConfigMaps at all. It imports what a
+`GrafanaDashboard` resource points at, so keep the ConfigMap and add the resource
+through `extraDeploy`. The dashboard JSON then stays inside the chart instead of
+being copied into your values, where it would drift the first time the chart is
+upgraded:
+
+```yaml
+dashboard:
+  enabled: true
+
+extraDeploy:
+  - apiVersion: grafana.integreatly.org/v1beta1
+    kind: GrafanaDashboard
+    metadata:
+      name: loomwatch-quotas
+    spec:
+      instanceSelector:
+        matchLabels:
+          dashboards: grafana
+      configMapRef:
+        name: loomwatch-dashboard
+        key: loomwatch.json
+```
+
+`configMapRef.name` is the release's fullname plus `-dashboard`, so it follows
+`fullnameOverride` if you set one. The operator re-reads the ConfigMap on its
+resync period, ten minutes by default, so a chart upgrade shows up in Grafana
+without touching the resource.
 
 ### Alerting rules
 

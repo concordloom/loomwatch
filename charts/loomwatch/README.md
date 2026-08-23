@@ -387,6 +387,26 @@ It only predicts when the window resets within
 across a week is noise amplified sevenfold — one batch job projects a breach that
 will never happen. Beyond the gate the rule stays silent rather than guessing.
 
+### Who an alert belongs to
+
+With `metrics.prometheusRule.teams` configured, every default alert carries a
+`team` label taken from `loomwatch:account_team`, so Alertmanager can route a
+quota page to the team that pays for the plan. Accounts nobody listed are
+published as `unassigned` rather than dropped, and `LoomwatchAccountWithoutTeam`
+says so.
+
+Leave `teams` empty and the alert expressions are byte for byte what they were:
+the join is rendered only when the recording rule it refers to exists. Joining
+against a series that was never created returns an empty vector, which would
+turn every rule here into one that never fires and never says why.
+
+The two collector rules are grouped by `(provider, account_id)`, not by provider
+alone. That is what makes the account addressable, and it also fixes a blind
+spot that predates teams: with one aggregate per provider, a single expired key
+is hidden by its healthy siblings - `max` and `min` across accounts report the
+healthy ones. Expect one alert per affected account rather than one per
+provider.
+
 ### Excluding quotas from alerts
 
 `metrics.prometheusRule.ignoredQuotaTypes` defaults to `.*video`, and the leading

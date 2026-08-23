@@ -739,6 +739,13 @@ metrics:
     ## forgotten account vanishing from a per-team query is exactly the silent
     ## failure this avoids.
     ##
+    ## Configuring this also puts a `team` label on every default alert, so a
+    ## page can be routed to whoever owns the plan rather than to a shared
+    ## channel. Leave it empty and the alerts keep their previous expressions
+    ## exactly: the join is conditional, because joining against a recording
+    ## rule that was never created returns an empty vector, and an alert that
+    ## silently stops firing is worse than one with no owner.
+    ##
     ## Join on BOTH labels - `on (provider, account_id)`. account_id is unique
     ## per provider, not globally: several providers report "default", so
     ## joining on account_id alone aborts the entire query with a many-to-one

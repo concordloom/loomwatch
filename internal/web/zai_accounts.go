@@ -115,6 +115,38 @@ func (h *Handler) zaiAccountCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// A POST that lands on a name already in use is not a create, and it must
+	// not be allowed to behave like one. CreateOrRestoreProviderAccount returns
+	// the existing row rather than failing, and the metadata write below replaces
+	// the blob wholesale - so a POST carrying a base_url and no api_key used to
+	// destroy a live account's credential and answer 201, telling the caller it
+	// had created something. Nothing reported the loss, and unlike the merge
+	// defect this needed no damaged metadata to trigger.
+	//
+	// Merging instead of refusing was the alternative, and it is worse: it makes
+	// POST a second PUT with different semantics, and leaves the caller no way to
+	// say "create this only if it does not exist". 409 is also what this codebase
+	// already answers in exactly this situation - see "profile already exists"
+	// above. Restoring a deleted account has its own route, PUT with
+	// {"restore": true}, which is what the dashboard uses, so refusing here takes
+	// no capability away.
+	existing, err := h.providerAccountByName("zai", req.Name)
+	if err != nil {
+		h.logger.Error("failed to look up Z.ai account", "error", err)
+		respondError(w, http.StatusInternalServerError, "failed to create account")
+		return
+	}
+	if existing != nil {
+		if existing.DeletedAt != nil {
+			respondError(w, http.StatusConflict,
+				"account "+req.Name+" already exists and is deleted; restore it with PUT /api/zai/accounts?id="+strconv.FormatInt(existing.ID, 10)+" and a body of {\"restore\":true}")
+			return
+		}
+		respondError(w, http.StatusConflict,
+			"account "+req.Name+" already exists; update it with PUT /api/zai/accounts?id="+strconv.FormatInt(existing.ID, 10))
+		return
+	}
+
 	acc, err := h.store.CreateOrRestoreProviderAccount("zai", req.Name)
 	if err != nil {
 		h.logger.Error("failed to create Z.ai account", "error", err)

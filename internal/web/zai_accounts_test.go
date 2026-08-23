@@ -542,3 +542,101 @@ func TestZaiAccountUpdatePreservesUnknownMetadataValues(t *testing.T) {
 			meta["poll_seconds"], after.Metadata)
 	}
 }
+
+// The create path had the same harm as the merge and needed none of its
+// preconditions. CreateOrRestoreProviderAccount returns the existing row on a
+// name collision instead of failing, and the handler then wrote metadata over
+// it wholesale - so a POST naming a live account, carrying a base_url and no
+// api_key, destroyed a working credential and answered 201.
+//
+// The metadata assertion is the one that matters. A test that only checked the
+// status code would be checking manners rather than whether the key survived.
+func TestZaiAccountCreateRefusesAnExistingNameAndKeepsItsMetadata(t *testing.T) {
+	h, s := newZaiTestHandler(t)
+
+	acc, err := s.CreateOrRestoreProviderAccount("zai", "live-account")
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	const stored = `{"api_key":"zai-secret-key","base_url":"https://old"}`
+	if err := s.UpdateProviderAccountMetadata(acc.ID, stored); err != nil {
+		t.Fatalf("seed metadata: %v", err)
+	}
+
+	req := httptest.NewRequest("POST", "/api/zai/accounts",
+		strings.NewReader(`{"name":"live-account","base_url":"https://new"}`))
+	w := httptest.NewRecorder()
+	h.ZaiAccounts(w, req)
+
+	after, err := s.GetProviderAccountByID(acc.ID)
+	if err != nil || after == nil {
+		t.Fatalf("reload account: %v", err)
+	}
+	if after.Metadata != stored {
+		t.Fatalf("metadata changed on a refused create:\n  was %q\n  now %q", stored, after.Metadata)
+	}
+	if w.Code != http.StatusConflict {
+		t.Fatalf("status %d, want 409 - a POST onto a name in use is not a create", w.Code)
+	}
+}
+
+// The soft-deleted half of the same rule, and the reason refusing costs no
+// capability: restoring goes through PUT {"restore":true}, so the create path
+// never needed to do it.
+func TestZaiAccountCreateRefusesADeletedNameAndKeepsItsMetadata(t *testing.T) {
+	h, s := newZaiTestHandler(t)
+
+	acc, err := s.CreateOrRestoreProviderAccount("zai", "gone")
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	const stored = `{"api_key":"zai-secret-key"}`
+	if err := s.UpdateProviderAccountMetadata(acc.ID, stored); err != nil {
+		t.Fatalf("seed metadata: %v", err)
+	}
+	if err := s.MarkProviderAccountDeletedByID(acc.ID); err != nil {
+		t.Fatalf("soft-delete: %v", err)
+	}
+
+	req := httptest.NewRequest("POST", "/api/zai/accounts",
+		strings.NewReader(`{"name":"gone","base_url":"https://new"}`))
+	w := httptest.NewRecorder()
+	h.ZaiAccounts(w, req)
+
+	after, err := s.GetProviderAccountByID(acc.ID)
+	if err != nil || after == nil {
+		t.Fatalf("reload account: %v", err)
+	}
+	if after.Metadata != stored {
+		t.Fatalf("metadata changed on a refused create:\n  was %q\n  now %q", stored, after.Metadata)
+	}
+	if after.DeletedAt == nil {
+		t.Fatalf("a refused create undeleted the account")
+	}
+	if w.Code != http.StatusConflict {
+		t.Fatalf("status %d, want 409", w.Code)
+	}
+}
+
+// The control: refusing a taken name must not have broken creating a free one.
+func TestZaiAccountCreateStillCreatesAFreeName(t *testing.T) {
+	h, s := newZaiTestHandler(t)
+
+	req := httptest.NewRequest("POST", "/api/zai/accounts",
+		strings.NewReader(`{"name":"brand-new","api_key":"zai-secret-key"}`))
+	w := httptest.NewRecorder()
+	h.ZaiAccounts(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("status %d, want 201: %s", w.Code, w.Body.String())
+	}
+
+	acc, err := h.providerAccountByName("zai", "brand-new")
+	if err != nil || acc == nil {
+		t.Fatalf("account was not created: %v", err)
+	}
+	if !strings.Contains(acc.Metadata, "zai-secret-key") {
+		t.Fatalf("created account did not keep its key: %q", acc.Metadata)
+	}
+	_ = s
+}

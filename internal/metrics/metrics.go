@@ -303,6 +303,7 @@ func (m *Metrics) scrapeAnthropic(s *store.Store, staleThreshold time.Duration) 
 		return
 	}
 
+	m.recordDefaultAccountInfo(method)
 	m.recordLastCycleAge(method, defaultAccountID, snap.CapturedAt, staleThreshold)
 
 	for _, v := range snap.Quotas {
@@ -321,7 +322,7 @@ func (m *Metrics) scrapeAnthropic(s *store.Store, staleThreshold time.Duration) 
 func (m *Metrics) scrapeCodex(s *store.Store, staleThreshold time.Duration) {
 	method := "codex"
 
-	accounts, err := s.QueryProviderAccounts(method)
+	accounts, err := s.QueryActiveProviderAccounts(method)
 	if err != nil {
 		m.scrapeErrorsTotal.WithLabelValues(method, "query_failed").Inc()
 		return
@@ -381,6 +382,7 @@ func (m *Metrics) scrapeCopilot(s *store.Store, staleThreshold time.Duration) {
 		return
 	}
 
+	m.recordDefaultAccountInfo(method)
 	m.recordLastCycleAge(method, defaultAccountID, snap.CapturedAt, staleThreshold)
 
 	for _, v := range snap.Quotas {
@@ -406,7 +408,7 @@ func (m *Metrics) scrapeCopilot(s *store.Store, staleThreshold time.Duration) {
 func (m *Metrics) scrapeZai(s *store.Store, staleThreshold time.Duration) {
 	method := "zai"
 
-	accounts, err := s.QueryProviderAccounts(method)
+	accounts, err := s.QueryActiveProviderAccounts(method)
 	if err != nil {
 		m.scrapeErrorsTotal.WithLabelValues(method, "query_failed").Inc()
 		return
@@ -484,7 +486,7 @@ func zaiQuotaDeclared(limit int, usage, currentValue, remaining float64, percent
 func (m *Metrics) scrapeMiniMax(s *store.Store, staleThreshold time.Duration) {
 	method := "minimax"
 
-	accounts, err := s.QueryProviderAccounts(method)
+	accounts, err := s.QueryActiveProviderAccounts(method)
 	if err != nil {
 		m.scrapeErrorsTotal.WithLabelValues(method, "query_failed").Inc()
 		return
@@ -561,6 +563,7 @@ func (m *Metrics) scrapeAntigravity(s *store.Store, staleThreshold time.Duration
 		return
 	}
 
+	m.recordDefaultAccountInfo(method)
 	m.recordLastCycleAge(method, defaultAccountID, snap.CapturedAt, staleThreshold)
 
 	for _, v := range snap.Models {
@@ -596,6 +599,7 @@ func (m *Metrics) scrapeGemini(s *store.Store, staleThreshold time.Duration) {
 		return
 	}
 
+	m.recordDefaultAccountInfo(method)
 	m.recordLastCycleAge(method, defaultAccountID, snap.CapturedAt, staleThreshold)
 
 	for _, v := range snap.Quotas {
@@ -623,6 +627,7 @@ func (m *Metrics) scrapeOpenRouter(s *store.Store, staleThreshold time.Duration)
 		return
 	}
 
+	m.recordDefaultAccountInfo(method)
 	m.recordLastCycleAge(method, defaultAccountID, snap.CapturedAt, staleThreshold)
 
 	labels := prometheus.Labels{"provider": method, "quota_type": "credits", "account_id": defaultAccountID}
@@ -651,6 +656,7 @@ func (m *Metrics) scrapeMoonshot(s *store.Store, staleThreshold time.Duration) {
 		return
 	}
 
+	m.recordDefaultAccountInfo(method)
 	m.recordLastCycleAge(method, defaultAccountID, snap.CapturedAt, staleThreshold)
 
 	m.creditsBalance.With(prometheus.Labels{
@@ -682,6 +688,7 @@ func (m *Metrics) scrapeDeepSeek(s *store.Store, staleThreshold time.Duration) {
 		return
 	}
 
+	m.recordDefaultAccountInfo(method)
 	m.recordLastCycleAge(method, defaultAccountID, snap.CapturedAt, staleThreshold)
 
 	unitPrefix := "cny"
@@ -743,6 +750,28 @@ func (m *Metrics) RecordScrapeError(provider, errorType string) {
 		return
 	}
 	m.scrapeErrorsTotal.WithLabelValues(provider, errorType).Inc()
+}
+
+// recordDefaultAccountInfo publishes the join-metric entry for a provider that
+// keeps no account rows.
+//
+// Every such provider reports under account_id "default", and account_info used
+// to exist only for the three providers that do keep rows. The join this
+// repository documents -
+//
+//	quota_utilization * on (provider, account_id) group_left(account_name) account_info
+//
+// drops left-hand series that find no match, and silently: on a deployment
+// running anything but those three, the documented query answered for a subset
+// and said nothing about the rest.
+//
+// This is deliberately not folded into recordLastCycleAge, which every scrape
+// calls. api_integrations calls it too, and api_integrations is the collector's
+// own ingestion path rather than a subscription anybody owns - giving it an
+// account_info entry would make it look like an account to everything that
+// reads one.
+func (m *Metrics) recordDefaultAccountInfo(provider string) {
+	m.accountInfo.WithLabelValues(provider, defaultAccountID, "default").Set(1)
 }
 
 func (m *Metrics) recordLastCycleAge(provider, accountID string, capturedAt time.Time, staleThreshold time.Duration) {

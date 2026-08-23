@@ -96,10 +96,14 @@ loomwatch_quota_utilization_percent * on(provider, account_id) group_left(accoun
 > Join on **both** labels. `account_id` is unique per provider, not globally:
 > every single-account provider reports `account_id="default"`, so joining on
 > `account_id` alone aborts the whole query with a many-to-one error rather
-> than returning partial data. Note also that `loomwatch_account_info` exists
-> only for providers that keep account rows (codex, zai, minimax); joining
-> against it silently drops every other provider, because an unmatched series
-> is removed rather than reported.
+> than returning partial data.
+>
+> `loomwatch_account_info` covers every provider that reports a quota. It used
+> to exist only for the three that keep account rows, which made this join
+> answer for a subset and say nothing about the rest - an unmatched series is
+> removed, not reported. Providers with no account rows appear with
+> `account_name="default"`. `api_integrations` has no entry: it is the
+> collector's own ingestion path, not a subscription anybody owns.
 
 **Attribute a quota to the team that owns it:**
 ```promql

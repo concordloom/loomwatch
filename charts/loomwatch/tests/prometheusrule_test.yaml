@@ -177,3 +177,64 @@ tests:
       - lengthEqual:
           path: spec.groups[0].rules
           count: 2
+
+  # Regression: an unquoted 1000000 is a YAML number, which Helm renders as
+  # "1e+06". The mapping then names an account that does not exist while the
+  # real one stays unassigned - and the alert fires against an account the
+  # operator did assign. Rejecting it at the schema is the only loud failure
+  # available, since nothing downstream can tell 1e+06 from a real id.
+  - it: refuses an accountId that is not a string
+    set:
+      metrics.prometheusRule.enabled: true
+      metrics.prometheusRule.teams:
+        - provider: minimax
+          accountId: 1000000
+          team: big
+    asserts:
+      - failedTemplate: {}
+
+  # Regression: two entries for one pair publish two series for one match group,
+  # and every consumer join then fails with many-to-one - including for accounts
+  # unrelated to the duplicate. JSON Schema cannot express uniqueness over a
+  # subset of fields, so the template is where this has to be caught.
+  - it: refuses two entries for the same provider and account
+    set:
+      metrics.prometheusRule.enabled: true
+      metrics.prometheusRule.teams:
+        - provider: zai
+          accountId: "1"
+          team: platform
+        - provider: zai
+          accountId: "1"
+          team: research
+    asserts:
+      - failedTemplate:
+          errorPattern: "listed twice"
+
+  # Regression: an exclusion class such as [^$"\\] passes newlines and C0
+  # control characters, which break rendering, and passes zero-width characters,
+  # which produce two teams no dashboard can tell apart.
+  - it: refuses a team name containing a newline
+    set:
+      metrics.prometheusRule.enabled: true
+      metrics.prometheusRule.teams:
+        - provider: zai
+          accountId: "1"
+          team: "plat\nform"
+    asserts:
+      - failedTemplate: {}
+
+  # Regression: api_integrations reports a provider/account_id pair but is the
+  # collector's own ingestion path, not a subscription. Left in the universe it
+  # fires LoomwatchAccountWithoutTeam forever against a complete mapping.
+  - it: keeps providers that are not accounts out of the ownership universe
+    set:
+      metrics.prometheusRule.enabled: true
+      metrics.prometheusRule.teams:
+        - provider: zai
+          accountId: "1"
+          team: platform
+    asserts:
+      - matchRegex:
+          path: spec.groups[0].rules[1].expr
+          pattern: 'loomwatch_agent_healthy\{provider!~"api_integrations"\}'

@@ -125,17 +125,18 @@
               "type": "string",
               "description": "PromQL label matchers are fully anchored, so a bare `video` does NOT exclude `weekly_video`."
             },
+            "nonAccountProviders": { "type": "string", "minLength": 1 },
             "teams": {
               "type": "array",
-              "description": "Maps a provider account to the team that owns it. Values are interpolated into PromQL string literals and into the replacement argument of label_replace, so characters that could escape either one are refused here rather than at evaluation time - where a broken rule fails silently instead of loudly.",
+              "description": "Maps a provider account to the team that owns it. accountId is a string and must be quoted: YAML reads a bare 1000000 as a number, which Helm renders as 1e+06 and which would map a phantom account while leaving the real one unassigned. team is restricted to a positive character class rather than an exclusion list, because an exclusion list passes newlines and control characters that break rendering, and passes zero-width characters that produce two teams nobody can tell apart.",
               "items": {
                 "type": "object",
                 "required": ["provider", "accountId", "team"],
                 "additionalProperties": false,
                 "properties": {
                   "provider": { "type": "string", "pattern": "^[a-z0-9_]+$" },
-                  "accountId": { "type": ["string", "integer"], "pattern": "^[A-Za-z0-9_-]+$" },
-                  "team": { "type": "string", "pattern": "^[^$\"\\\\]+$" }
+                  "accountId": { "type": "string", "pattern": "^[A-Za-z0-9_-]+$" },
+                  "team": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9 ._-]{0,62}$" }
                 }
               }
             },

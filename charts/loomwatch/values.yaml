@@ -719,9 +719,24 @@ metrics:
     ##     accountId: "default"
     ##     team: research
     ##
+    ## Quote accountId. YAML reads a bare 1000000 as a number and Helm renders
+    ## it as 1e+06, which would map an account that does not exist while the
+    ## real one stayed unassigned - so the schema requires a string, and on the
+    ## command line that means --set-string rather than --set.
+    ##
     ## @param metrics.prometheusRule.teams [array] Map provider accounts to the team that owns them
     ##
     teams: []
+    ## Providers that report under a provider/account_id pair without being an
+    ## account anybody can own. api_integrations is the collector's own
+    ## ingestion path, not a subscription, so leaving it in the universe would
+    ## fire LoomwatchAccountWithoutTeam forever against a mapping that is in
+    ## fact complete - the alert would teach its reader to ignore it, which is
+    ## worse than not having it.
+    ##
+    ## @param metrics.prometheusRule.nonAccountProviders Regex of providers excluded from team ownership
+    ##
+    nonAccountProviders: "api_integrations"
     ## @param metrics.prometheusRule.highThreshold Utilisation percentage above which LoomwatchQuotaHigh fires
     ##
     highThreshold: 80

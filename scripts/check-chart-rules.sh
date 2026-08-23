@@ -24,10 +24,10 @@ trap 'rm -rf "$work"' EXIT
 helm template rules-check "$CHART_DIR" \
   --set metrics.prometheusRule.enabled=true \
   --set metrics.prometheusRule.teams[0].provider=zai \
-  --set metrics.prometheusRule.teams[0].accountId=1 \
+  --set-string metrics.prometheusRule.teams[0].accountId=1 \
   --set metrics.prometheusRule.teams[0].team=platform \
   --set metrics.prometheusRule.teams[1].provider=anthropic \
-  --set metrics.prometheusRule.teams[1].accountId=default \
+  --set-string metrics.prometheusRule.teams[1].accountId=default \
   --set metrics.prometheusRule.teams[1].team=research \
   -s templates/prometheusrule.yaml > "$work/rendered.yaml"
 

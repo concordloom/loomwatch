@@ -292,6 +292,7 @@ kubectl delete pvc my-release-loomwatch-data
 | `metrics.prometheusRule.providers` | Regex of providers the default rules observe | `.+` |
 | `metrics.prometheusRule.ignoredQuotaTypes` | Regex of quota types excluded from the default rules | `.*video` |
 | `metrics.prometheusRule.teams` | Map provider accounts to the team that owns them | `[]` |
+| `metrics.prometheusRule.nonAccountProviders` | Regex of providers excluded from team ownership | `api_integrations` |
 | `metrics.prometheusRule.highThreshold` | Utilisation percentage above which LoomwatchQuotaHigh fires | `80` |
 | `metrics.prometheusRule.criticalThreshold` | Utilisation percentage above which LoomwatchQuotaCritical fires | `95` |
 | `metrics.prometheusRule.burn.trendWindow` | Range over which the burn slope is measured | `24h` |

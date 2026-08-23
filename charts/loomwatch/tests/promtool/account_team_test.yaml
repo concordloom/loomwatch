@@ -25,6 +25,12 @@ tests:
       # NOT mapped, and also reporting "default" - the collision case.
       - series: 'loomwatch_agent_healthy{provider="gemini",account_id="default"}'
         values: "1x5"
+      # Not an account at all: the collector's own ingestion path. It reports a
+      # provider/account_id pair like everything else, so without an explicit
+      # exclusion it would be published as unassigned and alert forever against
+      # a mapping that is complete.
+      - series: 'loomwatch_agent_healthy{provider="api_integrations",account_id="default"}'
+        values: "1x5"
       - series: 'loomwatch_quota_utilization_percent{provider="gemini",quota_type="tokens",account_id="default"}'
         values: "77x5"
     promql_expr_test:
@@ -55,9 +61,16 @@ tests:
           - labels: '{account_id="1",provider="zai",quota_type="tokens",team="platform"}'
             value: 92
 
-      # The inverse control that LoomwatchAccountWithoutTeam fires on.
+      # The inverse control that LoomwatchAccountWithoutTeam fires on. Exactly
+      # one sample: gemini is genuinely unowned, api_integrations is not an
+      # account and must not appear here at all.
       - expr: 'loomwatch:account_team{team="unassigned"}'
         eval_time: 3m
         exp_samples:
           - labels: 'loomwatch:account_team{account_id="default",provider="gemini",team="unassigned"}'
             value: 1
+
+      # Stated separately so the assertion above cannot pass by accident.
+      - expr: 'loomwatch:account_team{provider="api_integrations"}'
+        eval_time: 3m
+        exp_samples: []

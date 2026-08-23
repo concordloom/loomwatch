@@ -30,6 +30,14 @@ spec:
     # column to live on. See values.yaml for the full reasoning.
     - name: loomwatch.teams
       rules:
+        {{- $seen := dict }}
+        {{- range $t := .Values.metrics.prometheusRule.teams }}
+        {{- $pair := printf "%s/%s" $t.provider $t.accountId }}
+        {{- if hasKey $seen $pair }}
+        {{- fail (printf "metrics.prometheusRule.teams: %s is listed twice. A provider/accountId pair owns exactly one team; two of them publish two series for one match group, and every consumer join then fails with a many-to-one error - including for accounts that have nothing to do with this one." $pair) }}
+        {{- end }}
+        {{- $_ := set $seen $pair true }}
+        {{- end }}
         # One rule, not one per entry: two rules recording the same series name
         # are a duplicate as far as promtool's linter is concerned, since it
         # cannot see that label_replace gives them different labels.
@@ -45,14 +53,17 @@ spec:
         # silently disappearing from every per-team query.
         #
         # loomwatch_agent_healthy is the universe on purpose: it carries exactly
-        # {provider, account_id} and is emitted for every scraped account,
-        # including balance-based providers that have no utilisation series.
+        # {provider, account_id} and every account that reports a quota also
+        # reports it, including balance-based providers with no utilisation
+        # series. It is the universe of accounts that REPORT, not of accounts
+        # that exist: a provider with no metrics export at all, or an account
+        # whose very first poll never succeeded, is absent from both.
         - record: loomwatch:account_team
           expr: >-
             loomwatch:account_team_map
             or
             label_replace(
-              loomwatch_agent_healthy * 0 + 1
+              loomwatch_agent_healthy{provider!~"{{ .Values.metrics.prometheusRule.nonAccountProviders }}"} * 0 + 1
               unless on (provider, account_id) loomwatch:account_team_map,
               "team", "unassigned", "", ""
             )

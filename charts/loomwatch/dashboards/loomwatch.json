@@ -55,7 +55,11 @@
           "type": "prometheus",
           "uid": "${datasource}"
         },
-        "query": "label_values(loomwatch_agent_healthy{provider=~\"$provider\"}, account_id)",
+        "query": {
+          "qryType": 5,
+          "query": "query_result(label_join(loomwatch_agent_healthy{provider=~\"$provider\"}, \"account\", \" / \", \"provider\", \"account_id\"))",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
         "refresh": 1,
         "includeAll": true,
         "multi": true,
@@ -69,7 +73,8 @@
           "value": [
             "$__all"
           ]
-        }
+        },
+        "regex": "/account=\"(?<text>[^\"]+)\",account_id=\"(?<value>[^\"]+)\"/"
       },
       {
         "name": "quota_type",
@@ -382,7 +387,7 @@
     {
       "id": 10,
       "type": "row",
-      "title": "Account $account",
+      "title": "$account",
       "collapsed": false,
       "repeat": "account",
       "gridPos": {
@@ -544,7 +549,7 @@
         "uid": "${datasource}"
       },
       "gridPos": {
-        "h": 9,
+        "h": 4,
         "w": 5,
         "x": 19,
         "y": 16
@@ -601,10 +606,10 @@
         "textMode": "value_and_name",
         "justifyMode": "auto",
         "text": {
-          "titleSize": 13,
-          "valueSize": 26
+          "titleSize": 12,
+          "valueSize": 22
         },
-        "orientation": "vertical",
+        "orientation": "horizontal",
         "reduceOptions": {
           "calcs": [
             "lastNotNull"

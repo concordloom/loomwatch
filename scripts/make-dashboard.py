@@ -151,7 +151,7 @@ def account_row():
     return {
         "id": 10,
         "type": "row",
-        "title": "Account $account",
+        "title": "$account",
         "collapsed": False,
         "repeat": "account",
         "gridPos": {"h": 1, "w": 24, "x": 0, "y": 15},
@@ -224,7 +224,7 @@ def per_account_panels():
             "title": "Collector",
             "description": "Per account, not per provider: one stale account used to colour the whole provider red without saying which. While this is stale every quota above is old, and their calm means nothing.",
             "datasource": DS,
-            "gridPos": {"h": 9, "w": 5, "x": 19, "y": 16},
+            "gridPos": {"h": 4, "w": 5, "x": 19, "y": 16},
             "targets": [target("A", f'max by (provider, account_id) (loomwatch_agent_healthy{{account_id=~"$account"}})',
                                legend="{{provider}} / acct {{account_id}}")],
             "fieldConfig": {
@@ -241,8 +241,8 @@ def per_account_panels():
                 "justifyMode": "auto",
                 # One bit of information does not need display type. Fixed sizes
                 # stop it growing to fill whatever space is left.
-                "text": {"titleSize": 13, "valueSize": 26},
-                "orientation": "vertical",
+                "text": {"titleSize": 12, "valueSize": 22},
+                "orientation": "horizontal",
                 "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": False},
             },
         },
@@ -265,22 +265,23 @@ def variables():
               "Filters the table above and which accounts get a block below."),
         # The blocks repeat over this one.
         #
-        # An id is enough on its own: provider_accounts.id is a single
-        # autoincrement shared by every provider, so an id belongs to exactly
-        # one account. The exception is providers that keep no account rows -
-        # they all report "default" and therefore share a block, which is
-        # visible rather than silent.
+        # label_join builds the readable identity; the regex splits it again, so
+        # the block is titled "zai / 13" while the queries inside get the bare
+        # id. It has to be the classic query type: label_values resolves through
+        # /api/v1/series, which takes a selector and rejects a function outright.
         #
-        # The title is the bare id rather than "zai / 13" because a composite
-        # needs label_join, and a variable built on it never resolves:
-        # label_values goes through /api/v1/series, which takes a selector and
-        # rejects a function outright. query_result accepts one, but neither the
-        # classic string form nor an explicit query type made Grafana route the
-        # variable through it - it kept issuing the series call and coming back
-        # empty. The provider is one glance away in the Collector panel instead.
-        query("account", "Account",
-              'label_values(loomwatch_agent_healthy{provider=~"$provider"}, account_id)',
-              "One block per account. An account is what somebody pays for and adds one at a time; a provider is a category."),
+        # The regex has no space after the comma. Grafana prints the series of a
+        # query_result without one, and a regex written for the spaced form
+        # matches nothing - which is not an error, it is a variable that comes
+        # back empty and a dashboard that renders as one block called "All".
+        dict(query("account", "Account",
+                   {
+                       "qryType": 5,
+                       "query": 'query_result(label_join(loomwatch_agent_healthy{provider=~"$provider"}, "account", " / ", "provider", "account_id"))',
+                       "refId": "PrometheusVariableQueryEditor-VariableQuery",
+                   },
+                   "One block per account. An account is what somebody pays for and adds one at a time; a provider is a category."),
+             regex='/account="(?<text>[^"]+)",account_id="(?<value>[^"]+)"/'),
         query("quota_type", "Quota window", f'label_values(loomwatch_quota_utilization_percent{{provider=~"$provider"}}, quota_type)',
               "Rolling five-hour windows sit at zero most of the time; hide them here rather than dropping them from the data."),
         query("team", "Team", "label_values(loomwatch:account_team, team)",

@@ -138,6 +138,26 @@ def reset_at(sel):
     return f"max by (provider, quota_type, account_id) (loomwatch_quota_reset_timestamp_seconds{{{sel}}})"
 
 
+def crossed_reset(sel):
+    """Whether the trend window contains a reset, by counting drops.
+
+    The previous test was `deriv < 0`, on the assumption that a window holding
+    a reset yields a negative slope. That is false whenever the level rose
+    enough around the drop to outweigh it. Measured on the stand: MiniMax's
+    five-hour `general` window reset three times inside the 24h trend window and
+    still produced +1.05 %/hour, because the day began near zero and ended near
+    fifty. The forecast built on it read "breaches in 3 days" for a window that
+    resets every five hours - a horizon fourteen times longer than the thing
+    being forecast, and one that can never arrive.
+
+    resets() counts the drops directly. It is documented for counters, and a
+    quota gauge that only rises until its window resets is exactly that shape.
+    On the same data it caught six series where the sign test caught four; the
+    two it added were the ones printing the impossible forecast.
+    """
+    return f"resets(({util(sel)})[24h:5m]) > 0"
+
+
 def slope(sel):
     """Consumption rate in percent per second, or nothing at all.
 
@@ -164,7 +184,10 @@ def slope(sel):
     same quota at the same moment read 2% on a six-hour view and 38% on a day's,
     with nothing on screen to say the number had moved.
     """
-    return f"deriv(({util(sel)})[24h:5m]) > 0"
+    return (
+        f"(deriv(({util(sel)})[24h:5m]) > 0)"
+        f" unless on (provider, quota_type, account_id) ({crossed_reset(sel)})"
+    )
 
 
 def time_to_breach(sel):
@@ -194,7 +217,7 @@ def unjudgeable(sel):
     """
     return in_team(f"""
         ({util(sel)} unless on (provider, quota_type, account_id) {reset_at(sel)})
-        or ({util(sel)} and on (provider, quota_type, account_id) (deriv(({util(sel)})[24h:5m]) < 0))
+        or ({util(sel)} and on (provider, quota_type, account_id) ({crossed_reset(sel)}))
     """)
 
 
@@ -209,7 +232,14 @@ def unjudgeable(sel):
 #
 # Chosen far beyond any real horizon: a hundred years in seconds. Any genuine
 # forecast is smaller, so the sentinel always sorts last.
-NO_FORECAST = 3153600000
+NOT_ON_TRACK = 3153600000
+# Sorted after NOT_ON_TRACK, and named apart from it because they are not the
+# same statement. "Not on track" is a finding: consumption is flat or falling,
+# so the quota will not reach its limit. "Cannot forecast" is the absence of
+# one: a reset inside the trend window means the slope describes the boundary
+# rather than the consumption, and saying "not on track" there would be a claim
+# the data does not support.
+CANNOT_FORECAST = 6307200000
 
 
 def breaching(sel):
@@ -374,6 +404,18 @@ def triage_table():
             "Utilisation is a share of each plan's own limit, so 100 is the quota "
             "itself - and for the same reason two rows at 100% are not comparable "
             "quantities and none of these numbers can be summed.\n\n"
+            "A forecast needs a trend, and a trend needs a stretch of "
+            "consumption with no reset in it. The trend window is 24 hours, to "
+            "match the burn alert, so a quota whose own window is shorter than "
+            "that almost always contains one - and those rows read \"no "
+            "forecast\" rather than a number derived from a boundary. It is not "
+            "much of a loss: a five-hour window cannot do a great deal of damage "
+            "before it resets, and \"Resets in\" is the operative number there. "
+            "The forecast earns its place on the weekly windows, which are the "
+            "ones that quietly run out.\n\n"
+            "\"Not on track\" and \"no forecast\" are different statements. The "
+            "first is a finding - consumption is flat or falling, the quota will "
+            "not reach its limit. The second is the absence of one.\n\n"
             "Window is what the provider says the window is, not what this board "
             "worked out. It used to be derived from the longest time-to-reset "
             "seen over a week, which on a young deployment reported a confident "
@@ -390,9 +432,11 @@ def triage_table():
             # it is an absence of evidence, and it filled half this table.
             target("A", with_account_name(visible_rows(SEL)), instant=True),
             target("B", only_visible(f"({reset_at(SEL)}) - time()", SEL), instant=True),
-            target("C", only_visible(
-                f"({time_to_breach(SEL)}) or ({visible_rows(SEL)} * 0 + {NO_FORECAST})", SEL),
-                instant=True),
+            target("C", only_visible(f"""
+                ({time_to_breach(SEL)})
+                or (({unjudgeable(SEL)}) * 0 + {CANNOT_FORECAST})
+                or (({visible_rows(SEL)}) * 0 + {NOT_ON_TRACK})
+            """, SEL), instant=True),
             # Ownership, where the chart publishes it - and only when it
             # DISTINGUISHES. One team across every row is a column of identical
             # cells; the gate is "more than one value exists", not "the mapping
@@ -463,7 +507,8 @@ def triage_table():
                      # mapping rather than noValue: the value is present so
                      # that it sorts, and only its appearance is an absence.
                      {"id": "mappings", "value": [{"type": "value", "options": {
-                         str(NO_FORECAST): {"text": "not on track", "color": "text", "index": 0}}}]},
+                         str(NOT_ON_TRACK): {"text": "not on track", "color": "text", "index": 0},
+                         str(CANNOT_FORECAST): {"text": "no forecast", "color": "text", "index": 1}}}]},
                      {"id": "noValue", "value": "not on track"},
                      # The base step is neutral and the colours start at zero.
                      # Grafana paints an ABSENT value with the base colour, and

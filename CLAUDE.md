@@ -92,7 +92,19 @@ built on.
 Stage 2 talks to the deployed instance through a port-forward, not a public
 address: `scripts/check-deployed.sh` opens one, proves the deployed revision
 from the login page and from `onwatch_build_info`, runs the browser check with
-its own negative case, and tears it down. Its address and credentials are
+its own negative case, and tears it down.
+
+It also drives a browser over the Grafana dashboard
+(`scripts/check-deployed-grafana.py`), and that is a separate instrument rather
+than a second opinion. Everything else in Stage 2 inspects numbers; the
+dashboard is drawn by a different program from data this one exports, and
+defects that live in the last step - where a correct number meets a formatter -
+survive every check that stops at the query. Three shipped on 24 August with
+promtool, helm unittest and live PromQL all green: reset times rendered in 1970
+because a seconds timestamp met a millisecond formatter, rows lost their
+account name to a transformation, and the safe state was painted in alarm red.
+The check is skipped when `LOOMWATCH_GRAFANA_PASS` is absent, so a deployment
+without Grafana is not failed for not having one. Its address and credentials are
 machine-local - they live in `gopnik.local.env`, which `.gitignore` keeps out of
 commits. Create one from the variables that script documents. Nothing about a
 particular deployment belongs in this repository.

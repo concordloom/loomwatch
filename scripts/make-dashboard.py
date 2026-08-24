@@ -64,6 +64,29 @@ ACCOUNT_NAMED = """
 """
 
 
+def visible_rows(sel):
+    """The rows the table shows, defined once.
+
+    A quota reading zero whose provider publishes no reset is not evidence of
+    health - it is an absence of evidence, and it filled half this table.
+
+    Every other column has to be intersected with this same set, and that is not
+    tidiness. The filter used to live only on the utilisation query while the
+    window and reset-time queries stayed unfiltered, so the merge transformation
+    RESURRECTED the rows the filter had dropped: they came back carrying only
+    the columns those queries provide, with an empty Provider-and-Account and a
+    window beside them. Two such ghosts sat at the bottom of the deployed table.
+    """
+    return (
+        f"(({util(sel)} > 0)"
+        f" or ({util(sel)} and on (provider, quota_type, account_id) {reset_at(sel)}))"
+    )
+
+
+def only_visible(expr, sel):
+    return f"({expr}) and on (provider, quota_type, account_id) {visible_rows(sel)}"
+
+
 def with_account_name(expr):
     """Attach the account name inside the query rather than beside it.
 
@@ -317,12 +340,9 @@ def triage_table():
             # Utilisation, minus the rows that can say nothing. A quota reading
             # zero whose provider publishes no reset is not evidence of health -
             # it is an absence of evidence, and it filled half this table.
-            target("A", with_account_name(f"""
-                ({util(SEL)} > 0)
-                or ({util(SEL)} and on (provider, quota_type, account_id) {reset_at(SEL)})
-            """), instant=True),
-            target("B", f"({reset_at(SEL)}) - time()", instant=True),
-            target("C", time_to_breach(SEL), instant=True),
+            target("A", with_account_name(visible_rows(SEL)), instant=True),
+            target("B", only_visible(f"({reset_at(SEL)}) - time()", SEL), instant=True),
+            target("C", only_visible(time_to_breach(SEL), SEL), instant=True),
             # Ownership, where the chart publishes it - and only when it
             # DISTINGUISHES. One team across every row is a column of identical
             # cells; the gate is "more than one value exists", not "the mapping
@@ -333,18 +353,21 @@ def triage_table():
                   * on (provider, account_id) group_left(team) loomwatch:account_team
                 ) * 0
                 and on () (count(count by (team) (loomwatch:account_team)) > 1)
+                and on (provider, quota_type, account_id) """ + visible_rows(SEL) + """
             """, instant=True),
 
             # The window the provider declares, published by the collector since
             # 1.15.0. Absent for a provider that does not declare it, which is
             # the honest rendering - the previous statistical guess was never
             # absent and never said it was guessing.
-            target("F", f"max by (provider, quota_type, account_id) (loomwatch_quota_window_seconds{{{SEL}}})", instant=True),
+            target("F", only_visible(
+                f"max by (provider, quota_type, account_id) (loomwatch_quota_window_seconds{{{SEL}}})", SEL),
+                instant=True),
             # Milliseconds, because that is what Grafana's date units read. The
             # metric is in seconds, and rendered as-is every reset landed on
             # 21 January 1970 - a Unix timestamp interpreted as an offset a
             # thousand times smaller.
-            target("G", f"({reset_at(SEL)} > 0) * 1000", instant=True),
+            target("G", only_visible(f"({reset_at(SEL)} > 0) * 1000", SEL), instant=True),
         ],
         "transformations": [
             {"id": "merge", "options": {}},

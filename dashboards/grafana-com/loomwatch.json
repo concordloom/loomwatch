@@ -83,6 +83,30 @@
         }
       },
       {
+        "name": "team",
+        "label": "Team",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${DS_PROMETHEUS}"
+        },
+        "query": "label_values(loomwatch:account_team, team)",
+        "refresh": 1,
+        "includeAll": true,
+        "multi": true,
+        "allValue": ".+",
+        "sort": 1,
+        "description": "Who owns the plan. Accounts nobody mapped are published as \"unassigned\" rather than dropped, so selecting that value finds exactly the subscriptions with no owner.",
+        "current": {
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        }
+      },
+      {
         "name": "account",
         "label": "Account",
         "type": "query",
@@ -92,7 +116,7 @@
         },
         "query": {
           "qryType": 5,
-          "query": "query_result(label_join(loomwatch_agent_healthy{provider=~\"$provider\"} * on(provider, account_id) group_left(account_name) loomwatch_account_info, \"account\", \" / \", \"provider\", \"account_name\") or label_join(loomwatch_agent_healthy{provider=~\"$provider\"} unless on(provider, account_id) loomwatch_account_info, \"account\", \" / \", \"provider\", \"account_id\"))",
+          "query": "query_result(label_join((loomwatch_agent_healthy{provider=~\"$provider\"} and on(provider, account_id) loomwatch:account_team{team=~\"$team\"} or loomwatch_agent_healthy{provider=~\"$provider\"} unless on(provider, account_id) loomwatch:account_team) * on(provider, account_id) group_left(account_name) loomwatch_account_info, \"account\", \" / \", \"provider\", \"account_name\") or label_join((loomwatch_agent_healthy{provider=~\"$provider\"} and on(provider, account_id) loomwatch:account_team{team=~\"$team\"} or loomwatch_agent_healthy{provider=~\"$provider\"} unless on(provider, account_id) loomwatch:account_team) unless on(provider, account_id) loomwatch_account_info, \"account\", \" / \", \"provider\", \"account_id\"))",
           "refId": "PrometheusVariableQueryEditor-VariableQuery"
         },
         "refresh": 1,
@@ -160,7 +184,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "count( (max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}) >= 100) or ((clamp_min((100 - (max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}))) / (deriv((max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}))[24h:5m]) > 0), 0)) < ((max by (provider, quota_type, account_id) (loomwatch_quota_reset_timestamp_seconds{provider=~\"$provider\",quota_type=~\"$quota_type\"})) - time())) ) or vector(0)",
+          "expr": "count( ((( (max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}) >= 100) or ((clamp_min((100 - (max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}))) / (deriv((max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}))[24h:5m]) > 0), 0)) < ((max by (provider, quota_type, account_id) (loomwatch_quota_reset_timestamp_seconds{provider=~\"$provider\",quota_type=~\"$quota_type\"})) - time())) )) and on (provider, account_id) loomwatch:account_team{team=~\"$team\"}) or ((( (max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}) >= 100) or ((clamp_min((100 - (max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}))) / (deriv((max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}))[24h:5m]) > 0), 0)) < ((max by (provider, quota_type, account_id) (loomwatch_quota_reset_timestamp_seconds{provider=~\"$provider\",quota_type=~\"$quota_type\"})) - time())) )) unless on (provider, account_id) loomwatch:account_team) ) or vector(0)",
           "instant": true,
           "range": false,
           "format": "table"
@@ -226,7 +250,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "count( (max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}) unless on (provider, quota_type, account_id) max by (provider, quota_type, account_id) (loomwatch_quota_reset_timestamp_seconds{provider=~\"$provider\",quota_type=~\"$quota_type\"})) or (max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}) and on (provider, quota_type, account_id) (deriv((max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}))[24h:5m]) < 0)) ) or vector(0)",
+          "expr": "count( ((( (max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}) unless on (provider, quota_type, account_id) max by (provider, quota_type, account_id) (loomwatch_quota_reset_timestamp_seconds{provider=~\"$provider\",quota_type=~\"$quota_type\"})) or (max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}) and on (provider, quota_type, account_id) (deriv((max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}))[24h:5m]) < 0)) )) and on (provider, account_id) loomwatch:account_team{team=~\"$team\"}) or ((( (max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}) unless on (provider, quota_type, account_id) max by (provider, quota_type, account_id) (loomwatch_quota_reset_timestamp_seconds{provider=~\"$provider\",quota_type=~\"$quota_type\"})) or (max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}) and on (provider, quota_type, account_id) (deriv((max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}))[24h:5m]) < 0)) )) unless on (provider, account_id) loomwatch:account_team) ) or vector(0)",
           "instant": true,
           "range": false,
           "format": "table"
@@ -353,7 +377,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "(((max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}) > 0) or (max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}) and on (provider, quota_type, account_id) max by (provider, quota_type, account_id) (loomwatch_quota_reset_timestamp_seconds{provider=~\"$provider\",quota_type=~\"$quota_type\"})))) * on (provider, account_id) group_left(account_name) ( max by (provider, account_id, account_name) ( loomwatch_account_info or label_replace( loomwatch_agent_healthy unless on (provider, account_id) loomwatch_account_info, \"account_name\", \"$1\", \"account_id\", \"(.*)\") ) )",
+          "expr": "( (((((max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}) > 0) or (max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}) and on (provider, quota_type, account_id) max by (provider, quota_type, account_id) (loomwatch_quota_reset_timestamp_seconds{provider=~\"$provider\",quota_type=~\"$quota_type\"}))))) and on (provider, account_id) loomwatch:account_team{team=~\"$team\"}) or (((((max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}) > 0) or (max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}) and on (provider, quota_type, account_id) max by (provider, quota_type, account_id) (loomwatch_quota_reset_timestamp_seconds{provider=~\"$provider\",quota_type=~\"$quota_type\"}))))) unless on (provider, account_id) loomwatch:account_team) ) * on (provider, account_id) group_left(account_name) ( max by (provider, account_id, account_name) ( loomwatch_account_info or label_replace( loomwatch_agent_healthy unless on (provider, account_id) loomwatch_account_info, \"account_name\", \"$1\", \"account_id\", \"(.*)\") ) )",
           "instant": true,
           "range": false,
           "format": "table"
@@ -364,7 +388,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "((max by (provider, quota_type, account_id) (loomwatch_quota_reset_timestamp_seconds{provider=~\"$provider\",quota_type=~\"$quota_type\"})) - time()) and on (provider, quota_type, account_id) ((max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}) > 0) or (max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}) and on (provider, quota_type, account_id) max by (provider, quota_type, account_id) (loomwatch_quota_reset_timestamp_seconds{provider=~\"$provider\",quota_type=~\"$quota_type\"})))",
+          "expr": "((max by (provider, quota_type, account_id) (loomwatch_quota_reset_timestamp_seconds{provider=~\"$provider\",quota_type=~\"$quota_type\"})) - time()) and on (provider, quota_type, account_id) (((((max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}) > 0) or (max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}) and on (provider, quota_type, account_id) max by (provider, quota_type, account_id) (loomwatch_quota_reset_timestamp_seconds{provider=~\"$provider\",quota_type=~\"$quota_type\"}))))) and on (provider, account_id) loomwatch:account_team{team=~\"$team\"}) or (((((max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}) > 0) or (max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}) and on (provider, quota_type, account_id) max by (provider, quota_type, account_id) (loomwatch_quota_reset_timestamp_seconds{provider=~\"$provider\",quota_type=~\"$quota_type\"}))))) unless on (provider, account_id) loomwatch:account_team)",
           "instant": true,
           "range": false,
           "format": "table"
@@ -375,7 +399,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "((clamp_min((100 - (max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}))) / (deriv((max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}))[24h:5m]) > 0), 0)) or (((max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}) > 0) or (max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}) and on (provider, quota_type, account_id) max by (provider, quota_type, account_id) (loomwatch_quota_reset_timestamp_seconds{provider=~\"$provider\",quota_type=~\"$quota_type\"}))) * 0 + 3153600000)) and on (provider, quota_type, account_id) ((max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}) > 0) or (max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}) and on (provider, quota_type, account_id) max by (provider, quota_type, account_id) (loomwatch_quota_reset_timestamp_seconds{provider=~\"$provider\",quota_type=~\"$quota_type\"})))",
+          "expr": "((clamp_min((100 - (max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}))) / (deriv((max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}))[24h:5m]) > 0), 0)) or ( (((((max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}) > 0) or (max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}) and on (provider, quota_type, account_id) max by (provider, quota_type, account_id) (loomwatch_quota_reset_timestamp_seconds{provider=~\"$provider\",quota_type=~\"$quota_type\"}))))) and on (provider, account_id) loomwatch:account_team{team=~\"$team\"}) or (((((max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}) > 0) or (max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}) and on (provider, quota_type, account_id) max by (provider, quota_type, account_id) (loomwatch_quota_reset_timestamp_seconds{provider=~\"$provider\",quota_type=~\"$quota_type\"}))))) unless on (provider, account_id) loomwatch:account_team) * 0 + 3153600000)) and on (provider, quota_type, account_id) (((((max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}) > 0) or (max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}) and on (provider, quota_type, account_id) max by (provider, quota_type, account_id) (loomwatch_quota_reset_timestamp_seconds{provider=~\"$provider\",quota_type=~\"$quota_type\"}))))) and on (provider, account_id) loomwatch:account_team{team=~\"$team\"}) or (((((max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}) > 0) or (max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}) and on (provider, quota_type, account_id) max by (provider, quota_type, account_id) (loomwatch_quota_reset_timestamp_seconds{provider=~\"$provider\",quota_type=~\"$quota_type\"}))))) unless on (provider, account_id) loomwatch:account_team)",
           "instant": true,
           "range": false,
           "format": "table"
@@ -386,7 +410,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "max by (provider, quota_type, account_id, team) ( loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"} * on (provider, account_id) group_left(team) loomwatch:account_team ) * 0 and on () (count(count by (team) (loomwatch:account_team)) > 1) and on (provider, quota_type, account_id) ((max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}) > 0) or (max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}) and on (provider, quota_type, account_id) max by (provider, quota_type, account_id) (loomwatch_quota_reset_timestamp_seconds{provider=~\"$provider\",quota_type=~\"$quota_type\"})))",
+          "expr": "max by (provider, quota_type, account_id, team) ( loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"} * on (provider, account_id) group_left(team) loomwatch:account_team ) * 0 and on () (count(count by (team) (loomwatch:account_team)) > 1) and on (provider, quota_type, account_id) (((((max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}) > 0) or (max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}) and on (provider, quota_type, account_id) max by (provider, quota_type, account_id) (loomwatch_quota_reset_timestamp_seconds{provider=~\"$provider\",quota_type=~\"$quota_type\"}))))) and on (provider, account_id) loomwatch:account_team{team=~\"$team\"}) or (((((max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}) > 0) or (max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}) and on (provider, quota_type, account_id) max by (provider, quota_type, account_id) (loomwatch_quota_reset_timestamp_seconds{provider=~\"$provider\",quota_type=~\"$quota_type\"}))))) unless on (provider, account_id) loomwatch:account_team)",
           "instant": true,
           "range": false,
           "format": "table"
@@ -397,7 +421,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "(max by (provider, quota_type, account_id) (loomwatch_quota_window_seconds{provider=~\"$provider\",quota_type=~\"$quota_type\"})) and on (provider, quota_type, account_id) ((max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}) > 0) or (max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}) and on (provider, quota_type, account_id) max by (provider, quota_type, account_id) (loomwatch_quota_reset_timestamp_seconds{provider=~\"$provider\",quota_type=~\"$quota_type\"})))",
+          "expr": "(max by (provider, quota_type, account_id) (loomwatch_quota_window_seconds{provider=~\"$provider\",quota_type=~\"$quota_type\"})) and on (provider, quota_type, account_id) (((((max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}) > 0) or (max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}) and on (provider, quota_type, account_id) max by (provider, quota_type, account_id) (loomwatch_quota_reset_timestamp_seconds{provider=~\"$provider\",quota_type=~\"$quota_type\"}))))) and on (provider, account_id) loomwatch:account_team{team=~\"$team\"}) or (((((max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}) > 0) or (max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}) and on (provider, quota_type, account_id) max by (provider, quota_type, account_id) (loomwatch_quota_reset_timestamp_seconds{provider=~\"$provider\",quota_type=~\"$quota_type\"}))))) unless on (provider, account_id) loomwatch:account_team)",
           "instant": true,
           "range": false,
           "format": "table"
@@ -408,7 +432,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "((max by (provider, quota_type, account_id) (loomwatch_quota_reset_timestamp_seconds{provider=~\"$provider\",quota_type=~\"$quota_type\"}) > 0) * 1000) and on (provider, quota_type, account_id) ((max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}) > 0) or (max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}) and on (provider, quota_type, account_id) max by (provider, quota_type, account_id) (loomwatch_quota_reset_timestamp_seconds{provider=~\"$provider\",quota_type=~\"$quota_type\"})))",
+          "expr": "((max by (provider, quota_type, account_id) (loomwatch_quota_reset_timestamp_seconds{provider=~\"$provider\",quota_type=~\"$quota_type\"}) > 0) * 1000) and on (provider, quota_type, account_id) (((((max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}) > 0) or (max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}) and on (provider, quota_type, account_id) max by (provider, quota_type, account_id) (loomwatch_quota_reset_timestamp_seconds{provider=~\"$provider\",quota_type=~\"$quota_type\"}))))) and on (provider, account_id) loomwatch:account_team{team=~\"$team\"}) or (((((max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}) > 0) or (max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}) and on (provider, quota_type, account_id) max by (provider, quota_type, account_id) (loomwatch_quota_reset_timestamp_seconds{provider=~\"$provider\",quota_type=~\"$quota_type\"}))))) unless on (provider, account_id) loomwatch:account_team)",
           "instant": true,
           "range": false,
           "format": "table"

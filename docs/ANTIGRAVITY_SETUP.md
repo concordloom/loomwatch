@@ -13,7 +13,7 @@ Track your Antigravity AI model quota usage with onWatch.
 ## Prerequisites
 
 - Antigravity installed and running
-- onWatch installed ([Quick Start](../README.md#quick-start))
+- onWatch installed ([Quick Start](../README.md))
 
 ---
 

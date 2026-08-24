@@ -7,7 +7,7 @@ Track your GitHub Copilot premium request usage with onWatch.
 ## Prerequisites
 
 - GitHub account with an active Copilot subscription (Individual, Business, or Enterprise)
-- onWatch installed ([Quick Start](../README.md#quick-start))
+- onWatch installed ([Quick Start](../README.md))
 
 ---
 

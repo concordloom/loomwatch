@@ -39,12 +39,6 @@
       "id": "table",
       "name": "Table",
       "version": ""
-    },
-    {
-      "type": "panel",
-      "id": "timeseries",
-      "name": "Time series",
-      "version": ""
     }
   ],
   "id": null,
@@ -59,7 +53,7 @@
   "schemaVersion": 39,
   "refresh": "1m",
   "time": {
-    "from": "now-24h",
+    "from": "now-7d",
     "to": "now"
   },
   "templating": {
@@ -145,17 +139,17 @@
   },
   "panels": [
     {
-      "id": 1,
-      "type": "table",
-      "title": "Quotas, fullest first",
-      "description": "Every quota, ordered by how full it is. The title says fullest rather than soonest on purpose: a quota at 0% whose window resets in an hour is the safest thing on the board, so ordering by time would put it on top. Fullness is what needs an answer; the reset time beside it is what tells you how long you have.\n\nUtilisation is a share of each plan's own limit, so 100 is the quota itself - and for the same reason two rows at 100% are not comparable quantities and none of these numbers can be summed.\n\nAt reset is a forecast from the last 24 hours, the same window the burn alert uses. It is blank where the provider publishes no reset time, because there is then no moment to forecast to.",
+      "id": 2,
+      "type": "stat",
+      "title": "Needs attention",
+      "description": "Quotas already at their limit, or reaching it before their window resets at the rate of the last 24 hours.\n\nA quota with no reset time, or whose trend crossed a reset and is therefore not a trend, cannot be judged and is NOT counted here. The panel beside this one says how many those are, because a number that quietly excludes what it could not measure is the kind of calm that gets people paged at night.",
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
       "gridPos": {
-        "h": 15,
-        "w": 24,
+        "h": 5,
+        "w": 5,
         "x": 0,
         "y": 0
       },
@@ -166,7 +160,200 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"})",
+          "expr": "count( (max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}) >= 100) or ((clamp_min((100 - (max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}))) / (deriv((max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}))[24h:5m]) > 0), 0)) < ((max by (provider, quota_type, account_id) (loomwatch_quota_reset_timestamp_seconds{provider=~\"$provider\",quota_type=~\"$quota_type\"})) - time())) ) or vector(0)",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center",
+        "text": {
+          "valueSize": 56
+        },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Not judged",
+      "description": "Quotas the forecast cannot speak about: no reset time published, or a trend that crossed a reset inside the averaging window. A quota that simply is not being used is judged, not counted here - the answer for it is that it will not breach.\n\nThese are not safe and not unsafe - they are unmeasured, and they are shown so that the count beside them cannot be mistaken for a statement about every quota on the board.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 5,
+        "x": 5,
+        "y": 0
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "count( (max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}) unless on (provider, quota_type, account_id) max by (provider, quota_type, account_id) (loomwatch_quota_reset_timestamp_seconds{provider=~\"$provider\",quota_type=~\"$quota_type\"})) or (max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}) and on (provider, quota_type, account_id) (deriv((max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}))[24h:5m]) < 0)) ) or vector(0)",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "none",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center",
+        "text": {
+          "valueSize": 56
+        },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "id": 4,
+      "type": "bargauge",
+      "title": "Collector freshness",
+      "description": "How long ago each account was last polled successfully.\n\nThis is the answer to \"can I believe the numbers below\". While an account is stale its quota figures are old, and their calm means nothing - so this sits beside the counts rather than under them. Age rather than the health flag: the flag is the collector's own opinion of itself, and the failure worth catching is the one where it stalls while still reporting healthy.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 14,
+        "x": 10,
+        "y": 0
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "max by (account_id, account_name) ( loomwatch_agent_last_cycle_age_seconds{provider=~\"$provider\"} * on (provider, account_id) group_left(account_name) ( max by (provider, account_id, account_name) ( loomwatch_account_info or label_replace( loomwatch_agent_healthy unless on (provider, account_id) loomwatch_account_info, \"account_name\", \"$1\", \"account_id\", \"(.*)\") ) ) )",
+          "legendFormat": "{{account_name}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 0,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 300
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "basic",
+        "text": {
+          "titleSize": 12,
+          "valueSize": 18
+        },
+        "showUnfilled": true,
+        "valueMode": "text",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "id": 1,
+      "type": "table",
+      "title": "Quotas, soonest to breach first",
+      "description": "Every quota that has something to say, ordered by how long it has left before it reaches its own limit.\n\nOrdered by time to breach rather than by fullness. Fullness sorts a quota that hit its ceiling yesterday above one that will hit it in an hour, and the second is the one nobody has acted on yet. A quota with no trustworthy forecast has nothing to sort by and sinks to the bottom rather than being ranked on a guess.\n\nUtilisation is a share of each plan's own limit, so 100 is the quota itself - and for the same reason two rows at 100% are not comparable quantities and none of these numbers can be summed.\n\nWindow is what the provider says the window is, not what this board worked out. It used to be derived from the longest time-to-reset seen over a week, which on a young deployment reported a confident \"7 day\" for a window it had never once seen reset.\n\nRows whose quota is at zero AND whose provider publishes no reset time are left out: they carry no number that can change and no moment they change at.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 13,
+        "w": 24,
+        "x": 0,
+        "y": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "(max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}) > 0) or (max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}) and on (provider, quota_type, account_id) max by (provider, quota_type, account_id) (loomwatch_quota_reset_timestamp_seconds{provider=~\"$provider\",quota_type=~\"$quota_type\"}))",
           "instant": true,
           "range": false,
           "format": "table"
@@ -177,7 +364,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "max by (provider, quota_type, account_id) (loomwatch_quota_reset_timestamp_seconds{provider=~\"$provider\",quota_type=~\"$quota_type\"} - time())",
+          "expr": "(max by (provider, quota_type, account_id) (loomwatch_quota_reset_timestamp_seconds{provider=~\"$provider\",quota_type=~\"$quota_type\"})) - time()",
           "instant": true,
           "range": false,
           "format": "table"
@@ -188,7 +375,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "clamp_max( max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}) + deriv((max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}))[24h:5m]) * max by (provider, quota_type, account_id) (loomwatch_quota_reset_timestamp_seconds{provider=~\"$provider\",quota_type=~\"$quota_type\"} - time()) , 100)",
+          "expr": "clamp_min((100 - (max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}))) / (deriv((max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}))[24h:5m]) > 0), 0)",
           "instant": true,
           "range": false,
           "format": "table"
@@ -199,7 +386,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "max by (provider, quota_type, account_id, team) ( loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"} * on (provider, account_id) group_left(team) loomwatch:account_team ) * 0",
+          "expr": "max by (provider, quota_type, account_id, team) ( loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"} * on (provider, account_id) group_left(team) loomwatch:account_team ) * 0 and on () (count(count by (team) (loomwatch:account_team)) > 1)",
           "instant": true,
           "range": false,
           "format": "table"
@@ -211,6 +398,28 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "expr": "max by (provider, account_id, account_name) ( loomwatch_account_info or label_replace( loomwatch_agent_healthy unless on (provider, account_id) loomwatch_account_info, \"account_name\", \"$1\", \"account_id\", \"(.*)\") )",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "refId": "F",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "max by (provider, quota_type, account_id) (loomwatch_quota_window_seconds{provider=~\"$provider\",quota_type=~\"$quota_type\"})",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "refId": "G",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "max by (provider, quota_type, account_id) (loomwatch_quota_reset_timestamp_seconds{provider=~\"$provider\",quota_type=~\"$quota_type\"}) > 0",
           "instant": true,
           "range": false,
           "format": "table"
@@ -233,20 +442,24 @@
             "renameByName": {
               "provider": "Provider",
               "account_name": "Account",
-              "quota_type": "Window",
+              "quota_type": "Quota",
               "team": "Team",
               "Value #A": "Utilisation",
               "Value #B": "Resets in",
-              "Value #C": "At reset"
+              "Value #C": "Breaches in",
+              "Value #F": "Window",
+              "Value #G": "Resets at"
             },
             "indexByName": {
               "provider": 0,
               "account_name": 1,
               "quota_type": 2,
-              "team": 3,
-              "Value #A": 4,
-              "Value #B": 5,
-              "Value #C": 6
+              "Value #F": 3,
+              "team": 4,
+              "Value #A": 5,
+              "Value #C": 6,
+              "Value #B": 7,
+              "Value #G": 8
             }
           }
         }
@@ -311,28 +524,12 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Resets in"
+              "options": "Breaches in"
             },
             "properties": [
               {
                 "id": "unit",
                 "value": "s"
-              },
-              {
-                "id": "noValue",
-                "value": "not published"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "At reset"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "percent"
               },
               {
                 "id": "decimals",
@@ -345,8 +542,12 @@
                 }
               },
               {
+                "id": "custom.width",
+                "value": 130
+              },
+              {
                 "id": "noValue",
-                "value": "-"
+                "value": "not on track"
               },
               {
                 "id": "thresholds",
@@ -354,19 +555,87 @@
                   "mode": "absolute",
                   "steps": [
                     {
-                      "color": "green",
+                      "color": "red",
                       "value": null
                     },
                     {
                       "color": "orange",
-                      "value": 80
+                      "value": 21600
                     },
                     {
-                      "color": "red",
-                      "value": 95
+                      "color": "green",
+                      "value": 86400
                     }
                   ]
                 }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Resets in"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "custom.width",
+                "value": 110
+              },
+              {
+                "id": "noValue",
+                "value": "not published"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Resets at"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "dateTimeAsLocal"
+              },
+              {
+                "id": "custom.width",
+                "value": 160
+              },
+              {
+                "id": "noValue",
+                "value": "not published"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Window"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "custom.width",
+                "value": 100
+              },
+              {
+                "id": "noValue",
+                "value": "-"
               }
             ]
           },
@@ -378,7 +647,7 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 120
+                "value": 110
               }
             ]
           },
@@ -397,12 +666,12 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Window"
+              "options": "Quota"
             },
             "properties": [
               {
                 "id": "custom.width",
-                "value": 150
+                "value": 130
               }
             ]
           }
@@ -416,8 +685,8 @@
         "cellHeight": "sm",
         "sortBy": [
           {
-            "displayName": "Utilisation",
-            "desc": true
+            "displayName": "Breaches in",
+            "desc": false
           }
         ]
       }
@@ -426,297 +695,88 @@
       "id": 10,
       "type": "row",
       "title": "$account",
-      "collapsed": false,
+      "collapsed": true,
       "repeat": "account",
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 15
+        "y": 18
       },
-      "panels": []
-    },
-    {
-      "id": 11,
-      "type": "bargauge",
-      "title": "Quotas now",
-      "description": "One bar per account and quota window, labelled. Bars rather than lines because the question here is how full, not how it got there.",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "gridPos": {
-        "h": 9,
-        "w": 9,
-        "x": 0,
-        "y": 16
-      },
-      "targets": [
+      "panels": [
         {
-          "refId": "A",
+          "id": 12,
+          "type": "timeseries",
+          "title": "Trend",
+          "description": "Lines, not fills: sixteen filled areas are mud. The legend is a sorted table on the right so a series can be found by name rather than by colour.\n\nThe board opens on a week because most windows here are weekly, and a day of a weekly window is a flat line near the axis that looks like nothing happening. The vertical drops are resets, not incidents.",
           "datasource": {
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "max by (quota_type) (loomwatch_quota_utilization_percent{provider=~\"$provider\",account_id=~\"$account\",quota_type=~\"$quota_type\"})",
-          "legendFormat": "{{quota_type}}"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "percent",
-          "min": 0,
-          "max": 100,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
+          "gridPos": {
+            "h": 9,
+            "w": 24,
+            "x": 0,
+            "y": 19
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
               },
-              {
-                "color": "orange",
-                "value": 80
-              },
-              {
-                "color": "red",
-                "value": 95
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "orientation": "horizontal",
-        "displayMode": "basic",
-        "text": {
-          "titleSize": 14,
-          "valueSize": 28
-        },
-        "showUnfilled": true,
-        "valueMode": "text",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
+              "expr": "max by (quota_type) (loomwatch_quota_utilization_percent{provider=~\"$provider\",account_id=~\"$account\",quota_type=~\"$quota_type\"})",
+              "legendFormat": "{{quota_type}}"
+            }
           ],
-          "fields": "",
-          "values": false
-        }
-      }
-    },
-    {
-      "id": 12,
-      "type": "timeseries",
-      "title": "Trend",
-      "description": "Lines, not fills: sixteen filled areas are mud. The legend is a sorted table on the right so a series can be found by name rather than by colour.",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "gridPos": {
-        "h": 9,
-        "w": 10,
-        "x": 9,
-        "y": 16
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "expr": "max by (quota_type) (loomwatch_quota_utilization_percent{provider=~\"$provider\",account_id=~\"$account\",quota_type=~\"$quota_type\"})",
-          "legendFormat": "{{quota_type}}"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "percent",
-          "min": 0,
-          "max": 100,
-          "custom": {
-            "lineWidth": 2,
-            "fillOpacity": 0,
-            "showPoints": "never"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent",
+              "min": 0,
+              "max": 100,
+              "custom": {
+                "lineWidth": 2,
+                "fillOpacity": 0,
+                "showPoints": "never"
               },
-              {
-                "color": "orange",
-                "value": 80
-              },
-              {
-                "color": "red",
-                "value": 95
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "right",
-          "calcs": [
-            "lastNotNull"
-          ],
-          "sortBy": "Last *",
-          "sortDesc": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      }
-    },
-    {
-      "id": 13,
-      "type": "stat",
-      "title": "Collector",
-      "description": "Two readings, because one of them cannot see the failure the other alerts on. agent_healthy is the collector's own verdict about this account. Age of last poll is what LoomwatchCollectorNotPolling is built on, and that rule exists precisely for the case where the collector stalls while its own health flag stays at 1 - so a panel showing only the flag reports fresh at the exact moment the alert fires.\n\nWhile this is stale every quota beside it is old, and their calm stops meaning anything.",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "gridPos": {
-        "h": 9,
-        "w": 5,
-        "x": 19,
-        "y": 16
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "expr": "max by (account_id) (loomwatch_agent_healthy{provider=~\"$provider\",account_id=~\"$account\"})",
-          "legendFormat": "health"
-        },
-        {
-          "refId": "B",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "expr": "max by (account_id) (loomwatch_agent_last_cycle_age_seconds{provider=~\"$provider\",account_id=~\"$account\"})",
-          "legendFormat": "last poll"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          }
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byFrameRefID",
-              "options": "A"
-            },
-            "properties": [
-              {
-                "id": "mappings",
-                "value": [
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
                   {
-                    "type": "value",
-                    "options": {
-                      "0": {
-                        "text": "stale",
-                        "color": "red",
-                        "index": 0
-                      },
-                      "1": {
-                        "text": "fresh",
-                        "color": "green",
-                        "index": 1
-                      }
-                    }
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "orange",
+                    "value": 80
+                  },
+                  {
+                    "color": "red",
+                    "value": 95
                   }
                 ]
-              },
-              {
-                "id": "thresholds",
-                "value": {
-                  "mode": "absolute",
-                  "steps": [
-                    {
-                      "color": "red",
-                      "value": null
-                    },
-                    {
-                      "color": "green",
-                      "value": 1
-                    }
-                  ]
-                }
               }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byFrameRefID",
-              "options": "B"
             },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "s"
-              },
-              {
-                "id": "thresholds",
-                "value": {
-                  "mode": "absolute",
-                  "steps": [
-                    {
-                      "color": "green",
-                      "value": null
-                    },
-                    {
-                      "color": "red",
-                      "value": 300
-                    }
-                  ]
-                }
-              }
-            ]
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "right",
+              "calcs": [
+                "lastNotNull"
+              ],
+              "sortBy": "Last *",
+              "sortDesc": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
           }
-        ]
-      },
-      "options": {
-        "colorMode": "value",
-        "graphMode": "none",
-        "textMode": "value_and_name",
-        "justifyMode": "auto",
-        "text": {
-          "titleSize": 12,
-          "valueSize": 22
-        },
-        "orientation": "horizontal",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
         }
-      }
+      ]
     }
   ]
 }

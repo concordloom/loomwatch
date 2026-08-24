@@ -42,75 +42,273 @@ def target(ref, expr, legend=None, instant=False):
     return t
 
 
-def projection(sel):
-    """Where this quota lands when its own window resets.
+# The aggregate every expression below starts from. Every term is aggregated to
+# the same label set on purpose: taking max of each term separately takes
+# utilisation from one pod generation, the slope from another and the remaining
+# time from a third, and adds up a number for a series that never existed. On a
+# stand with five generations behind one account that read 38% where the truth
+# was 2%.
+def util(sel):
+    return f"max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{{{sel}}})"
 
-    Three things here were wrong before and are load-bearing now.
 
-    Every term is aggregated to the same label set. Taking max of each term
-    separately takes utilisation from one pod generation, the slope from
-    another and the remaining time from a third, and adds up a forecast for a
-    series that never existed. On a stand with five generations behind a single
-    account that read 38% where the truth was 2%.
+def reset_at(sel):
+    return f"max by (provider, quota_type, account_id) (loomwatch_quota_reset_timestamp_seconds{{{sel}}})"
 
-    The slope comes from a subquery over the aggregate, so restarts collapse
-    before differentiating rather than after.
+
+def slope(sel):
+    """Consumption rate in percent per second, or nothing at all.
+
+    `> 0` is not a tidy-up, it is the whole point. Consumption inside a window
+    never falls; the only thing that lowers utilisation is the window resetting,
+    which drops it off a cliff. deriv over 24h reads that cliff as a trend, and
+    a forecast built on it is an artefact of the boundary rather than a
+    statement about consumption.
+
+    This was found the expensive way. The column first extrapolated the cliff
+    and printed -837%, which was absurd enough that the operator asked about it
+    within a day. The repair clamped the slope at zero, and the same row then
+    read a calm green 1% - on a quota that had spent every observed hour of its
+    previous window at 100%. Clamping turned a loud wrong answer into a quiet
+    one, which is worse.
+
+    So a slope that cannot be trusted produces no series, the forecast that
+    depends on it produces no value, and the cell is empty. An empty cell is the
+    only honest rendering of "the estimator lost its footing inside the
+    averaging window".
 
     The window is fixed at 24h to match burn.trendWindow in the alert. It used
     to be $__range, which made the column a function of the time picker: the
-    same quota at the same moment read 2% on a six-hour view and 38% on a
-    day's, with nothing on screen to say the number had moved.
+    same quota at the same moment read 2% on a six-hour view and 38% on a day's,
+    with nothing on screen to say the number had moved.
+    """
+    return f"deriv(({util(sel)})[24h:5m]) > 0"
 
-    Clamped at 100 because utilisation is a share of the plan's own limit, and
-    111% of a limit is not a quantity.
+
+def time_to_breach(sel):
+    """Seconds until this quota reaches its own limit, at the current rate.
+
+    A duration, not a share. The share it used to be was clamped at 100, so a
+    quota that will overshoot fivefold and one that will land exactly on the
+    limit printed the same number, and a quota already at 100 printed 100
+    whatever it was doing. What the operator has to compare is this against the
+    time left before the window resets - two durations, one decision.
     """
-    agg = f"max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{{{sel}}})"
+    return f"clamp_min((100 - ({util(sel)})) / ({slope(sel)}), 0)"
+
+
+def unjudgeable(sel):
+    """Quotas the forecast has nothing to say about.
+
+    Two cases only, and neither is "the quota is not moving". A flat quota with
+    a known reset IS judged: the answer is that it will not breach, and that is
+    a result rather than a gap. Counting idleness as ignorance made this panel
+    read 13 of 16 on a board where twelve quotas were simply not being used.
+
+    What genuinely cannot be judged: a provider that publishes no reset time, so
+    there is no moment to forecast to; and a trend whose averaging window
+    contains a reset, so the slope describes the boundary rather than the
+    consumption.
+    """
     return f"""
-      clamp_max(
-        {agg}
-        + deriv(({agg})[24h:5m])
-          * max by (provider, quota_type, account_id) (loomwatch_quota_reset_timestamp_seconds{{{sel}}} - time())
-      , 100)
+        ({util(sel)} unless on (provider, quota_type, account_id) {reset_at(sel)})
+        or ({util(sel)} and on (provider, quota_type, account_id) (deriv(({util(sel)})[24h:5m]) < 0))
     """
+
+
+def breaching(sel):
+    """The quotas that are out, or reach their limit before their window resets.
+
+    The comparison the whole board exists to make, written once. The first term
+    is not redundant: a quota sitting AT its limit has a slope of zero, so the
+    forecast says nothing about it, and it would fall out of the very count that
+    exists to notice exactly that. Being out of quota is the most urgent state
+    there is, not an unmeasured one.
+
+    Rows with no reset time and rows with no trustworthy slope are absent rather
+    than counted as safe - which is why the panel beside this one says how many
+    could not be judged.
+    """
+    return f"""
+        ({util(sel)} >= 100)
+        or (({time_to_breach(sel)}) < (({reset_at(sel)}) - time()))
+    """
+
+
+def headline():
+    """The two questions, answered before anything has to be read.
+
+    An operator opening this board is asking two things, and only two: is there
+    something I have to act on, and can I believe what I am looking at. The
+    table below answers the first one by sorting - but a sort still has to be
+    read, row by row, and on a board where fifteen of sixteen rows want nothing
+    the reading is the work. A count is read without being read.
+
+    The second question had no answer here at all. The panel that carried it sat
+    on the sixteenth grid row inside a repeated block, and on the morning of
+    24 August the collector for one provider stopped polling for half an hour
+    while the top row of the table went on showing a confident 100% - measured
+    before the outage, by a collector that had already declared itself
+    unhealthy. Nothing on the first screen said so.
+    """
+    return [
+        {
+            "id": 2,
+            "type": "stat",
+            "title": "Needs attention",
+            "description": (
+                "Quotas already at their limit, or reaching it before their window "
+                "resets at the rate of the last 24 hours.\n\n"
+                "A quota with no reset time, or whose trend crossed a reset and is "
+                "therefore not a trend, cannot be judged and is NOT counted here. "
+                "The panel beside this one says how many those are, because a "
+                "number that quietly excludes what it could not measure is the "
+                "kind of calm that gets people paged at night."
+            ),
+            "datasource": DS,
+            "gridPos": {"h": 5, "w": 5, "x": 0, "y": 0},
+            "targets": [target("A", f"count({breaching(SEL)}) or vector(0)", instant=True)],
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "short", "decimals": 0,
+                    "thresholds": {"mode": "absolute", "steps": [
+                        {"color": "green", "value": None}, {"color": "red", "value": 1}]},
+                    "noValue": "0",
+                },
+                "overrides": [],
+            },
+            "options": {
+                "colorMode": "background", "graphMode": "none", "textMode": "value",
+                "justifyMode": "center", "text": {"valueSize": 56},
+                "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": False},
+            },
+        },
+        {
+            "id": 3,
+            "type": "stat",
+            "title": "Not judged",
+            "description": (
+                "Quotas the forecast cannot speak about: no reset time published, "
+                "or a trend that crossed a reset inside the averaging window. A "
+                "quota that simply is not being used is judged, not counted here - "
+                "the answer for it is that it will not breach.\n\n"
+                "These are not safe and not unsafe - they are unmeasured, and they "
+                "are shown so that the count beside them cannot be mistaken for a "
+                "statement about every quota on the board."
+            ),
+            "datasource": DS,
+            "gridPos": {"h": 5, "w": 5, "x": 5, "y": 0},
+            "targets": [target("A", f"count({unjudgeable(SEL)}) or vector(0)", instant=True)],
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "short", "decimals": 0,
+                    "thresholds": {"mode": "absolute", "steps": [{"color": "text", "value": None}]},
+                    "noValue": "0",
+                },
+                "overrides": [],
+            },
+            "options": {
+                "colorMode": "none", "graphMode": "none", "textMode": "value",
+                "justifyMode": "center", "text": {"valueSize": 56},
+                "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": False},
+            },
+        },
+        {
+            "id": 4,
+            "type": "bargauge",
+            "title": "Collector freshness",
+            "description": (
+                "How long ago each account was last polled successfully.\n\n"
+                "This is the answer to \"can I believe the numbers below\". While an "
+                "account is stale its quota figures are old, and their calm means "
+                "nothing - so this sits beside the counts rather than under them. "
+                "Age rather than the health flag: the flag is the collector's own "
+                "opinion of itself, and the failure worth catching is the one "
+                "where it stalls while still reporting healthy."
+            ),
+            "datasource": DS,
+            "gridPos": {"h": 5, "w": 14, "x": 10, "y": 0},
+            "targets": [target("A", """
+                max by (account_id, account_name) (
+                  loomwatch_agent_last_cycle_age_seconds{provider=~"$provider"}
+                  * on (provider, account_id) group_left(account_name) (
+                      max by (provider, account_id, account_name) (
+                        loomwatch_account_info
+                        or label_replace(
+                             loomwatch_agent_healthy unless on (provider, account_id) loomwatch_account_info,
+                             "account_name", "$1", "account_id", "(.*)")
+                      )
+                    )
+                )
+            """, legend="{{account_name}}")],
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "s", "decimals": 0, "min": 0,
+                    # The alert's own shape: five poll intervals. The chart
+                    # rewrites this number from pollInterval, so the panel and
+                    # the rule cannot drift apart.
+                    "thresholds": {"mode": "absolute", "steps": [
+                        {"color": "green", "value": None}, {"color": "red", "value": 300}]},
+                },
+                "overrides": [],
+            },
+            "options": {
+                "orientation": "horizontal", "displayMode": "basic",
+                "text": {"titleSize": 12, "valueSize": 18},
+                "showUnfilled": True, "valueMode": "text",
+                "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": False},
+            },
+        },
+    ]
 
 
 def triage_table():
     return {
         "id": 1,
         "type": "table",
-        "title": "Quotas, fullest first",
+        "title": "Quotas, soonest to breach first",
         "description": (
-            "Every quota, ordered by how full it is. The title says fullest "
-            "rather than soonest on purpose: a quota at 0% whose window resets "
-            "in an hour is the safest thing on the board, so ordering by time "
-            "would put it on top. Fullness is what needs an answer; the reset "
-            "time beside it is what tells you how long you have.\n\n"
-            "Utilisation is a share of each plan's own limit, so 100 is the "
-            "quota itself - and for the same reason two rows at 100% are not "
-            "comparable quantities and none of these numbers can be summed.\n\n"
-            "At reset is a forecast from the last 24 hours, the same window the "
-            "burn alert uses. It is blank where the provider publishes no reset "
-            "time, because there is then no moment to forecast to."
+            "Every quota that has something to say, ordered by how long it has "
+            "left before it reaches its own limit.\n\n"
+            "Ordered by time to breach rather than by fullness. Fullness sorts a "
+            "quota that hit its ceiling yesterday above one that will hit it in "
+            "an hour, and the second is the one nobody has acted on yet. A quota "
+            "with no trustworthy forecast has nothing to sort by and sinks to the "
+            "bottom rather than being ranked on a guess.\n\n"
+            "Utilisation is a share of each plan's own limit, so 100 is the quota "
+            "itself - and for the same reason two rows at 100% are not comparable "
+            "quantities and none of these numbers can be summed.\n\n"
+            "Window is what the provider says the window is, not what this board "
+            "worked out. It used to be derived from the longest time-to-reset "
+            "seen over a week, which on a young deployment reported a confident "
+            "\"7 day\" for a window it had never once seen reset.\n\n"
+            "Rows whose quota is at zero AND whose provider publishes no reset "
+            "time are left out: they carry no number that can change and no "
+            "moment they change at."
         ),
         "datasource": DS,
-        "gridPos": {"h": 15, "w": 24, "x": 0, "y": 0},
+        "gridPos": {"h": 13, "w": 24, "x": 0, "y": 5},
         "targets": [
-            target("A", f"max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{{{SEL}}})", instant=True),
-            target("B", f"max by (provider, quota_type, account_id) (loomwatch_quota_reset_timestamp_seconds{{{SEL}}} - time())", instant=True),
-            target("C", projection(SEL), instant=True),
-            # Ownership, where the chart publishes it. No variable goes with
-            # this: a filter that cannot filter, because the recording rule is
-            # not installed, teaches the reader to distrust the filters beside
-            # it that do work. The column simply appears when the data does.
+            # Utilisation, minus the rows that can say nothing. A quota reading
+            # zero whose provider publishes no reset is not evidence of health -
+            # it is an absence of evidence, and it filled half this table.
+            target("A", f"""
+                ({util(SEL)} > 0)
+                or ({util(SEL)} and on (provider, quota_type, account_id) {reset_at(SEL)})
+            """, instant=True),
+            target("B", f"({reset_at(SEL)}) - time()", instant=True),
+            target("C", time_to_breach(SEL), instant=True),
+            # Ownership, where the chart publishes it - and only when it
+            # DISTINGUISHES. One team across every row is a column of identical
+            # cells; the gate is "more than one value exists", not "the mapping
+            # exists", because a constant column costs width and teaches nothing.
             target("D", f"""
                 max by (provider, quota_type, account_id, team) (
                   loomwatch_quota_utilization_percent{{{SEL}}}
                   * on (provider, account_id) group_left(team) loomwatch:account_team
                 ) * 0
+                and on () (count(count by (team) (loomwatch:account_team)) > 1)
             """, instant=True),
-            # The account's name, with its id as the fallback. The blocks below
-            # are titled by name; a table that names the same account by number
-            # makes the reader do the mapping in their head.
             target("E", """
                 max by (provider, account_id, account_name) (
                   loomwatch_account_info
@@ -119,6 +317,12 @@ def triage_table():
                        "account_name", "$1", "account_id", "(.*)")
                 )
             """, instant=True),
+            # The window the provider declares, published by the collector since
+            # 1.15.0. Absent for a provider that does not declare it, which is
+            # the honest rendering - the previous statistical guess was never
+            # absent and never said it was guessing.
+            target("F", f"max by (provider, quota_type, account_id) (loomwatch_quota_window_seconds{{{SEL}}})", instant=True),
+            target("G", f"{reset_at(SEL)} > 0", instant=True),
         ],
         "transformations": [
             {"id": "merge", "options": {}},
@@ -127,15 +331,18 @@ def triage_table():
                 "renameByName": {
                     "provider": "Provider",
                     "account_name": "Account",
-                    "quota_type": "Window",
+                    "quota_type": "Quota",
                     "team": "Team",
                     "Value #A": "Utilisation",
                     "Value #B": "Resets in",
-                    "Value #C": "At reset",
+                    "Value #C": "Breaches in",
+                    "Value #F": "Window",
+                    "Value #G": "Resets at",
                 },
                 "indexByName": {
-                    "provider": 0, "account_name": 1, "quota_type": 2, "team": 3,
-                    "Value #A": 4, "Value #B": 5, "Value #C": 6,
+                    "provider": 0, "account_name": 1, "quota_type": 2,
+                    "Value #F": 3, "team": 4,
+                    "Value #A": 5, "Value #C": 6, "Value #B": 7, "Value #G": 8,
                 },
             }},
         ],
@@ -149,18 +356,40 @@ def triage_table():
                      {"id": "custom.cellOptions", "value": {"type": "gauge", "mode": "basic"}},
                      {"id": "thresholds", "value": {"mode": "absolute", "steps": STEPS}},
                  ]},
-                {"matcher": {"id": "byName", "options": "Resets in"},
-                 "properties": [{"id": "unit", "value": "s"}, {"id": "noValue", "value": "not published"}]},
-                {"matcher": {"id": "byName", "options": "At reset"},
+                # The pair that decides. Breaches in is coloured, Resets in is
+                # not: the eye needs one of the two to draw it, and the question
+                # is whether the first is smaller than the second.
+                {"matcher": {"id": "byName", "options": "Breaches in"},
                  "properties": [
-                     {"id": "unit", "value": "percent"}, {"id": "decimals", "value": 0},
+                     {"id": "unit", "value": "s"}, {"id": "decimals", "value": 0},
                      {"id": "custom.cellOptions", "value": {"type": "color-text"}},
-                     {"id": "noValue", "value": "-"},
-                     {"id": "thresholds", "value": {"mode": "absolute", "steps": STEPS}},
+                     {"id": "custom.width", "value": 130},
+                     {"id": "noValue", "value": "not on track"},
+                     {"id": "thresholds", "value": {"mode": "absolute", "steps": [
+                         {"color": "red", "value": None}, {"color": "orange", "value": 21600},
+                         {"color": "green", "value": 86400}]}},
                  ]},
-                {"matcher": {"id": "byName", "options": "Provider"}, "properties": [{"id": "custom.width", "value": 120}]},
+                {"matcher": {"id": "byName", "options": "Resets in"},
+                 "properties": [
+                     {"id": "unit", "value": "s"}, {"id": "decimals", "value": 0},
+                     {"id": "custom.width", "value": 110},
+                     {"id": "noValue", "value": "not published"},
+                 ]},
+                {"matcher": {"id": "byName", "options": "Resets at"},
+                 "properties": [
+                     {"id": "unit", "value": "dateTimeAsLocal"},
+                     {"id": "custom.width", "value": 160},
+                     {"id": "noValue", "value": "not published"},
+                 ]},
+                {"matcher": {"id": "byName", "options": "Window"},
+                 "properties": [
+                     {"id": "unit", "value": "s"}, {"id": "decimals", "value": 0},
+                     {"id": "custom.width", "value": 100},
+                     {"id": "noValue", "value": "-"},
+                 ]},
+                {"matcher": {"id": "byName", "options": "Provider"}, "properties": [{"id": "custom.width", "value": 110}]},
                 {"matcher": {"id": "byName", "options": "Account"}, "properties": [{"id": "custom.width", "value": 150}]},
-                {"matcher": {"id": "byName", "options": "Window"}, "properties": [{"id": "custom.width", "value": 150}]},
+                {"matcher": {"id": "byName", "options": "Quota"}, "properties": [{"id": "custom.width", "value": 130}]},
             ],
         },
         "options": {
@@ -170,18 +399,22 @@ def triage_table():
             # chain, which is before the rename, and a name it cannot find is
             # not an error - it is a table that quietly comes back unsorted.
             #
-            # Utilisation is the sort key, not the projection. It is defined for
-            # every row, while a projection needs a reset timestamp and several
-            # windows do not publish one. Sorting by a column that is empty for
-            # half the rows puts the empties somewhere arbitrary and buries the
-            # full quota under them.
-            "sortBy": [{"displayName": "Utilisation", "desc": True}],
+            # Ascending, and on the forecast: the row with the least time left
+            # is the one to act on. Rows with no forecast have no value here and
+            # Grafana puts them last, which is where an unjudged row belongs.
+            "sortBy": [{"displayName": "Breaches in", "desc": False}],
         },
     }
 
 
 def account_row():
     """A row that repeats over $account: one block per subscription.
+
+    Collapsed by default, and that is the point of it. What a block holds is a
+    curve, and a curve answers "how did this get here", which is the question
+    after the decision rather than before it. Fifteen panels open under a table
+    that already said everything is why the board read as heavy: the reader
+    scrolls past all of them to reach nothing.
 
     Per account rather than per provider because an account is the thing
     somebody pays for and adds one at a time; a provider is a category. Three
@@ -192,56 +425,49 @@ def account_row():
         "id": 10,
         "type": "row",
         "title": "$account",
-        "collapsed": False,
+        "collapsed": True,
         "repeat": "account",
-        "gridPos": {"h": 1, "w": 24, "x": 0, "y": 15},
-        "panels": [],
+        "gridPos": {"h": 1, "w": 24, "x": 0, "y": 18},
+        # Collapsed rows carry their panels inside themselves rather than as
+        # siblings: a panel left at the top level stays visible whatever the row
+        # does, which is how a "collapsed" block ends up rendering anyway.
+        "panels": per_account_panels(),
     }
 
 
 def per_account_panels():
-    # account_id alone is enough to name an account: provider_accounts.id is a
-    # single autoincrement shared by every provider, so an id belongs to exactly
-    # one of them. The exception is providers that keep no account rows at all -
-    # they all report "default" and therefore share one block, which is visible
-    # rather than silent.
-    psel = 'provider=~"$provider",account_id=~"$account",quota_type=~"$quota_type"' 
+    """One curve per subscription, and nothing else.
+
+    Two panels were removed rather than rearranged. "Quotas now" was the
+    utilisation column of the table again, one bar per row, and its own
+    description claimed a bar per account when the aggregation had dropped
+    account entirely. "Collector" moved to the top strip, where the question it
+    answers - can these numbers be believed - is asked before the table rather
+    than sixteen grid rows below it.
+
+    account_id alone is enough to name an account: provider_accounts.id is a
+    single autoincrement shared by every provider, so an id belongs to exactly
+    one of them. The exception is providers that keep no account rows at all -
+    they all report "default" and therefore share one block, which is visible
+    rather than silent.
+    """
+    psel = 'provider=~"$provider",account_id=~"$account",quota_type=~"$quota_type"'
     return [
-        {
-            "id": 11,
-            "type": "bargauge",
-            "title": "Quotas now",
-            "description": "One bar per account and quota window, labelled. Bars rather than lines because the question here is how full, not how it got there.",
-            "datasource": DS,
-            "gridPos": {"h": 9, "w": 9, "x": 0, "y": 16},
-            "targets": [target("A", f"max by (quota_type) (loomwatch_quota_utilization_percent{{{psel}}})",
-                               legend="{{quota_type}}")],
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "percent", "min": 0, "max": 100,
-                    "thresholds": {"mode": "absolute", "steps": STEPS},
-                },
-                "overrides": [],
-            },
-            "options": {
-                "orientation": "horizontal",
-                "displayMode": "basic",
-                # Fixed sizes: a bar gauge with three bars stretches its labels
-                # to headline size, and the same panel next to an account with
-                # eight bars then reads as a different kind of thing.
-                "text": {"titleSize": 14, "valueSize": 28},
-                "showUnfilled": True,
-                "valueMode": "text",
-                "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": False},
-            },
-        },
         {
             "id": 12,
             "type": "timeseries",
             "title": "Trend",
-            "description": "Lines, not fills: sixteen filled areas are mud. The legend is a sorted table on the right so a series can be found by name rather than by colour.",
+            "description": (
+                "Lines, not fills: sixteen filled areas are mud. The legend is a "
+                "sorted table on the right so a series can be found by name "
+                "rather than by colour.\n\n"
+                "The board opens on a week because most windows here are weekly, "
+                "and a day of a weekly window is a flat line near the axis that "
+                "looks like nothing happening. The vertical drops are resets, "
+                "not incidents."
+            ),
             "datasource": DS,
-            "gridPos": {"h": 9, "w": 10, "x": 9, "y": 16},
+            "gridPos": {"h": 9, "w": 24, "x": 0, "y": 19},
             "targets": [target("A", f"max by (quota_type) (loomwatch_quota_utilization_percent{{{psel}}})",
                                legend="{{quota_type}}")],
             "fieldConfig": {
@@ -256,57 +482,6 @@ def per_account_panels():
                 "legend": {"displayMode": "table", "placement": "right",
                            "calcs": ["lastNotNull"], "sortBy": "Last *", "sortDesc": True},
                 "tooltip": {"mode": "multi", "sort": "desc"},
-            },
-        },
-        {
-            "id": 13,
-            "type": "stat",
-            "title": "Collector",
-            "description": (
-                "Two readings, because one of them cannot see the failure the "
-                "other alerts on. agent_healthy is the collector's own verdict "
-                "about this account. Age of last poll is what "
-                "LoomwatchCollectorNotPolling is built on, and that rule exists "
-                "precisely for the case where the collector stalls while its "
-                "own health flag stays at 1 - so a panel showing only the flag "
-                "reports fresh at the exact moment the alert fires.\n\n"
-                "While this is stale every quota beside it is old, and their "
-                "calm stops meaning anything."
-            ),
-            "datasource": DS,
-            "gridPos": {"h": 9, "w": 5, "x": 19, "y": 16},
-            "targets": [
-                target("A", f'max by (account_id) (loomwatch_agent_healthy{{provider=~"$provider",account_id=~"$account"}})',
-                       legend="health"),
-                target("B", f'max by (account_id) (loomwatch_agent_last_cycle_age_seconds{{provider=~"$provider",account_id=~"$account"}})',
-                       legend="last poll"),
-            ],
-            "fieldConfig": {
-                "defaults": {"thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": None}]}},
-                "overrides": [
-                    {"matcher": {"id": "byFrameRefID", "options": "A"},
-                     "properties": [
-                         {"id": "mappings", "value": [{"type": "value", "options": {
-                             "0": {"text": "stale", "color": "red", "index": 0},
-                             "1": {"text": "fresh", "color": "green", "index": 1}}}]},
-                         {"id": "thresholds", "value": {"mode": "absolute", "steps": [
-                             {"color": "red", "value": None}, {"color": "green", "value": 1}]}},
-                     ]},
-                    {"matcher": {"id": "byFrameRefID", "options": "B"},
-                     "properties": [
-                         {"id": "unit", "value": "s"},
-                         # The rule's own threshold shape: five poll intervals.
-                         {"id": "thresholds", "value": {"mode": "absolute", "steps": [
-                             {"color": "green", "value": None}, {"color": "red", "value": 300}]}},
-                     ]},
-                ],
-            },
-            "options": {
-                "colorMode": "value", "graphMode": "none", "textMode": "value_and_name",
-                "justifyMode": "auto",
-                "text": {"titleSize": 12, "valueSize": 22},
-                "orientation": "horizontal",
-                "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": False},
             },
         },
     ]
@@ -371,7 +546,6 @@ def variables():
 
 
 def main():
-    row = account_row()
     dashboard = {
         "uid": "loomwatch-quotas",
         "title": "loomwatch - LLM quotas",
@@ -384,9 +558,9 @@ def main():
         "timezone": "browser",
         "schemaVersion": 39,
         "refresh": "1m",
-        "time": {"from": "now-24h", "to": "now"},
+        "time": {"from": "now-7d", "to": "now"},
         "templating": {"list": variables()},
-        "panels": [triage_table(), row] + per_account_panels(),
+        "panels": headline() + [triage_table(), account_row()],
     }
     out = "charts/loomwatch/dashboards/loomwatch.json"
     with open(out, "w") as fh:

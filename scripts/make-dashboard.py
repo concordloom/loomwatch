@@ -164,6 +164,20 @@ def unjudgeable(sel):
     """
 
 
+# The value a row carries when there is no forecast for it.
+#
+# A sentinel rather than an absent value, and the reason is the sort. Grafana
+# orders an absent value FIRST on an ascending sort, so a table titled "soonest
+# to breach first" put every row it could not judge above the two rows it could
+# - the only actionable rows on the board sank to the bottom. A number sorts;
+# nothing does not. The display is a value mapping back to the same words, so
+# the operator sees no difference and the order is the one the title promises.
+#
+# Chosen far beyond any real horizon: a hundred years in seconds. Any genuine
+# forecast is smaller, so the sentinel always sorts last.
+NO_FORECAST = 3153600000
+
+
 def breaching(sel):
     """The quotas that are out, or reach their limit before their window resets.
 
@@ -342,7 +356,9 @@ def triage_table():
             # it is an absence of evidence, and it filled half this table.
             target("A", with_account_name(visible_rows(SEL)), instant=True),
             target("B", only_visible(f"({reset_at(SEL)}) - time()", SEL), instant=True),
-            target("C", only_visible(time_to_breach(SEL), SEL), instant=True),
+            target("C", only_visible(
+                f"({time_to_breach(SEL)}) or ({visible_rows(SEL)} * 0 + {NO_FORECAST})", SEL),
+                instant=True),
             # Ownership, where the chart publishes it - and only when it
             # DISTINGUISHES. One team across every row is a column of identical
             # cells; the gate is "more than one value exists", not "the mapping
@@ -409,6 +425,11 @@ def triage_table():
                      {"id": "unit", "value": "s"}, {"id": "decimals", "value": 0},
                      {"id": "custom.cellOptions", "value": {"type": "color-text"}},
                      {"id": "custom.width", "value": 130},
+                     # The sentinel, rendered as the words it stands for. A
+                     # mapping rather than noValue: the value is present so
+                     # that it sorts, and only its appearance is an absence.
+                     {"id": "mappings", "value": [{"type": "value", "options": {
+                         str(NO_FORECAST): {"text": "not on track", "color": "text", "index": 0}}}]},
                      {"id": "noValue", "value": "not on track"},
                      # The base step is neutral and the colours start at zero.
                      # Grafana paints an ABSENT value with the base colour, and

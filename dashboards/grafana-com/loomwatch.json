@@ -375,7 +375,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "(clamp_min((100 - (max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}))) / (deriv((max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}))[24h:5m]) > 0), 0)) and on (provider, quota_type, account_id) ((max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}) > 0) or (max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}) and on (provider, quota_type, account_id) max by (provider, quota_type, account_id) (loomwatch_quota_reset_timestamp_seconds{provider=~\"$provider\",quota_type=~\"$quota_type\"})))",
+          "expr": "((clamp_min((100 - (max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}))) / (deriv((max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}))[24h:5m]) > 0), 0)) or (((max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}) > 0) or (max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}) and on (provider, quota_type, account_id) max by (provider, quota_type, account_id) (loomwatch_quota_reset_timestamp_seconds{provider=~\"$provider\",quota_type=~\"$quota_type\"}))) * 0 + 3153600000)) and on (provider, quota_type, account_id) ((max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}) > 0) or (max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}) and on (provider, quota_type, account_id) max by (provider, quota_type, account_id) (loomwatch_quota_reset_timestamp_seconds{provider=~\"$provider\",quota_type=~\"$quota_type\"})))",
           "instant": true,
           "range": false,
           "format": "table"
@@ -532,6 +532,21 @@
               {
                 "id": "custom.width",
                 "value": 130
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "3153600000": {
+                        "text": "not on track",
+                        "color": "text",
+                        "index": 0
+                      }
+                    }
+                  }
+                ]
               },
               {
                 "id": "noValue",

@@ -83,9 +83,18 @@ def in_team(expr):
     rule publishes it as "unassigned", so it has a mapping and obeys the filter
     like any other.
     """
+    # The outer parentheses are load-bearing. Without them this returns
+    # `A or B`, and `or` binds LOOSER than arithmetic - so embedding the result
+    # in an expression like `rows * 0 + SENTINEL` silently reassociates into
+    # `A or (B * 0 + SENTINEL)`, and the first branch keeps its own values.
+    # The forecast column then rendered utilisation as a duration: a quota at
+    # 8% read "8 s to breach", in alarm red, on a board where nothing was
+    # breaching at all.
     return f"""
-      ((({expr})) and on (provider, account_id) loomwatch:account_team{{team=~"$team"}})
-      or ((({expr})) unless on (provider, account_id) loomwatch:account_team)
+      (
+        ((({expr})) and on (provider, account_id) loomwatch:account_team{{team=~"$team"}})
+        or ((({expr})) unless on (provider, account_id) loomwatch:account_team)
+      )
     """
 
 

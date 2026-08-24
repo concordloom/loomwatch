@@ -132,15 +132,37 @@ def main() -> int:
     # on an assertion the release had just fixed, and the dashboard appeared in
     # Grafana about five minutes later.
     #
-    # The fingerprint is the set of queries, because that is what the assertions
-    # below actually exercise. Cosmetic drift does not hold the check up.
+    # The fingerprint covers what the assertions below actually exercise, and
+    # that is more than the queries.
+    #
+    # It was the queries alone at first, on the reasoning that "cosmetic drift
+    # should not hold the check up". That reasoning was wrong in the one
+    # direction that matters: this check asserts about RENDERING, and rendering
+    # is what field config controls. A release that widened one column passed
+    # Stage 2 while Grafana was still serving the narrow one, because the
+    # queries had not changed - the very failure the wait exists to prevent,
+    # arriving through the gap left for convenience.
+    #
+    # Not the whole document: Grafana fills in defaults on write, and comparing
+    # everything would never converge. These five kinds do come back unchanged,
+    # which was measured against a live instance rather than assumed.
     def fingerprint(dashboard: dict) -> set:
-        return {
-            " ".join(target.get("expr", "").split())
-            for panel in dashboard.get("panels", [])
-            for target in panel.get("targets", [])
-            if target.get("expr")
-        }
+        marks = set()
+        for panel in dashboard.get("panels", []):
+            marks.add(("title", panel.get("title")))
+            for target in panel.get("targets", []) or []:
+                if target.get("expr"):
+                    marks.add(("expr", " ".join(target["expr"].split())))
+            overrides = panel.get("fieldConfig", {}).get("overrides")
+            if overrides:
+                marks.add(("overrides", json.dumps(overrides, sort_keys=True)))
+            transformations = panel.get("transformations")
+            if transformations:
+                marks.add(("transformations", json.dumps(transformations, sort_keys=True)))
+            sort_by = (panel.get("options") or {}).get("sortBy")
+            if sort_by:
+                marks.add(("sortBy", json.dumps(sort_by, sort_keys=True)))
+        return marks
 
     want = fingerprint(shipped)
 

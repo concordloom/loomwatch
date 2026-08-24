@@ -318,6 +318,7 @@ kubectl delete pvc my-release-loomwatch-data
 ```
 loomwatch_quota_utilization_percent{provider,quota_type,account_id}
 loomwatch_quota_reset_timestamp_seconds{provider,quota_type,account_id}
+loomwatch_quota_window_seconds{provider,quota_type,account_id}
 loomwatch_agent_healthy{provider,account_id}
 loomwatch_agent_last_cycle_age_seconds{provider,account_id}
 ```
@@ -327,9 +328,15 @@ Two properties are worth stating because alerts depend on them:
 - **A series exists when the provider declares the quota, not when it has been
   consumed.** Zero utilisation is a real reading. An absent series means the
   plan has no such quota — not that it is idle.
-- **`quota_type` is the window, and its length is not implied by its name.** A
-  provider may reset `general` every five hours and `tokens` weekly. Group by
-  the reset timestamp, never by the name.
+- **`quota_type` names a series, not a duration.** A provider may reset
+  `general` every five hours and `tokens` weekly, and one of those names is not
+  even the provider's: `tokens` is this project's word for Z.ai's long window.
+  Read the length from `loomwatch_quota_window_seconds`, never from the name.
+- **`loomwatch_quota_window_seconds` is absent when the provider does not
+  describe the window**, and absent is the answer - not zero. A dashboard that
+  derived the length statistically instead reported a confident "7 day" for a
+  window it had never once observed reset, because the deployment was younger
+  than the window. A missing series can be rendered as "unknown"; a zero cannot.
 
 ### Getting the dashboard into Grafana
 

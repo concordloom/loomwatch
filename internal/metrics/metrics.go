@@ -52,6 +52,7 @@ type Metrics struct {
 
 	quotaUtilization    *dualGaugeVec
 	quotaResetTimestamp *dualGaugeVec
+	quotaWindowSeconds  *dualGaugeVec
 	creditsBalance      *dualGaugeVec
 	agentHealthy        *dualGaugeVec
 	agentLastCycleAge   *dualGaugeVec
@@ -92,6 +93,11 @@ func New() *Metrics {
 		quotaResetTimestamp: newDualGaugeVec(
 			"loomwatch_quota_reset_timestamp_seconds", "onwatch_quota_reset_timestamp_seconds",
 			"Unix timestamp (seconds) at which the quota next resets. Compute remaining time with: metric - time()",
+			[]string{"provider", "quota_type", "account_id"},
+		),
+		quotaWindowSeconds: newDualGaugeVec(
+			"loomwatch_quota_window_seconds", "onwatch_quota_window_seconds",
+			"Length of the quota's window in seconds, as the provider describes it. Absent when the provider does not describe it - a window of unknown length has no number, and zero would read as one.",
 			[]string{"provider", "quota_type", "account_id"},
 		),
 		creditsBalance: newDualGaugeVec(
@@ -150,6 +156,7 @@ func New() *Metrics {
 	for _, pair := range [][]prometheus.Collector{
 		m.quotaUtilization.collectors(),
 		m.quotaResetTimestamp.collectors(),
+		m.quotaWindowSeconds.collectors(),
 		m.creditsBalance.collectors(),
 		m.agentHealthy.collectors(),
 		m.agentLastCycleAge.collectors(),
@@ -241,6 +248,7 @@ func (m *Metrics) Scrape(s *store.Store, pollInterval time.Duration) {
 
 	m.quotaUtilization.Reset()
 	m.quotaResetTimestamp.Reset()
+	m.quotaWindowSeconds.Reset()
 	m.creditsBalance.Reset()
 	m.agentHealthy.Reset()
 	m.agentLastCycleAge.Reset()
@@ -462,6 +470,12 @@ func (m *Metrics) scrapeZai(s *store.Store, staleThreshold time.Duration) {
 			if snap.TokensNextResetTime != nil && !snap.TokensNextResetTime.IsZero() {
 				m.quotaResetTimestamp.With(labels).Set(float64(snap.TokensNextResetTime.Unix()))
 			}
+			// The series is named "tokens" by this repository, not by Z.ai, so
+			// the name says nothing about the window. The descriptor does, it
+			// reached the snapshot all along, and it stopped here.
+			if seconds := api.ZaiWindowSeconds(snap.TokensUnit, snap.TokensNumber); seconds > 0 {
+				m.quotaWindowSeconds.With(labels).Set(seconds)
+			}
 		}
 		if zaiQuotaDeclared(snap.TimeLimit, snap.TimeUsage, snap.TimeCurrentValue, snap.TimeRemaining, snap.TimePercentage) {
 			labels := prometheus.Labels{"provider": method, "quota_type": "time", "account_id": accountID}
@@ -488,6 +502,9 @@ func (m *Metrics) scrapeZai(s *store.Store, staleThreshold time.Duration) {
 			m.quotaUtilization.With(labels).Set(float64(snap.TokensShortPercentage))
 			if snap.TokensShortNextResetTime != nil && !snap.TokensShortNextResetTime.IsZero() {
 				m.quotaResetTimestamp.With(labels).Set(float64(snap.TokensShortNextResetTime.Unix()))
+			}
+			if seconds := api.ZaiWindowSeconds(snap.TokensShortUnit, snap.TokensShortNumber); seconds > 0 {
+				m.quotaWindowSeconds.With(labels).Set(seconds)
 			}
 		}
 	}
@@ -544,6 +561,9 @@ func (m *Metrics) scrapeMiniMax(s *store.Store, staleThreshold time.Duration) {
 			if v.ResetAt != nil && !v.ResetAt.IsZero() {
 				m.quotaResetTimestamp.With(labels).Set(float64(v.ResetAt.Unix()))
 			}
+			if seconds := windowSeconds(v.WindowStart, v.WindowEnd); seconds > 0 {
+				m.quotaWindowSeconds.With(labels).Set(seconds)
+			}
 
 			// MiniMax plans carry a weekly window alongside the rolling
 			// five-hour one, and the weekly window is the one that burns over
@@ -562,9 +582,26 @@ func (m *Metrics) scrapeMiniMax(s *store.Store, staleThreshold time.Duration) {
 				if v.WeeklyResetAt != nil && !v.WeeklyResetAt.IsZero() {
 					m.quotaResetTimestamp.With(weeklyLabels).Set(float64(v.WeeklyResetAt.Unix()))
 				}
+				if seconds := windowSeconds(v.WeeklyWindowStart, v.WeeklyWindowEnd); seconds > 0 {
+					m.quotaWindowSeconds.With(weeklyLabels).Set(seconds)
+				}
 			}
 		}
 	}
+}
+
+// windowSeconds is the length of a window given by its two ends. It returns
+// zero - meaning "publish nothing" - for a missing end or a non-positive
+// span, so a half-parsed response cannot become a confident number.
+func windowSeconds(start, end *time.Time) float64 {
+	if start == nil || end == nil || start.IsZero() || end.IsZero() {
+		return 0
+	}
+	seconds := end.Sub(*start).Seconds()
+	if seconds <= 0 {
+		return 0
+	}
+	return seconds
 }
 
 // weeklyQuotaType names the weekly companion of a per-model quota. Keeping both

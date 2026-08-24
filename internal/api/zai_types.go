@@ -113,6 +113,19 @@ func zaiUnitHours(unit int) float64 {
 	}
 }
 
+// ZaiWindowSeconds is the length of a window in seconds, from the same
+// descriptor ZaiWindowLabel names. Zero means the descriptor is not one the
+// provider documents, and the caller must then publish nothing: a window of no
+// length is a quantity, and a consumer that reads it as one draws exactly the
+// wrong conclusion. Absence is the only value that says "not known".
+func ZaiWindowSeconds(unit, number int) float64 {
+	hours := zaiUnitHours(unit)
+	if hours <= 0 || number <= 0 {
+		return 0
+	}
+	return hours * float64(number) * 3600
+}
+
 // zaiWindowLabel is the human-readable name of a window, from its descriptor.
 func ZaiWindowLabel(unit, number int) string {
 	switch unit {

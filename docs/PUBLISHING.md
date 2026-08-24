@@ -85,6 +85,12 @@ The chart README is written for someone who arrived at a repository. This
 audience arrived at a dashboard and needs one thing the picture cannot tell
 them: what has to be running for it to show anything. Keep it to that.
 
+Both links belong in it. Artifact Hub answers "how do I install this"; the
+repository answers everything else - what the queries do, why a column says
+"no forecast", where to report that it does not work. A listing that offers only
+the install path leaves anyone with a question at a dead end, and a dashboard
+catalogue is full of dashboards whose projects cannot be found.
+
 ```markdown
 Remaining quota on prepaid LLM subscriptions - Anthropic, Z.ai, MiniMax, Copilot,
 Codex, Gemini, Cursor, Grok and eight more - per account and per quota window.
@@ -96,7 +102,8 @@ board without provisioning it:
 
     helm install loomwatch oci://ghcr.io/concordloom/charts/loomwatch
 
-Chart and setup: https://artifacthub.io/packages/helm/loomwatch/loomwatch
+Source, issues and documentation: https://github.com/concordloom/loomwatch
+Chart and installation: https://artifacthub.io/packages/helm/loomwatch/loomwatch
 
 The board answers two questions before anything has to be read: whether any
 quota will hit its limit before its window resets, and whether the collector is

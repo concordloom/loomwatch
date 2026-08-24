@@ -41,6 +41,7 @@ here, so this stays correct for a deployment that carries a different set.
 Requires the playwright package - the same one tests/e2e/requirements.txt
 installs.
 """
+import base64
 import datetime
 import json
 import os
@@ -48,6 +49,8 @@ import pathlib
 import re
 import sys
 import tempfile
+import time
+import urllib.request
 
 from playwright.sync_api import sync_playwright
 
@@ -58,6 +61,10 @@ DASHBOARD = ROOT / "charts" / "loomwatch" / "dashboards" / "loomwatch.json"
 # future. The window is deliberately loose - the point is not to pin the value,
 # it is to catch a timestamp that has been read in the wrong unit, and those
 # miss by decades rather than by days.
+# Longer than grafana-operator's default resync period, so a deploy that lands
+# just after a reconcile still settles inside the wait.
+WAIT_FOR_DEPLOY_SECONDS = int(os.environ.get("LOOMWATCH_GRAFANA_WAIT", "720"))
+
 SANE_YEARS_BACK = 2
 SANE_YEARS_FORWARD = 5
 
@@ -114,6 +121,55 @@ def main() -> int:
     def check(condition: bool, message: str) -> None:
         if not condition:
             failures.append(message)
+
+    # Grafana is not necessarily showing the dashboard the chart just shipped.
+    # grafana-operator re-reads its ConfigMap on a resync period - ten minutes
+    # by default - so a check that runs straight after a deploy inspects the
+    # PREVIOUS revision and reports on it. That is the failure this whole gate
+    # exists to prevent: a verdict about something other than what shipped.
+    #
+    # Observed rather than reasoned: the first Stage 2 run after 1.15.3 failed
+    # on an assertion the release had just fixed, and the dashboard appeared in
+    # Grafana about five minutes later.
+    #
+    # The fingerprint is the set of queries, because that is what the assertions
+    # below actually exercise. Cosmetic drift does not hold the check up.
+    def fingerprint(dashboard: dict) -> set:
+        return {
+            " ".join(target.get("expr", "").split())
+            for panel in dashboard.get("panels", [])
+            for target in panel.get("targets", [])
+            if target.get("expr")
+        }
+
+    want = fingerprint(shipped)
+
+    def deployed_fingerprint() -> set:
+        request = urllib.request.Request(
+            f"{url}/api/dashboards/uid/{uid}",
+            headers={"Authorization": "Basic " + base64.b64encode(
+                f"{user}:{password}".encode()).decode()},
+        )
+        with urllib.request.urlopen(request, timeout=30) as response:
+            return fingerprint(json.load(response)["dashboard"])
+
+    deadline = time.monotonic() + WAIT_FOR_DEPLOY_SECONDS
+    while True:
+        try:
+            if deployed_fingerprint() == want:
+                break
+        except Exception as error:  # noqa: BLE001 - reported, not swallowed
+            last_error = error
+        else:
+            last_error = None
+        if time.monotonic() >= deadline:
+            where = f": {last_error}" if last_error else ""
+            sys.exit(
+                f"Grafana is still serving a different revision of {uid} after "
+                f"{WAIT_FOR_DEPLOY_SECONDS}s{where}. Checking it would report on "
+                "a dashboard other than the one that shipped."
+            )
+        time.sleep(10)
 
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch()

@@ -209,6 +209,30 @@ def main() -> int:
                 f"the placeholder {text!r} is drawn in {colour}, which reads as an alarm. "
                 "Grafana paints an absent value with the base threshold colour.",
             )
+        # 4. The order the panel's own title promises. A table sorted ascending
+        #    on a column where "no value" is absent puts the unjudged rows
+        #    FIRST, so a board titled "soonest to breach first" showed every row
+        #    it could not judge above the two it could - the only actionable
+        #    rows sank to the bottom. Checked only when both kinds are present,
+        #    because with one kind there is no order to get wrong.
+        data_rows = [
+            [(c.inner_text() or "").strip() for c in row.query_selector_all('[role="gridcell"], [role="cell"]')]
+            for row in rows
+        ]
+        data_rows = [r for r in data_rows if r and r[0]]
+        placeholder_positions = [
+            i for i, r in enumerate(data_rows)
+            if any(cell in placeholders for cell in r)
+        ]
+        real_positions = [i for i in range(len(data_rows)) if i not in placeholder_positions]
+        if placeholder_positions and real_positions:
+            check(
+                min(real_positions) < min(placeholder_positions),
+                "every row the board could judge is sorted BELOW rows it could not; "
+                "an ascending sort orders an absent value first, so the actionable "
+                "rows end up at the bottom of a table that promises them at the top",
+            )
+
         if placeholders:
             check(
                 checked_placeholders > 0,

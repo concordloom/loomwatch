@@ -527,7 +527,12 @@ def triage_table():
                 {"matcher": {"id": "byName", "options": "Resets at"},
                  "properties": [
                      {"id": "unit", "value": "dateTimeAsLocal"},
-                     {"id": "custom.width", "value": 160},
+                     # Wide enough for the longest thing the formatter produces:
+                     # a two-digit month, a four-digit year and a 12-hour clock
+                     # with a meridiem. At 160 the leading digit of the month was
+                     # clipped, so a reset on 8/29 read "/29/2026" - a date that
+                     # is not wrong so much as unreadable.
+                     {"id": "custom.width", "value": 210},
                      {"id": "noValue", "value": "not published"},
                  ]},
                 {"matcher": {"id": "byName", "options": "Window"},

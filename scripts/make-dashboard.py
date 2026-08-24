@@ -52,6 +52,31 @@ def util(sel):
     return f"max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{{{sel}}})"
 
 
+# The account's name as a labelling vector, and the fallback that keeps a
+# nameless account visible rather than dropping it out of the join.
+ACCOUNT_NAMED = """
+    max by (provider, account_id, account_name) (
+      loomwatch_account_info
+      or label_replace(
+           loomwatch_agent_healthy unless on (provider, account_id) loomwatch_account_info,
+           "account_name", "$1", "account_id", "(.*)")
+    )
+"""
+
+
+def with_account_name(expr):
+    """Attach the account name inside the query rather than beside it.
+
+    It used to arrive as its own frame and be joined by the `merge`
+    transformation. merge attaches such a frame to ONE row per key, so an
+    account with three quota rows got its name on the first and blanks on the
+    other two - visible on the stand as two `zai` rows with an empty Account
+    column. A vector multiply broadcasts to every matching row, which is what
+    the alert rules already do for the same reason.
+    """
+    return f"({expr}) * on (provider, account_id) group_left(account_name) ({ACCOUNT_NAMED})"
+
+
 def reset_at(sel):
     return f"max by (provider, quota_type, account_id) (loomwatch_quota_reset_timestamp_seconds{{{sel}}})"
 
@@ -292,10 +317,10 @@ def triage_table():
             # Utilisation, minus the rows that can say nothing. A quota reading
             # zero whose provider publishes no reset is not evidence of health -
             # it is an absence of evidence, and it filled half this table.
-            target("A", f"""
+            target("A", with_account_name(f"""
                 ({util(SEL)} > 0)
                 or ({util(SEL)} and on (provider, quota_type, account_id) {reset_at(SEL)})
-            """, instant=True),
+            """), instant=True),
             target("B", f"({reset_at(SEL)}) - time()", instant=True),
             target("C", time_to_breach(SEL), instant=True),
             # Ownership, where the chart publishes it - and only when it
@@ -309,25 +334,22 @@ def triage_table():
                 ) * 0
                 and on () (count(count by (team) (loomwatch:account_team)) > 1)
             """, instant=True),
-            target("E", """
-                max by (provider, account_id, account_name) (
-                  loomwatch_account_info
-                  or label_replace(
-                       loomwatch_agent_healthy unless on (provider, account_id) loomwatch_account_info,
-                       "account_name", "$1", "account_id", "(.*)")
-                )
-            """, instant=True),
+
             # The window the provider declares, published by the collector since
             # 1.15.0. Absent for a provider that does not declare it, which is
             # the honest rendering - the previous statistical guess was never
             # absent and never said it was guessing.
             target("F", f"max by (provider, quota_type, account_id) (loomwatch_quota_window_seconds{{{SEL}}})", instant=True),
-            target("G", f"{reset_at(SEL)} > 0", instant=True),
+            # Milliseconds, because that is what Grafana's date units read. The
+            # metric is in seconds, and rendered as-is every reset landed on
+            # 21 January 1970 - a Unix timestamp interpreted as an offset a
+            # thousand times smaller.
+            target("G", f"({reset_at(SEL)} > 0) * 1000", instant=True),
         ],
         "transformations": [
             {"id": "merge", "options": {}},
             {"id": "organize", "options": {
-                "excludeByName": {"Time": True, "Value #D": True, "Value #E": True, "account_id": True},
+                "excludeByName": {"Time": True, "Value #D": True, "account_id": True},
                 "renameByName": {
                     "provider": "Provider",
                     "account_name": "Account",
@@ -365,9 +387,13 @@ def triage_table():
                      {"id": "custom.cellOptions", "value": {"type": "color-text"}},
                      {"id": "custom.width", "value": 130},
                      {"id": "noValue", "value": "not on track"},
+                     # The base step is neutral and the colours start at zero.
+                     # Grafana paints an ABSENT value with the base colour, and
+                     # with red at the base every row that was not on track to
+                     # breach - the safe majority - was rendered in alarm red.
                      {"id": "thresholds", "value": {"mode": "absolute", "steps": [
-                         {"color": "red", "value": None}, {"color": "orange", "value": 21600},
-                         {"color": "green", "value": 86400}]}},
+                         {"color": "text", "value": None}, {"color": "red", "value": 0},
+                         {"color": "orange", "value": 21600}, {"color": "green", "value": 86400}]}},
                  ]},
                 {"matcher": {"id": "byName", "options": "Resets in"},
                  "properties": [

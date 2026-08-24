@@ -318,7 +318,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "(max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}) > 0) or (max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}) and on (provider, quota_type, account_id) max by (provider, quota_type, account_id) (loomwatch_quota_reset_timestamp_seconds{provider=~\"$provider\",quota_type=~\"$quota_type\"}))",
+          "expr": "( (max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}) > 0) or (max by (provider, quota_type, account_id) (loomwatch_quota_utilization_percent{provider=~\"$provider\",quota_type=~\"$quota_type\"}) and on (provider, quota_type, account_id) max by (provider, quota_type, account_id) (loomwatch_quota_reset_timestamp_seconds{provider=~\"$provider\",quota_type=~\"$quota_type\"})) ) * on (provider, account_id) group_left(account_name) ( max by (provider, account_id, account_name) ( loomwatch_account_info or label_replace( loomwatch_agent_healthy unless on (provider, account_id) loomwatch_account_info, \"account_name\", \"$1\", \"account_id\", \"(.*)\") ) )",
           "instant": true,
           "range": false,
           "format": "table"
@@ -357,17 +357,6 @@
           "format": "table"
         },
         {
-          "refId": "E",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "expr": "max by (provider, account_id, account_name) ( loomwatch_account_info or label_replace( loomwatch_agent_healthy unless on (provider, account_id) loomwatch_account_info, \"account_name\", \"$1\", \"account_id\", \"(.*)\") )",
-          "instant": true,
-          "range": false,
-          "format": "table"
-        },
-        {
           "refId": "F",
           "datasource": {
             "type": "prometheus",
@@ -384,7 +373,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "max by (provider, quota_type, account_id) (loomwatch_quota_reset_timestamp_seconds{provider=~\"$provider\",quota_type=~\"$quota_type\"}) > 0",
+          "expr": "(max by (provider, quota_type, account_id) (loomwatch_quota_reset_timestamp_seconds{provider=~\"$provider\",quota_type=~\"$quota_type\"}) > 0) * 1000",
           "instant": true,
           "range": false,
           "format": "table"
@@ -401,7 +390,6 @@
             "excludeByName": {
               "Time": true,
               "Value #D": true,
-              "Value #E": true,
               "account_id": true
             },
             "renameByName": {
@@ -520,8 +508,12 @@
                   "mode": "absolute",
                   "steps": [
                     {
-                      "color": "red",
+                      "color": "text",
                       "value": null
+                    },
+                    {
+                      "color": "red",
+                      "value": 0
                     },
                     {
                       "color": "orange",

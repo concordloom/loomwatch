@@ -64,6 +64,31 @@ ACCOUNT_NAMED = """
 """
 
 
+def in_team(expr):
+    """Restrict a set of series to the selected team, safely.
+
+    The second branch is the whole design. loomwatch:account_team exists only
+    where metrics.prometheusRule.teams is configured, and intersecting with a
+    series that does not exist yields nothing - so a naive team filter would
+    empty the entire board for every deployment that has not set ownership up.
+    Rows for accounts with NO mapping at all are therefore kept regardless of
+    the selection, which means:
+
+      no recording rule      -> the filter does not filter, and nothing is lost
+      rule present, All      -> first branch keeps everything anyway
+      rule present, one team -> other teams drop, because they DO have a
+                                mapping and it does not match
+
+    An account the operator forgot to map is not silently hidden either: the
+    rule publishes it as "unassigned", so it has a mapping and obeys the filter
+    like any other.
+    """
+    return f"""
+      ((({expr})) and on (provider, account_id) loomwatch:account_team{{team=~"$team"}})
+      or ((({expr})) unless on (provider, account_id) loomwatch:account_team)
+    """
+
+
 def visible_rows(sel):
     """The rows the table shows, defined once.
 
@@ -77,7 +102,7 @@ def visible_rows(sel):
     the columns those queries provide, with an empty Provider-and-Account and a
     window beside them. Two such ghosts sat at the bottom of the deployed table.
     """
-    return (
+    return in_team(
         f"(({util(sel)} > 0)"
         f" or ({util(sel)} and on (provider, quota_type, account_id) {reset_at(sel)}))"
     )
@@ -158,10 +183,10 @@ def unjudgeable(sel):
     contains a reset, so the slope describes the boundary rather than the
     consumption.
     """
-    return f"""
+    return in_team(f"""
         ({util(sel)} unless on (provider, quota_type, account_id) {reset_at(sel)})
         or ({util(sel)} and on (provider, quota_type, account_id) (deriv(({util(sel)})[24h:5m]) < 0))
-    """
+    """)
 
 
 # The value a row carries when there is no forecast for it.
@@ -191,10 +216,10 @@ def breaching(sel):
     than counted as safe - which is why the panel beside this one says how many
     could not be judged.
     """
-    return f"""
+    return in_team(f"""
         ({util(sel)} >= 100)
         or (({time_to_breach(sel)}) < (({reset_at(sel)}) - time()))
-    """
+    """)
 
 
 def headline():
@@ -557,6 +582,17 @@ def per_account_panels():
     ]
 
 
+# The universe of reporting accounts, narrowed to the selected team by the same
+# two-branch rule as in_team(): an account with no mapping stays, so a
+# deployment without ownership configured keeps every block it had.
+TEAM_SCOPED_HEALTHY = (
+    '(loomwatch_agent_healthy{provider=~"$provider"}'
+    ' and on(provider, account_id) loomwatch:account_team{team=~"$team"}'
+    ' or loomwatch_agent_healthy{provider=~"$provider"}'
+    ' unless on(provider, account_id) loomwatch:account_team)'
+)
+
+
 def variables():
     def query(name, label, q, description):
         return {
@@ -571,6 +607,16 @@ def variables():
          "query": "prometheus", "current": {}},
         query("provider", "Provider", "label_values(loomwatch_agent_healthy, provider)",
               "Filters the table above and which accounts get a block below."),
+        # Ownership. Present whether or not anyone configured it: with no
+        # mapping the variable comes back empty and every filter built on it
+        # keeps everything, which is what in_team() guarantees.
+        #
+        # It sits before Account deliberately - picking a team narrows the
+        # accounts below it, so the two read left to right as one thought.
+        query("team", "Team", "label_values(loomwatch:account_team, team)",
+              "Who owns the plan. Accounts nobody mapped are published as "
+              "\"unassigned\" rather than dropped, so selecting that value finds "
+              "exactly the subscriptions with no owner."),
         # The blocks repeat over this one.
         #
         # label_join builds the readable identity; the regex splits it again, so
@@ -594,14 +640,14 @@ def variables():
                        "query": (
                            "query_result("
                            # Named accounts, where the collector keeps rows for them.
-                           'label_join(loomwatch_agent_healthy{provider=~"$provider"}'
+                           "label_join(" + TEAM_SCOPED_HEALTHY +
                            " * on(provider, account_id) group_left(account_name) loomwatch_account_info,"
                            ' "account", " / ", "provider", "account_name")'
                            " or "
                            # Everyone else, by id. Without this branch the seven
                            # providers that keep no account rows lose their blocks
                            # entirely, which is a worse trade than an ugly label.
-                           'label_join(loomwatch_agent_healthy{provider=~"$provider"}'
+                           "label_join(" + TEAM_SCOPED_HEALTHY +
                            " unless on(provider, account_id) loomwatch_account_info,"
                            ' "account", " / ", "provider", "account_id")'
                            ")"

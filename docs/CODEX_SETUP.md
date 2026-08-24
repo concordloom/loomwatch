@@ -8,7 +8,7 @@ Track Codex quota usage in onWatch (`v2.11.12`).
 
 - Codex account access with a valid OAuth auth state
 - Codex auth file present at `~/.codex/auth.json` (or `$CODEX_HOME/auth.json`)
-- onWatch installed ([Quick Start](../README.md#quick-start))
+- onWatch installed ([Quick Start](../README.md))
 
 ---
 

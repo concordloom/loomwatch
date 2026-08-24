@@ -10,7 +10,7 @@ OpenCode Go does not expose a public quota API. onWatch scrapes the authenticate
 
 - An active [OpenCode Go](https://opencode.ai) subscription
 - Access to the OpenCode Go dashboard in a browser
-- onWatch installed ([Quick Start](../README.md#quick-start))
+- onWatch installed ([Quick Start](../README.md))
 
 ---
 

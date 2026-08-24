@@ -1,0 +1,30 @@
+name: Docs
+
+# The README is the first thing anyone sees, and it shipped to the default
+# branch with two broken images. The cause was not a typo: `.gitignore` carries
+# a blanket `*.png` with a short list of exceptions, the images were written
+# outside those, `git add -A` skipped them silently, and the commit went through
+# referencing files that existed on one workstation and nowhere else.
+#
+# Nothing catches that locally. A link checker that asks whether the path exists
+# passes, because on the author's disk it does. So this asks the only question
+# that distinguishes the two: is the file in the repository.
+#
+# Fork-owned workflow: upstream has no equivalent, so syncing never has to
+# resolve a conflict in this file.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  links:
+    runs-on: ubuntu-latest
+    name: Documentation links
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Relative links and images resolve to tracked files
+        run: python3 scripts/check-doc-links.py

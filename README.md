@@ -11,7 +11,7 @@ tell your monitoring when a plan is nearly spent. loomwatch polls them, exports
 what is left as Prometheus metrics, and ships the rules and the dashboard that
 turn that into a page days before a job starts failing at three in the morning.
 
-![The quota dashboard](docs/img/dashboard.png)
+![The quota dashboard](docs/screenshots/grafana-dashboard.png)
 
 ```console
 helm install loomwatch oci://ghcr.io/concordloom/charts/loomwatch \
@@ -80,7 +80,7 @@ line in a values file rather than a form somebody fills in after the fact.
 
 ## Reading the board
 
-![One account's quota windows over 36 hours](docs/img/trend.png)
+![One account's quota windows over 36 hours](docs/screenshots/grafana-trend.png)
 
 The vertical drops are window resets, and they are why the forecast column
 sometimes says `no forecast` rather than a number. A trend measured across a

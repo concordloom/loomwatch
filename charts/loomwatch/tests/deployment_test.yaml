@@ -76,7 +76,7 @@ tests:
       # appVersion, so the pattern also catches a trailing bare colon.
       - matchRegex:
           path: spec.template.spec.containers[0].image
-          pattern: "^ghcr\\.io/concordloom/loomwatch:[0-9]+\\.[0-9]+\\.[0-9]+$"
+          pattern: "^ghcr\\.io/madduck-tech/loomwatch:[0-9]+\\.[0-9]+\\.[0-9]+$"
 
   - it: lets the digest replace the tag rather than sit beside it
     set:
@@ -85,7 +85,7 @@ tests:
     asserts:
       - equal:
           path: spec.template.spec.containers[0].image
-          value: ghcr.io/concordloom/loomwatch@sha256:a22799d469e7afc63eb565775b820024b835bebb6d951f626198afa3d8d759f8
+          value: ghcr.io/madduck-tech/loomwatch@sha256:a22799d469e7afc63eb565775b820024b835bebb6d951f626198afa3d8d759f8
 
   - it: rejects a digest that is not a full sha256
     set:
@@ -100,7 +100,7 @@ tests:
     asserts:
       - matchRegex:
           path: spec.template.spec.containers[0].image
-          pattern: "^harbor\\.example\\.com/concordloom/loomwatch:"
+          pattern: "^harbor\\.example\\.com/madduck-tech/loomwatch:"
 
   - it: probes the only route that answers without credentials
     asserts:

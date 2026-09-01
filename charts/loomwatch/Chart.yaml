@@ -10,24 +10,24 @@ annotations:
   artifacthub.io/containsSecurityUpdates: "false"
   artifacthub.io/links: |
     - name: source
-      url: https://github.com/concordloom/loomwatch
+      url: https://github.com/madduck-tech/loomwatch
     - name: chart documentation
-      url: https://github.com/concordloom/loomwatch/blob/main/charts/loomwatch/README.md
+      url: https://github.com/madduck-tech/loomwatch/blob/main/charts/loomwatch/README.md
     - name: alert runbooks
-      url: https://github.com/concordloom/loomwatch/blob/main/docs/runbooks/README.md
+      url: https://github.com/madduck-tech/loomwatch/blob/main/docs/runbooks/README.md
     - name: exported metrics
-      url: https://github.com/concordloom/loomwatch/blob/main/docs/PROMETHEUS_METRICS.md
+      url: https://github.com/madduck-tech/loomwatch/blob/main/docs/PROMETHEUS_METRICS.md
   artifacthub.io/maintainers: |
-    - name: concordloom
-      email: noreply@concordloom.invalid
+    - name: madduck-tech
+      email: noreply@madduck-tech.invalid
   artifacthub.io/images: |
     - name: loomwatch
-      image: ghcr.io/concordloom/loomwatch:1.15.7
+      image: ghcr.io/madduck-tech/loomwatch:1.15.8
 apiVersion: v2
-appVersion: 1.15.7
+appVersion: 1.15.8
 description: Prometheus exporter for prepaid LLM subscription quotas - per account, per team, with alerts that name an owner. Exports how much of each plan is left so exhaustion is alerted on days early rather than discovered when a job fails.
-home: https://github.com/concordloom/loomwatch
-icon: https://raw.githubusercontent.com/concordloom/loomwatch/main/charts/loomwatch/logo.png
+home: https://github.com/madduck-tech/loomwatch
+icon: https://raw.githubusercontent.com/madduck-tech/loomwatch/main/charts/loomwatch/logo.png
 keywords:
   - monitoring
   - observability
@@ -40,14 +40,14 @@ keywords:
   - finops
   - alerting
 maintainers:
-  - name: concordloom
-    url: https://github.com/concordloom
+  - name: madduck-tech
+    url: https://github.com/madduck-tech
 name: loomwatch
 sources:
-  - https://github.com/concordloom/loomwatch
+  - https://github.com/madduck-tech/loomwatch
 type: application
 # Kept equal to appVersion on purpose. The chart ships this application from
 # the same repository and is released with it, so two independent numbers would
 # only raise the question "which chart version carries that fix". The release
 # workflow refuses to publish when the two disagree.
-version: 1.15.7
+version: 1.15.8

@@ -20,7 +20,7 @@ tokens, the dashboard - applies to that.
 Requires Go (the version in `go.mod`) and Git.
 
 ```powershell
-git clone https://github.com/concordloom/loomwatch
+git clone https://github.com/madduck-tech/loomwatch
 cd loomwatch
 go build -o "$env:USERPROFILE\.onwatch\bin\onwatch.exe" .
 mkdir "$env:USERPROFILE\.onwatch\data" -Force
@@ -286,7 +286,7 @@ Windows Defender may flag `onwatch.exe` as `Program:Win32/Wacapew.A!ml`. **This 
 4. Click **Add an exclusion** → **Folder**
 5. Add: `C:\Users\<your-username>\.onwatch`
 
-The source code is fully auditable at [github.com/concordloom/loomwatch](https://github.com/concordloom/loomwatch) (GPL-3.0).
+The source code is fully auditable at [github.com/madduck-tech/loomwatch](https://github.com/madduck-tech/loomwatch) (GPL-3.0).
 
 ### "No provider data appears in dashboard"
 
@@ -365,7 +365,7 @@ $newPath = ($path -split ';' | Where-Object { $_ -notlike "*\.onwatch*" }) -join
 
 ## Support
 
-- [GitHub Issues](https://github.com/concordloom/loomwatch/issues)
+- [GitHub Issues](https://github.com/madduck-tech/loomwatch/issues)
 - [README](../README.md)
 - [Development Guide](DEVELOPMENT.md)
 #### MiniMax

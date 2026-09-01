@@ -13,7 +13,7 @@ at all, so the category is empty rather than crowded.
 2. Control Panel, Repositories, Add.
    - Kind: **Helm charts**
    - Name: `loomwatch`
-   - URL: `oci://ghcr.io/concordloom/charts/loomwatch`
+   - URL: `oci://ghcr.io/madduck-tech/charts/loomwatch`
 
    OCI repositories are listed per chart rather than per registry, because an
    OCI registry has no `index.yaml` to enumerate.
@@ -27,7 +27,7 @@ at all, so the category is empty rather than crowded.
    and revokes; a personal token with `write:packages` sitting in a shell
    history is the alternative, and it is a worse one.
 
-Done once already: the repository is registered under the `concordloom`
+Done once already: the repository is registered under the `madduck-tech`
 organisation rather than a personal account, so ownership and the badge belong
 to the organisation and survive any one person's account.
 
@@ -101,9 +101,9 @@ metrics this dashboard reads. It installs as a Helm chart, and the dashboard
 ships inside that chart as well, so importing here is for people who want the
 board without provisioning it:
 
-    helm install loomwatch oci://ghcr.io/concordloom/charts/loomwatch
+    helm install loomwatch oci://ghcr.io/madduck-tech/charts/loomwatch
 
-Source, issues and documentation: https://github.com/concordloom/loomwatch
+Source, issues and documentation: https://github.com/madduck-tech/loomwatch
 Chart and installation: https://artifacthub.io/packages/helm/loomwatch/loomwatch
 
 The board answers two questions before anything has to be read: whether any

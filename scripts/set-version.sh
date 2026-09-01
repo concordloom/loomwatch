@@ -33,8 +33,8 @@ sed -i -E "s/^version: .*/version: $version/; s/^appVersion: .*/appVersion: $ver
 
 # The image inside artifacthub.io/images. Anchored to the leading two spaces of
 # the annotation's folded block so it cannot match the chart's own image values.
-sed -i -E "s|^      image: ghcr\\.io/concordloom/loomwatch:.*|      image: ghcr.io/concordloom/loomwatch:$version|" "$chart"
+sed -i -E "s|^      image: ghcr\\.io/madduck-tech/loomwatch:.*|      image: ghcr.io/madduck-tech/loomwatch:$version|" "$chart"
 
 echo "VERSION      $(cat "$root/VERSION")"
 awk '/^version:|^appVersion:/ {print "Chart.yaml   " $0}' "$chart"
-awk '/image: ghcr\.io\/concordloom\/loomwatch:/ {gsub(/^ +/, ""); print "annotation   " $0}' "$chart"
+awk '/image: ghcr\.io\/madduck-tech\/loomwatch:/ {gsub(/^ +/, ""); print "annotation   " $0}' "$chart"

@@ -84,8 +84,8 @@ jobs:
         run: |
           a="$(awk '/^appVersion:/ {print $2; exit}' charts/loomwatch/Chart.yaml)"
           img="$(helm template lw charts/loomwatch \
-            | grep -oE 'ghcr\.io/concordloom/loomwatch[:@][^"[:space:]]+' | head -1)"
-          if [ "$img" != "ghcr.io/concordloom/loomwatch:$a" ]; then
+            | grep -oE 'ghcr\.io/madduck-tech/loomwatch[:@][^"[:space:]]+' | head -1)"
+          if [ "$img" != "ghcr.io/madduck-tech/loomwatch:$a" ]; then
             echo "chart renders image '$img' but appVersion is '$a'"
             exit 1
           fi
@@ -102,7 +102,7 @@ jobs:
           imgs = yaml.safe_load(c['annotations']['artifacthub.io/images'])
           print(imgs[0]['image'])
           ")"
-          if [ "$ann" != "ghcr.io/concordloom/loomwatch:$a" ]; then
+          if [ "$ann" != "ghcr.io/madduck-tech/loomwatch:$a" ]; then
             echo "artifacthub.io/images names '$ann' but appVersion is '$a'"
             exit 1
           fi

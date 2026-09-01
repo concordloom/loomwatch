@@ -14,7 +14,7 @@ turn that into a page days before a job starts failing at three in the morning.
 ![The quota dashboard](docs/screenshots/grafana-dashboard.png)
 
 ```console
-helm install loomwatch oci://ghcr.io/concordloom/charts/loomwatch \
+helm install loomwatch oci://ghcr.io/madduck-tech/charts/loomwatch \
   --set auth.providers.MINIMAX_API_KEY=... \
   --set metrics.serviceMonitor.enabled=true \
   --set metrics.prometheusRule.enabled=true \
@@ -101,7 +101,7 @@ Five of them - Synthetic, Cursor, Kimi, Grok and OpenCode Go - were collected
 and shown on upstream's dashboard while exporting nothing at all, so no rule
 could see them. That was upstream's shape rather than something this fork
 removed, and it is fixed here rather than documented as a limitation
-([#19](https://github.com/concordloom/loomwatch/issues/19)).
+([#19](https://github.com/madduck-tech/loomwatch/issues/19)).
 
 ## How it is verified
 

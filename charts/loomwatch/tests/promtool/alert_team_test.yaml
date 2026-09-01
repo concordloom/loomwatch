@@ -40,7 +40,7 @@ tests:
               account_id: "1"
               team: platform
             exp_annotations:
-              runbook_url: https://github.com/concordloom/loomwatch/blob/main/docs/runbooks/README.md#loomwatchquotahigh
+              runbook_url: https://github.com/madduck-tech/loomwatch/blob/main/docs/runbooks/README.md#loomwatchquotahigh
               summary: Quota tokens of zai (account 1) is over 80% used
               description: There may not be enough left before the window resets. Check what is consuming it and consider pausing background workloads.
 
@@ -54,7 +54,7 @@ tests:
               account_id: default
               team: research
             exp_annotations:
-              runbook_url: https://github.com/concordloom/loomwatch/blob/main/docs/runbooks/README.md#loomwatchcollectorstale
+              runbook_url: https://github.com/madduck-tech/loomwatch/blob/main/docs/runbooks/README.md#loomwatchcollectorstale
               summary: Quota collector is not receiving data from anthropic (account default)
               description: Remaining quota stopped updating, which means every other quota rule here is blind and its silence no longer means anything. The usual cause is an expired provider key or an unreachable API.
 

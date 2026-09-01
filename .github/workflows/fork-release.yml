@@ -144,8 +144,8 @@ jobs:
           labels: |
             org.opencontainers.image.title=loomwatch
             org.opencontainers.image.description=LLM subscription quota tracker (fork of onllm-dev/onWatch)
-            dev.concordloom.upstream.repository=onllm-dev/onWatch
-            dev.concordloom.upstream.version=${{ steps.upstream.outputs.version }}
+            tech.madduck.upstream.repository=onllm-dev/onWatch
+            tech.madduck.upstream.version=${{ steps.upstream.outputs.version }}
 
       - name: Build and push
         uses: docker/build-push-action@v6

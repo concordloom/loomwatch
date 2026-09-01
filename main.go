@@ -604,7 +604,7 @@ func run() error {
 	}
 	if hasCommand("--version", "-v", "version") {
 		fmt.Printf("loomWatch v%s\n", version)
-		fmt.Println("github.com/concordloom/loomwatch")
+		fmt.Println("github.com/madduck-tech/loomwatch")
 		fmt.Println("A fork of onWatch by onllm.dev")
 		return nil
 	}
